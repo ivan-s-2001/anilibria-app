@@ -46,6 +46,7 @@ class MainActivity : ComponentActivity() {
     private var enterDay = false
     private lateinit var shell: LinearLayout
     private lateinit var menu: LinearLayout
+    private fun dp(value:Int)=(value*resources.displayMetrics.density).toInt()
     private var menuOpen=false
     private var contentFocus: View?=null
     private var selectedSection=0
