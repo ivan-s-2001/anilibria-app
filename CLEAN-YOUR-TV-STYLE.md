@@ -22,15 +22,38 @@ UI/UX Pro Max informed visible focus and state consistency. Ponytail informed re
 of Android/Leanback and existing data providers. No new recommendation engine or
 account requirement. No launcher integration in this change.
 
-## Catalog follow-up
-- Five equal-width filter capsules stay inside the title area's available width.
-  Long year/season/genre selections ellipsize instead of pushing status off screen.
-- Year, season and genre labels identify their purpose even before a selection.
-  Status distinguishes all releases from completed releases.
-- Filter buttons share the home navigation's high-contrast focus treatment,
-  with 44 dp minimum height and single-line labels. Existing D-pad links and dialogs remain.
-- Verify long multi-select values and all five filters with D-pad at 720p/1080p.
-  Compilation was attempted again; Gradle distribution download fails with network unreachable.
+## Viewing UX and layout revision
+- Reference composition: Lampa `full/start_new` (poster, metadata and primary actions),
+  permanent captions, separate catalog sorting/filter entry points. Zona Android's official
+  TV preview informs the compact poster grid; its application code was not copied.
+- Home prioritizes Continue, current releases and schedule. Menu order is Home, Catalog,
+  Search, My, Profile. Up returns to the menu only above the first content row.
+- Guest launch goes directly to content. Account sign-in remains available in Profile
+  and when an authenticated favorite action is requested.
+- Detail header wraps content instead of forcing a full screen. Primary Watch/Continue
+  and the separate Episodes action sit beside the poster, before the compact description.
+  Actions scroll horizontally if long labels exceed available width. Missing description
+  and secondary title are hidden. Selecting Episodes always opens episode selection.
+- Continue cards attempt direct playback of the most recent available saved episode;
+  missing access data or loading errors fall back to details. Legacy completion semantics
+  remain unchanged; this does not yet implement completed/next-episode resolution.
+- Catalog uses five columns, Sort and Filters buttons, a summary and a filter picker
+  with reset. Individual choices reuse existing guided dialogs and apply immediately;
+  a cross-category draft/apply workflow is not implemented.
+- Catalog refresh cancels an in-flight request when filters change; its progress state
+  resets on failure as well as success. No request parameter or endpoint changes.
+- One decorative poster focus overlay replaces per-card borders. It tracks visible artwork
+  during zoom/scroll with a damped spring; it is not focusable and honors animations off.
+  Unlike CleanYourTV, this initial overlay does not cache a per-tile glass texture and
+  needs on-device frame-time validation. It does not redraw continually while settled.
+- Profile has a compact account panel and an explanation of local history versus favorites.
+- CI assembles a debug TV APK on branch pushes/PR changes. No release signing or deployment.
+
+## API reference
+The user supplied https://anilibria.top/api/docs/v1; its OpenAPI document is at
+https://anilibria.top/storage/api/docs/v1 and describes the separate `/api/v1` contract.
+The current fork's query-based adapters are retained. No migration, live credentials,
+new content sources or server changes are included in this layout revision.
 
 ## Validation
 TV XML resources parse, all original detail-view binding IDs are preserved,
@@ -54,7 +77,16 @@ On-TV acceptance:
 7. Check long Russian titles, 720p/1080p layouts and rapid repeated D-pad input.
 
 ## Still pending
-Shared moving spring highlight, precise launcher ambient glow, explicit restoration
-of a stable card after process death, and wider catalog/search/player redesign.
+Precise launcher ambient glow, explicit restoration of a stable card after process death,
+completed/next-episode resolution and the full player/panel redesign.
 Outfit assets remain bundled with their OFL license, but are not selected by the TV theme
 until a Cyrillic-complete companion font is chosen.
+
+## Revision acceptance on the TV
+1. Guest launch, Profile sign-in/out and authenticated favorites.
+2. First and lower content rows: repeated Up/Down and rapid Left/Right without lost focus.
+3. Poster frame follows zoom and scroll, hides on buttons/player, settles without idle animation.
+4. Long title and all detail actions at 720p; Watch starts playback, Episodes opens selection.
+5. Catalog filters/reset, fast changes on slow network and failure/retry; five-column grid.
+6. Back from playback and dialogs; retained history; single-episode and unavailable releases.
+7. Compare PSS and frame time on realme Android 11 and Xiaomi Android 14.

@@ -3,6 +3,7 @@ package ru.radiationx.anilibria.screen.mainpages
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
+import androidx.leanback.app.RowsSupportFragment
 import androidx.leanback.app.BrowseSupportFragment
 import androidx.leanback.widget.BrowseFrameLayout
 import androidx.leanback.widget.ArrayObjectAdapter
@@ -44,7 +45,8 @@ class MainPagesFragment : BrowseSupportFragment() {
                         View.FOCUS_UP -> focused
                         else -> null
                     }
-                    direction == View.FOCUS_UP -> titleView
+                    direction == View.FOCUS_UP &&
+                        (mainFragment as? RowsSupportFragment)?.selectedPosition == 0 -> titleView
                     else -> null
                 }
             }
@@ -53,9 +55,9 @@ class MainPagesFragment : BrowseSupportFragment() {
             setHomeNavigation(
                 listOf(
                     "Главная" to { openPage(0) },
-                    "Моё" to { openPage(1) },
                     "Каталог" to { viewModel.onCatalogClick() },
                     "Поиск" to { viewModel.onSearchClick() },
+                    "Моё" to { openPage(1) },
                     "Профиль" to { openPage(2) }
                 )
             )

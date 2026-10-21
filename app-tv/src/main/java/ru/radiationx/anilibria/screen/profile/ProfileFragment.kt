@@ -41,11 +41,11 @@ class ProfileFragment : Fragment(R.layout.fragment_profile),
             if (!it?.avatarUrl.isNullOrEmpty()) {
                 binding.profileAvatar.showImageUrl(it.avatarUrl)
             }
-            binding.profileNick.text = it?.nick
+            binding.profileNick.text = it?.nick ?: "Гостевой просмотр"
 
             val hasAuth = it != null
             binding.profileAvatar.isVisible = hasAuth
-            binding.profileNick.isVisible = hasAuth
+            binding.profileNick.isVisible = true
             binding.profileSignIn.isGone = hasAuth
             binding.profileSignOut.isVisible = hasAuth
         }.launchIn(viewLifecycleOwner.lifecycleScope)

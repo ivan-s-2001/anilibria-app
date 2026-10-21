@@ -39,7 +39,7 @@ class SearchFragment : BaseVerticalGridFragment() {
         super.onCreate(savedInstanceState)
         title = "Каталог"
         setGridPresenter(VerticalGridPresenter().apply {
-            numberOfColumns = 6
+            numberOfColumns = 5
         })
     }
 
@@ -107,6 +107,7 @@ class SearchFragment : BaseVerticalGridFragment() {
         emptyTextManager.text = "По данным параметрам ничего не найдено"
 
         (titleView as? SearchTitleView?)?.apply {
+            setResetClickListener { formViewModel.onResetClick() }
             setYearClickListener({ formViewModel.onYearClick() })
             setSeasonClickListener({ formViewModel.onSeasonClick() })
             setGenreClickListener({ formViewModel.onGenreClick() })

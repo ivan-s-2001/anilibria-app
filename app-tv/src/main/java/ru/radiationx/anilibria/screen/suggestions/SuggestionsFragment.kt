@@ -65,6 +65,7 @@ class SuggestionsFragment : SearchSupportFragment(), SearchSupportFragment.Searc
 
         backgroundManager.clearGradient()
 
+        title = "Поиск аниме"
         setSearchResultProvider(this)
         setOnItemViewSelectedListener(ItemViewSelectedListener())
         setOnItemViewClickedListener { _, item, _, row ->

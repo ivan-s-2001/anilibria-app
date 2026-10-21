@@ -1,61 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:clipChildren="false"
-    android:clipToPadding="false"
-    android:orientation="horizontal">
-
-    <Button
-        android:id="@+id/searchTitleYear"
-        style="?attr/searchTitleButtonStyle"
-        android:layout_width="0dp"
-        android:layout_weight="1"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="8dp"
-        android:nextFocusRight="@id/searchTitleSeason"
-        android:text="Год" />
-
-    <Button
-        android:id="@+id/searchTitleSeason"
-        style="?attr/searchTitleButtonStyle"
-        android:layout_width="0dp"
-        android:layout_weight="1"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="8dp"
-        android:nextFocusLeft="@id/searchTitleYear"
-        android:nextFocusRight="@id/searchTitleGenre"
-        android:text="Сезон" />
-
-    <Button
-        android:id="@+id/searchTitleGenre"
-        style="?attr/searchTitleButtonStyle"
-        android:layout_width="0dp"
-        android:layout_weight="1"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="8dp"
-        android:nextFocusLeft="@id/searchTitleSeason"
-        android:nextFocusRight="@id/searchTitleSort"
-        android:text="Жанр" />
-
-    <Button
-        android:id="@+id/searchTitleSort"
-        style="?attr/searchTitleButtonStyle"
-        android:layout_width="0dp"
-        android:layout_weight="1"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="8dp"
-        android:nextFocusLeft="@id/searchTitleGenre"
-        android:nextFocusRight="@id/searchTitleComplete"
-        android:text="По популярности" />
-
-    <Button
-        android:id="@+id/searchTitleComplete"
-        style="?attr/searchTitleButtonStyle"
-        android:layout_width="0dp"
-        android:layout_weight="1"
-        android:layout_height="wrap_content"
-        android:nextFocusLeft="@id/searchTitleSort"
-        android:text="Только завершенные" />
-
+    android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal"
+    android:gravity="center_vertical" android:clipChildren="false" android:clipToPadding="false">
+    <Button android:id="@+id/searchTitleSort" style="?attr/searchTitleButtonStyle" android:layout_width="180dp" android:layout_height="44dp" android:layout_marginEnd="10dp" android:nextFocusRight="@id/searchTitleFilters" android:text="По популярности" />
+    <Button android:id="@+id/searchTitleFilters" style="?attr/searchTitleButtonStyle" android:layout_width="130dp" android:layout_height="44dp" android:layout_marginEnd="20dp" android:nextFocusLeft="@id/searchTitleSort" android:text="Фильтры" />
+    <TextView android:id="@+id/searchTitleSummary" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:maxLines="2" android:ellipsize="end" android:textSize="13sp" android:lineSpacingMultiplier="1.2" android:textColor="@color/dark_textSecond" />
 </androidx.appcompat.widget.LinearLayoutCompat>

@@ -7,7 +7,6 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.core.view.isInvisible
 import androidx.core.view.isVisible
-import androidx.core.view.updateLayoutParams
 import androidx.core.widget.TextViewCompat
 import androidx.leanback.widget.RowPresenter
 import ru.radiationx.anilibria.R
@@ -83,17 +82,9 @@ class LibriaReleaseViewHolder(
                 .setPositiveButton("Закрыть", null)
                 .show()
         }
-        binding.root.updateLayoutParams {
-            height =
-                binding.root.resources.displayMetrics.heightPixels - 1 // Шобы следующая строка подгрузилась при открытии
-        }
     }
 
     fun bind(item: LibriaDetailsRow) {
-        binding.root.updateLayoutParams {
-            height =
-                binding.root.resources.displayMetrics.heightPixels - 1 // Шобы следующая строка подгрузилась при открытии
-        }
         item.state?.also { bindState(it) }
         item.details?.also { bindDetails(it) }
     }
@@ -122,8 +113,10 @@ class LibriaReleaseViewHolder(
 
         binding.rowReleaseTitleRu.text = details.titleRu
         binding.rowReleaseTitleEn.text = details.titleEn
+        binding.rowReleaseTitleEn.isVisible = details.titleEn.isNotBlank()
         binding.rowReleaseExtra.text = details.extra
         binding.rowReleaseDescription.text = details.description
+        binding.rowReleaseDescriptionCard.isVisible = details.description.isNotBlank()
         binding.rowReleaseAnnounce.text = details.announce
         binding.rowReleaseAnnounce.isVisible = details.announce.isNotEmpty()
         binding.rowReleaseFavoriteCount.text = details.favoriteCount
@@ -147,9 +140,10 @@ class LibriaReleaseViewHolder(
         binding.rowReleaseHQMarker.isVisible = details.hasFullHd
 
         binding.rowReleaseActionContinue.text = details.continueLabel
-        binding.rowReleaseActionPlay.text = if (details.hasViewed) "Серии" else "Смотреть"
+        binding.rowReleaseActionPlay.text = "Серии"
         binding.rowReleaseActionPlay.isVisible = details.hasEpisodes
-        binding.rowReleaseActionContinue.isVisible = details.hasViewed
+        binding.rowReleaseActionContinue.isVisible = details.hasEpisodes
+        binding.rowReleaseActionContinue.text = if (details.hasViewed) details.continueLabel else "Смотреть"
         binding.rowReleaseActionOther.isVisible = details.hasEpisodes || details.hasViewed
         binding.rowReleaseActionFavorite.text = if (details.isFavorite) {
             "В избранном"
@@ -164,8 +158,7 @@ class LibriaReleaseViewHolder(
         }
         if (firstBind && (!binding.root.hasFocus() || binding.root.isFocused)) {
             when {
-                details.hasViewed -> binding.rowReleaseActionContinue.requestFocus()
-                details.hasEpisodes -> binding.rowReleaseActionPlay.requestFocus()
+                details.hasEpisodes -> binding.rowReleaseActionContinue.requestFocus()
                 else -> binding.rowReleaseActionFavorite.requestFocus()
             }
         }

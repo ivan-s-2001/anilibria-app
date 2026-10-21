@@ -1,293 +1,54 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/rowReleaseRoot"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:clipToPadding="false"
-    tools:background="@color/dark_colorPrimary"
-    tools:layout_height="wrap_content">
-
-    <androidx.constraintlayout.widget.Guideline
-        android:id="@+id/guideline_left"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        app:layout_constraintGuide_begin="?browsePaddingEnd" />
-
-    <androidx.constraintlayout.widget.Guideline
-        android:id="@+id/guideline_right"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        app:layout_constraintGuide_end="?browsePaddingEnd" />
-
-    <androidx.constraintlayout.widget.Guideline
-        android:id="@+id/guideline_bottom"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        app:layout_constraintGuide_end="?browsePaddingBottom" />
-
-    <com.google.android.material.imageview.ShapeableImageView
-        android:id="@+id/rowReleaseImageCard"
-        android:layout_width="160dp"
-        android:layout_height="228dp"
-        android:layout_marginTop="?browsePaddingBottom"
-        android:background="@color/dark_cardBackground"
-        android:scaleType="centerCrop"
-        android:theme="@style/AppTheme.Material"
-        app:layout_constraintStart_toStartOf="@id/guideline_left"
-        app:layout_constraintTop_toTopOf="parent"
-        app:shapeAppearanceOverlay="@style/AppTheme.RoundedImageView" />
-
-    <TextView
-        android:id="@+id/rowReleaseTitleRu"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="?browsePaddingBottom"
-        android:layout_marginEnd="0dp"
-        android:textColor="@color/dark_textDefault"
-        android:textSize="30sp"
-        android:maxLines="2"
-        android:ellipsize="end"
-        app:layout_constraintEnd_toEndOf="@id/guideline_right"
-        app:layout_constraintStart_toEndOf="@id/rowReleaseImageCard"
-        android:layout_marginStart="24dp"
-        app:layout_constraintTop_toTopOf="parent"
-        tools:text="Фантазия Гранблю 2" />
-
-    <TextView
-        android:id="@+id/rowReleaseTitleEn"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:layout_marginEnd="0dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:textColor="@color/dark_textDefault"
-        android:textSize="16sp"
-        app:layout_constraintEnd_toEndOf="@id/guideline_right"
-        app:layout_constraintStart_toEndOf="@id/rowReleaseImageCard"
-        android:layout_marginStart="24dp"
-        app:layout_constraintTop_toBottomOf="@id/rowReleaseTitleRu"
-        tools:text="Granblue Fantasy The Animation Season 2" />
-
-    <TextView
-        android:id="@+id/rowReleaseExtra"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:layout_marginEnd="16dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:textColor="@color/dark_textDefault"
-        android:textSize="16sp"
-        app:layout_constraintEnd_toStartOf="@id/rowReleaseHQMarker"
-        app:layout_constraintHorizontal_bias="0"
-        app:layout_constraintHorizontal_chainStyle="packed"
-        app:layout_constraintStart_toEndOf="@id/rowReleaseImageCard"
-        android:layout_marginStart="24dp"
-        app:layout_constraintTop_toBottomOf="@id/rowReleaseTitleEn"
-        app:layout_constraintWidth_default="wrap"
-        tools:text="2019 год, Экшен, ТВ (12эп.) 12 мин., Выходит по четвергам " />
-
-    <androidx.appcompat.widget.AppCompatImageView
-        android:id="@+id/rowReleaseHQMarker"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="16dp"
-        android:src="@drawable/ic_fullhd"
-        android:visibility="gone"
-        app:layout_constraintBottom_toBottomOf="@id/rowReleaseExtra"
-        app:layout_constraintEnd_toStartOf="@id/rowReleaseFavoriteCount"
-        app:layout_constraintStart_toEndOf="@id/rowReleaseExtra"
-        app:layout_constraintTop_toTopOf="@id/rowReleaseExtra"
-        app:tint="@color/dark_textDefault"
-        tools:visibility="visible" />
-
-    <androidx.appcompat.widget.AppCompatTextView
-        android:id="@+id/rowReleaseFavoriteCount"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="0dp"
-        android:drawablePadding="2dp"
-        android:drawableTint="@color/dark_textDefault"
-        android:textColor="@color/dark_textDefault"
-        android:textSize="16sp"
-        android:theme="@style/AppTheme.Material"
-        android:visibility="gone"
-        app:drawableEndCompat="@drawable/ic_details_favorite"
-        app:drawableTint="@color/dark_textDefault"
-        app:layout_constraintBottom_toBottomOf="@id/rowReleaseExtra"
-        app:layout_constraintEnd_toEndOf="@id/guideline_right"
-        app:layout_constraintStart_toEndOf="@id/rowReleaseHQMarker"
-        app:layout_constraintTop_toTopOf="@id/rowReleaseExtra"
-        tools:text="13 999"
-        tools:visibility="visible" />
-
-    <TextView
-        android:id="@+id/rowReleaseAnnounce"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:layout_marginEnd="0dp"
-        android:background="@drawable/bg_detail_announce"
-        android:paddingStart="8dp"
-        android:paddingTop="4dp"
-        android:paddingEnd="8dp"
-        android:paddingBottom="4dp"
-        android:textColor="@color/dark_textDefault"
-        android:textSize="14sp"
-        android:visibility="gone"
-        app:layout_constrainedWidth="true"
-        app:layout_constraintEnd_toEndOf="@id/guideline_right"
-        app:layout_constraintHorizontal_bias="0"
-        app:layout_constraintStart_toEndOf="@id/rowReleaseImageCard"
-        android:layout_marginStart="24dp"
-        app:layout_constraintTop_toBottomOf="@id/rowReleaseExtra"
-        tools:text="Новая серия каждую субботу."
-        tools:visibility="visible" />
-
-
-    <androidx.appcompat.widget.LinearLayoutCompat
-        android:id="@+id/rowReleaseDescriptionCard"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:layout_marginEnd="0dp"
-        android:layout_marginBottom="16dp"
-        android:background="@drawable/bg_details_description"
-        android:clickable="true"
-        android:focusable="true"
-        android:focusableInTouchMode="false"
-        android:nextFocusDown="@id/rowReleaseActions"
-        android:padding="12dp"
-        android:orientation="vertical"
-        app:layout_constrainedHeight="true"
-        app:layout_constraintBottom_toTopOf="@id/rowReleaseActions"
-        app:layout_constraintEnd_toEndOf="@id/guideline_right"
-        app:layout_constraintStart_toEndOf="@id/rowReleaseImageCard"
-        android:layout_marginStart="24dp"
-        app:layout_constraintTop_toBottomOf="@id/rowReleaseAnnounce">
-
-        <TextView
-            android:id="@+id/rowReleaseDescription"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:alpha="0.8"
-            android:ellipsize="end"
-            android:lineSpacingMultiplier="1.33"
-            android:maxLines="4"
-            android:textColor="@color/dark_textDefault"
-            android:textSize="14sp"
-            app:layout_constraintEnd_toEndOf="@id/guideline_right"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/rowReleaseExtra"
-            tools:text="@tools:sample/lorem/random" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Подробнее"
-            android:textColor="@color/dark_textSecond"
-            android:textSize="14sp" />
-
+    android:id="@+id/rowReleaseRoot" android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:minHeight="320dp" android:paddingTop="24dp" android:paddingBottom="24dp" android:clipChildren="false" android:clipToPadding="false">
+    <androidx.constraintlayout.widget.Guideline android:id="@+id/guideline_left" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="vertical" app:layout_constraintGuide_begin="48dp" />
+    <androidx.constraintlayout.widget.Guideline android:id="@+id/guideline_right" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="vertical" app:layout_constraintGuide_end="48dp" />
+    <com.google.android.material.imageview.ShapeableImageView android:id="@+id/rowReleaseImageCard"
+        android:layout_width="150dp" android:layout_height="214dp" android:scaleType="centerCrop"
+        android:background="@color/dark_cardBackground" android:theme="@style/AppTheme.Material"
+        app:shapeAppearanceOverlay="@style/AppTheme.RoundedImageView"
+        app:layout_constraintStart_toStartOf="@id/guideline_left" app:layout_constraintTop_toTopOf="parent" />
+    <TextView android:id="@+id/rowReleaseTitleRu" android:layout_width="0dp" android:layout_height="wrap_content"
+        android:layout_marginStart="28dp" android:textSize="30sp" android:fontFamily="sans-serif-light" android:textColor="@color/dark_textDefault" android:maxLines="2" android:ellipsize="end"
+        app:layout_constraintStart_toEndOf="@id/rowReleaseImageCard" app:layout_constraintEnd_toEndOf="@id/guideline_right" app:layout_constraintTop_toTopOf="parent" />
+    <TextView android:id="@+id/rowReleaseTitleEn" android:layout_width="0dp" android:layout_height="wrap_content"
+        android:layout_marginTop="4dp" android:textSize="14sp" android:textColor="@color/dark_textSecond" android:maxLines="1" android:ellipsize="end"
+        app:layout_constraintStart_toStartOf="@id/rowReleaseTitleRu" app:layout_constraintEnd_toEndOf="@id/guideline_right" app:layout_constraintTop_toBottomOf="@id/rowReleaseTitleRu" />
+    <TextView android:id="@+id/rowReleaseExtra" android:layout_width="0dp" android:layout_height="wrap_content"
+        android:layout_marginTop="12dp" android:layout_marginEnd="12dp" android:textSize="14sp" android:textColor="@color/dark_textSecond" android:maxLines="2" android:ellipsize="end"
+        app:layout_constraintStart_toStartOf="@id/rowReleaseTitleRu" app:layout_constraintEnd_toStartOf="@id/rowReleaseHQMarker" app:layout_constraintTop_toBottomOf="@id/rowReleaseTitleEn" />
+    <androidx.appcompat.widget.AppCompatImageView android:id="@+id/rowReleaseHQMarker" android:layout_width="32dp" android:layout_height="20dp" android:layout_marginEnd="12dp"
+        android:src="@drawable/ic_fullhd" android:visibility="gone" app:tint="@color/dark_textSecond"
+        app:layout_constraintEnd_toStartOf="@id/rowReleaseFavoriteCount" app:layout_constraintTop_toTopOf="@id/rowReleaseExtra" />
+    <androidx.appcompat.widget.AppCompatTextView android:id="@+id/rowReleaseFavoriteCount" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:textSize="13sp" android:textColor="@color/dark_textSecond" android:drawablePadding="4dp" android:visibility="gone"
+        app:drawableEndCompat="@drawable/ic_details_favorite" app:drawableTint="@color/dark_textSecond"
+        app:layout_constraintEnd_toEndOf="@id/guideline_right" app:layout_constraintTop_toTopOf="@id/rowReleaseExtra" />
+    <TextView android:id="@+id/rowReleaseAnnounce" android:layout_width="0dp" android:layout_height="wrap_content"
+        android:layout_marginTop="8dp" android:textSize="13sp" android:textColor="@color/dark_textSecond" android:maxLines="2" android:ellipsize="end" android:visibility="gone"
+        app:layout_constraintStart_toStartOf="@id/rowReleaseTitleRu" app:layout_constraintEnd_toEndOf="@id/guideline_right" app:layout_constraintTop_toBottomOf="@id/rowReleaseExtra" />
+    <HorizontalScrollView android:id="@+id/rowReleaseActionsScroll" android:layout_width="0dp" android:layout_height="wrap_content"
+        android:layout_marginTop="16dp" android:scrollbars="none" android:clipToPadding="false" android:clipChildren="false" android:fillViewport="false"
+        app:layout_constraintStart_toStartOf="@id/rowReleaseTitleRu" app:layout_constraintEnd_toEndOf="@id/guideline_right" app:layout_constraintTop_toBottomOf="@id/rowReleaseAnnounce">
+        <androidx.appcompat.widget.LinearLayoutCompat android:id="@+id/rowReleaseActions" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:paddingTop="4dp" android:paddingBottom="4dp" android:clipChildren="false" android:clipToPadding="false" android:orientation="horizontal">
+            <Button android:id="@+id/rowReleaseActionContinue" style="?attr/detailsActionButtonStyle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginEnd="8dp" android:text="Продолжить" android:visibility="gone" android:nextFocusDown="@id/rowReleaseDescriptionCard" />
+            <Button android:id="@+id/rowReleaseActionPlay" style="?attr/detailsActionButtonStyle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginEnd="8dp" android:text="Смотреть" android:nextFocusDown="@id/rowReleaseDescriptionCard" />
+            <Button android:id="@+id/rowReleaseActionFavorite" style="?attr/detailsActionButtonStyle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginEnd="8dp" android:text="В избранное" android:nextFocusDown="@id/rowReleaseDescriptionCard" />
+            <androidx.appcompat.widget.AppCompatImageButton android:id="@+id/rowReleaseActionOther" style="?attr/detailsActionButtonStyle" android:layout_width="44dp" android:layout_height="44dp" android:minWidth="44dp" android:padding="10dp" android:contentDescription="Другие действия" app:srcCompat="@drawable/ic_more_vert" app:tint="@color/text_button_color" android:nextFocusDown="@id/rowReleaseDescriptionCard" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
+    </HorizontalScrollView>
+    <androidx.appcompat.widget.LinearLayoutCompat android:id="@+id/rowReleaseDescriptionCard" android:layout_width="0dp" android:layout_height="wrap_content"
+        android:layout_marginTop="12dp" android:background="@drawable/bg_details_description" android:padding="12dp" android:orientation="vertical" android:focusable="true" android:clickable="true"
+        android:nextFocusUp="@id/rowReleaseActions"
+        app:layout_constraintStart_toStartOf="@id/rowReleaseTitleRu" app:layout_constraintEnd_toEndOf="@id/guideline_right" app:layout_constraintTop_toBottomOf="@id/rowReleaseActionsScroll">
+        <TextView android:id="@+id/rowReleaseDescription" android:layout_width="match_parent" android:layout_height="wrap_content" android:maxLines="3" android:ellipsize="end" android:lineSpacingMultiplier="1.2" android:textSize="14sp" android:textColor="@color/dark_textSecond" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="Полное описание" android:textSize="13sp" android:textColor="@color/dark_textDefault" />
     </androidx.appcompat.widget.LinearLayoutCompat>
-
-
-    <androidx.appcompat.widget.LinearLayoutCompat
-        android:id="@+id/rowReleaseActions"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="32dp"
-        android:layout_marginBottom="24dp"
-        android:clipChildren="false"
-        android:clipToPadding="false"
-        android:orientation="horizontal"
-        app:layout_constrainedWidth="true"
-        app:layout_constraintBottom_toBottomOf="@id/guideline_bottom"
-        app:layout_constraintEnd_toEndOf="@id/guideline_right"
-        app:layout_constraintHorizontal_bias="0"
-        app:layout_constraintStart_toStartOf="@id/guideline_left"
-        app:layout_constraintVertical_bias="1">
-
-        <Button
-            android:id="@+id/rowReleaseActionContinue"
-            style="?attr/detailsActionButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:text="Продолжить"
-            android:visibility="gone" />
-
-        <Button
-            android:id="@+id/rowReleaseActionPlay"
-            style="?attr/detailsActionButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:text="Смотреть" />
-
-        <Button
-            android:id="@+id/rowReleaseActionFavorite"
-            style="?attr/detailsActionButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:text="В избранное" />
-
-        <androidx.appcompat.widget.AppCompatImageButton
-            android:id="@+id/rowReleaseActionOther"
-            style="?attr/detailsActionButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
-            android:minWidth="48dp"
-            android:padding="12dp"
-            android:paddingStart="0dp"
-            android:paddingEnd="0dp"
-            android:contentDescription="Ещё"
-            app:srcCompat="@drawable/ic_more_vert"
-            app:tint="@color/text_button_color" />
-
-    </androidx.appcompat.widget.LinearLayoutCompat>
-
-    <ProgressBar
-        android:id="@+id/rowReleaseUpdateProgress"
-        style="?android:progressBarStyleSmall"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:visibility="invisible"
-        app:layout_constraintBottom_toTopOf="@id/rowReleaseArrow"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        tools:visibility="visible" />
-
-    <androidx.appcompat.widget.AppCompatImageView
-        android:id="@+id/rowReleaseArrow"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="@dimen/lb_browse_padding_top"
-        android:alpha="0.75"
-        android:src="@drawable/ic_wide_arrow_down"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:tint="@color/dark_textDefault" />
-
-    <ProgressBar
-        android:id="@+id/rowReleaseLoadingProgress"
-        style="?android:progressBarStyleLarge"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:visibility="invisible"
-        app:layout_constraintBottom_toBottomOf="@id/guideline_bottom"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        tools:visibility="visible" />
-
+    <androidx.constraintlayout.widget.Barrier android:id="@+id/detailBottom" android:layout_width="wrap_content" android:layout_height="wrap_content" app:barrierDirection="bottom" app:constraint_referenced_ids="rowReleaseImageCard,rowReleaseDescriptionCard" />
+    <androidx.appcompat.widget.AppCompatImageView android:id="@+id/rowReleaseArrow" android:layout_width="24dp" android:layout_height="16dp" android:layout_marginTop="20dp" android:alpha="0.5" android:src="@drawable/ic_wide_arrow_down" app:tint="@color/dark_textSecond" app:layout_constraintTop_toBottomOf="@id/detailBottom" app:layout_constraintBottom_toBottomOf="parent" app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent" />
+    <ProgressBar android:id="@+id/rowReleaseUpdateProgress" style="?android:progressBarStyleSmall" android:layout_width="24dp" android:layout_height="24dp" android:visibility="invisible" app:layout_constraintBottom_toBottomOf="parent" app:layout_constraintEnd_toEndOf="@id/guideline_right" />
+    <ProgressBar android:id="@+id/rowReleaseLoadingProgress" android:layout_width="48dp" android:layout_height="48dp" android:visibility="invisible" app:layout_constraintTop_toTopOf="parent" app:layout_constraintBottom_toBottomOf="parent" app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent" />
 </androidx.constraintlayout.widget.ConstraintLayout>

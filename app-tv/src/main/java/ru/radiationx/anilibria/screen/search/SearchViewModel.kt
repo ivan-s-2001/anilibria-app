@@ -13,6 +13,7 @@ import ru.radiationx.anilibria.screen.SuggestionsScreen
 import ru.radiationx.data.entity.domain.search.SearchForm
 import ru.radiationx.data.repository.SearchRepository
 import javax.inject.Inject
+import java.util.concurrent.atomic.AtomicLong
 
 class SearchViewModel @Inject constructor(
     private val searchRepository: SearchRepository,
@@ -23,12 +24,15 @@ class SearchViewModel @Inject constructor(
 ) : BaseCardsViewModel() {
 
     private var searchForm = SearchForm()
+    private val loaderVersion = AtomicLong()
 
     val progressState = MutableStateFlow(false)
 
     override val loadOnCreate: Boolean = false
 
     override val progressOnRefresh: Boolean = false
+
+    override val replaceRequestOnRefresh: Boolean = true
 
     init {
         searchController.applyFormEvent.onEach {
@@ -38,12 +42,14 @@ class SearchViewModel @Inject constructor(
     }
 
     override suspend fun getLoader(requestPage: Int): List<LibriaCard> {
+        val version = loaderVersion.incrementAndGet()
         progressState.value = requestPage == firstPage
-        val result = searchRepository
-            .searchReleases(searchForm, requestPage)
-            .data.map { converter.toCard(it) }
-        progressState.value = false
-        return result
+        return try {
+            searchRepository.searchReleases(searchForm, requestPage)
+                .data.map { converter.toCard(it) }
+        } finally {
+            if (version == loaderVersion.get()) progressState.value = false
+        }
     }
 
     fun onSearchClick() {

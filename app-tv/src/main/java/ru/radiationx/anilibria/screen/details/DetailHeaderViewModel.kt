@@ -83,23 +83,22 @@ class DetailHeaderViewModel @Inject constructor(
 
     fun onContinueClick() {
         viewModelScope.launch {
-            releaseInteractor.getAccesses(releaseId).maxByOrNull { it.lastAccessRaw }?.also {
-                router.navigateTo(PlayerScreen(releaseId, it.id))
-            }
+            val release = currentRelease ?: return@launch
+            if (release.episodes.isEmpty()) return@launch
+            val lastAccess = releaseInteractor.getAccesses(releaseId)
+                .filter { access -> release.episodes.any { it.id == access.id } }
+                .maxByOrNull { it.lastAccessRaw }
+            router.navigateTo(PlayerScreen(releaseId, lastAccess?.id))
         }
     }
 
     fun onPlayClick() {
         val release = currentRelease ?: return
         if (release.episodes.isEmpty()) return
-        if (release.episodes.size == 1) {
-            router.navigateTo(PlayerScreen(releaseId, null))
-        } else {
-            viewModelScope.launch {
-                val episodeId =
-                    releaseInteractor.getAccesses(releaseId).maxByOrNull { it.lastAccessRaw }?.id
-                guidedRouter.open(PlayerEpisodesGuidedScreen(releaseId, episodeId))
-            }
+        viewModelScope.launch {
+            val episodeId = releaseInteractor.getAccesses(releaseId)
+                .maxByOrNull { it.lastAccessRaw }?.id
+            guidedRouter.open(PlayerEpisodesGuidedScreen(releaseId, episodeId))
         }
     }
 

@@ -68,9 +68,6 @@ class AppLauncherViewModel @Inject constructor(
         firstLaunch = false
         viewModelScope.launch {
             router.newRootScreen(MainPagesScreen())
-            if (authRepository.getAuthState() == AuthState.NO_AUTH) {
-                router.navigateTo(AuthGuidedScreen())
-            }
             appReadyState.value = Unit
         }
         GlobalScope.launch {

@@ -1,5 +1,12 @@
 package ru.radiationx.anilibria.screen.watching
 
+import androidx.lifecycle.viewModelScope
+import com.github.terrakok.cicerone.Router
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import ru.radiationx.anilibria.screen.PlayerScreen
+import ru.radiationx.shared.ktx.coRunCatching
 import ru.radiationx.anilibria.common.BaseCardsViewModel
 import ru.radiationx.anilibria.common.CardsDataConverter
 import ru.radiationx.anilibria.common.LibriaCard
@@ -15,7 +22,10 @@ class WatchingContinueViewModel @Inject constructor(
     private val episodesCheckerHolder: EpisodesCheckerHolder,
     private val converter: CardsDataConverter,
     private val cardRouter: LibriaCardRouter,
+    private val router: Router,
 ) : BaseCardsViewModel() {
+
+    private var playJob: Job? = null
 
     override val defaultTitle: String = "Продолжить просмотр"
 
@@ -55,7 +65,17 @@ class WatchingContinueViewModel @Inject constructor(
         false
 
     override fun onLibriaCardClick(card: LibriaCard) {
-        super.onLibriaCardClick(card)
-        cardRouter.navigate(card)
+        val type = card.type as? LibriaCard.Type.Release ?: return
+        if (playJob?.isActive == true) return
+        playJob = viewModelScope.launch {
+            coRunCatching {
+                val release = withTimeoutOrNull(12_000L) { releaseInteractor.getFull(type.releaseId) }
+                val access = releaseInteractor.getAccesses(type.releaseId)
+                    .filter { saved -> release?.episodes?.any { it.id == saved.id } == true }
+                    .maxByOrNull { it.lastAccessRaw }
+                if (access != null) router.navigateTo(PlayerScreen(type.releaseId, access.id))
+                else cardRouter.navigate(card)
+            }.onFailure { cardRouter.navigate(card) }
+        }
     }
 }

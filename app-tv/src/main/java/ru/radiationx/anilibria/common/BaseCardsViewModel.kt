@@ -18,6 +18,7 @@ abstract class BaseCardsViewModel : LifecycleViewModel() {
     protected open val firstPage = 1
     protected open val loadOnCreate = true
     protected open val progressOnRefresh = true
+    protected open val replaceRequestOnRefresh = false
     protected open val preventClearOnRefresh = false
     open val defaultTitle = "Cards"
 
@@ -46,6 +47,7 @@ abstract class BaseCardsViewModel : LifecycleViewModel() {
     }
 
     open fun onRefreshClick() {
+        if (replaceRequestOnRefresh) requestJob?.cancel()
         loadPage(firstPage)
     }
 

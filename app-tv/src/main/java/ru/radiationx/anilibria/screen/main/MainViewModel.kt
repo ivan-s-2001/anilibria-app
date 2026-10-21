@@ -27,7 +27,7 @@ class MainViewModel @Inject constructor(
     }
 
     override val rowIds: List<Long> =
-        listOf(CONTINUE_ROW_ID, FAVORITE_ROW_ID, FEED_ROW_ID, SCHEDULE_ROW_ID, YOUTUBE_ROW_ID)
+        listOf(CONTINUE_ROW_ID, FEED_ROW_ID, SCHEDULE_ROW_ID, FAVORITE_ROW_ID, YOUTUBE_ROW_ID)
 
     override val availableRows: MutableSet<Long> =
         mutableSetOf(FEED_ROW_ID, SCHEDULE_ROW_ID, YOUTUBE_ROW_ID)

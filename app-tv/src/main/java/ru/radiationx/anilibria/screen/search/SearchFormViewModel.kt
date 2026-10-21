@@ -56,6 +56,11 @@ class SearchFormViewModel @Inject constructor(
         }.launchIn(viewModelScope)
     }
 
+    fun onResetClick() {
+        searchForm = SearchForm()
+        updateDataByForm()
+    }
+
     fun onYearClick() {
         guidedRouter.open(SearchYearGuidedScreen(searchForm.years.map { it.value }))
     }

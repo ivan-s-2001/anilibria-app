@@ -131,7 +131,7 @@ open class BrowseTitleView @JvmOverloads constructor(
 
     fun selectHomePage(position: Int) {
         homePageIndex = when (position) {
-            1 -> 1
+            1 -> 3
             2 -> 4
             else -> 0
         }
