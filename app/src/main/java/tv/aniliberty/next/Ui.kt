@@ -188,11 +188,11 @@ class PageAdapter(
                     layoutParams=FrameLayout.LayoutParams(-1,if(poster)view.dp(152)else -1,Gravity.TOP)
                     load(if(poster)release?.poster else row.image)
                 }
-                box.getChildAt(1).visibility=if(poster)View.GONE else View.VISIBLE
+                box.getChildAt(1).visibility=if(poster && !box.hasFocus())View.GONE else View.VISIBLE
                 title.label(release?.title?:row.title,if(spotlight)30f else if(poster)13f else 19f,WHITE,true)
                 val metadata=if(release!=null) listOfNotNull(release.latestEpisode?.let{"Эпизод ${number(it.ordinal)}"},release.metadata,release.genres.joinToString(" · ")).filter(String::isNotBlank).joinToString("\n") else row.subtitle
                 subtitle.label(metadata,if(spotlight)15f else 13f,MUTED)
-                subtitle.visibility=if(poster)View.GONE else View.VISIBLE
+                subtitle.visibility=if(poster && !box.hasFocus())View.GONE else View.VISIBLE
                 if(spotlight){
                     content.setPadding(view.dp(32),view.dp(24),view.dp(32),view.dp(24))
                     content.layoutParams=FrameLayout.LayoutParams((view.resources.displayMetrics.widthPixels*.65f).toInt(),-2,Gravity.BOTTOM or Gravity.START)
@@ -209,7 +209,8 @@ class PageAdapter(
                     title.textSize=13f
                     title.maxLines=if(focused)3 else 2
                 } }
-                content.setBackgroundColor(Color.TRANSPARENT)
+                content.setBackgroundColor(if(poster && box.hasFocus())0xEE121212.toInt()else Color.TRANSPARENT)
+                title.maxLines=if(poster && box.hasFocus())3 else 2
                 box.contentDescription=release?.title?:row.title
                 box.setOnClickListener{if(row.click!=null)row.click.invoke() else if(release!=null)details(release)}
                 box.setOnLongClickListener(if(release!=null)View.OnLongClickListener{quickActions(release);true}else null)

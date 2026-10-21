@@ -77,7 +77,9 @@ class MainActivity : ComponentActivity() {
     }
     private fun quickActions(item:Release){
         val resume=prefs.getString("last:${item.id}",null)!=null
-        AlertDialog.Builder(this).setTitle(item.title).setItems(arrayOf(if(resume)"Продолжить просмотр"else"Смотреть", "В библиотеку / Убрать", "Подробнее")){_,choice->
+        val library=JSONArray(prefs.getString("library","[]"))
+        val added=(0 until library.length()).any{library.getJSONObject(it).getInt("id")==item.id}
+        AlertDialog.Builder(this).setTitle(item.title).setItems(arrayOf(if(resume)"Продолжить просмотр"else"Смотреть", if(added)"Убрать из библиотеки"else"В библиотеку", "Подробнее")){_,choice->
             when(choice){
                 0->lifecycleScope.launch {
                     try {
