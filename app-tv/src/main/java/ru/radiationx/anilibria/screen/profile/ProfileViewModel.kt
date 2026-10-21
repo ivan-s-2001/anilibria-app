@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import ru.radiationx.anilibria.common.fragment.GuidedRouter
-import ru.radiationx.anilibria.screen.AuthGuidedScreen
+import ru.radiationx.anilibria.screen.WelcomeScreen
 import ru.radiationx.anilibria.screen.LifecycleViewModel
 import ru.radiationx.data.entity.domain.other.ProfileItem
 import ru.radiationx.data.repository.AuthRepository
@@ -31,7 +31,7 @@ class ProfileViewModel @Inject constructor(
     }
 
     fun onSignInClick() {
-        guidedRouter.open(AuthGuidedScreen())
+        guidedRouter.navigateTo(WelcomeScreen())
     }
 
     @OptIn(DelicateCoroutinesApi::class)

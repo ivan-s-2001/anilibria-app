@@ -13,6 +13,7 @@ import ru.radiationx.anilibria.screen.AuthGuidedScreen
 import ru.radiationx.anilibria.screen.ConfigScreen
 import ru.radiationx.anilibria.screen.DetailsScreen
 import ru.radiationx.anilibria.screen.LifecycleViewModel
+import ru.radiationx.anilibria.screen.WelcomeScreen
 import ru.radiationx.anilibria.screen.MainPagesScreen
 import ru.radiationx.data.datasource.remote.address.ApiConfig
 import ru.radiationx.data.entity.common.AuthState
@@ -67,7 +68,12 @@ class AppLauncherViewModel @Inject constructor(
     private fun initMain() {
         firstLaunch = false
         viewModelScope.launch {
-            router.newRootScreen(MainPagesScreen())
+            val firstScreen = if (authRepository.getAuthState() == AuthState.NO_AUTH) {
+                WelcomeScreen()
+            } else {
+                MainPagesScreen()
+            }
+            router.newRootScreen(firstScreen)
             appReadyState.value = Unit
         }
         GlobalScope.launch {

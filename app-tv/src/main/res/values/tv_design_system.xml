@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="tv_screen_inset">48dp</dimen>
+    <dimen name="tv_column_gap">48dp</dimen>
+    <dimen name="tv_control_gap">12dp</dimen>
+    <dimen name="tv_choice_height">84dp</dimen>
+    <dimen name="tv_type_display">36sp</dimen>
+    <dimen name="tv_type_title">26sp</dimen>
+    <dimen name="tv_type_body">16sp</dimen>
+    <dimen name="tv_type_caption">13sp</dimen>
+
+    <style name="TvChoice">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">@dimen/tv_choice_height</item>
+        <item name="android:layout_marginBottom">@dimen/tv_control_gap</item>
+        <item name="android:padding">16dp</item>
+        <item name="android:background">@drawable/tv_choice</item>
+        <item name="android:focusable">true</item>
+        <item name="android:clickable">true</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:gravity">center_vertical</item>
+    </style>
+    <style name="TvChoiceTitle">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">19sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/launcher_pill_text</item>
+        <item name="android:duplicateParentState">true</item>
+    </style>
+    <style name="TvChoiceDescription">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">4dp</item>
+        <item name="android:textSize">@dimen/tv_type_caption</item>
+        <item name="android:textColor">@color/launcher_pill_text</item>
+        <item name="android:alpha">0.8</item>
+        <item name="android:duplicateParentState">true</item>
+    </style>
+</resources>

@@ -210,3 +210,7 @@ class TestGuidedStepScreen : GuidedAppScreen() {
         return DialogExampleFragment()
     }
 }
+class WelcomeScreen : FragmentScreen {
+    override fun createFragment(factory: FragmentFactory): Fragment =
+        ru.radiationx.anilibria.screen.welcome.WelcomeFragment()
+}
