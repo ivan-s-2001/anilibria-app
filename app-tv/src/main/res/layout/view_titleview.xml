@@ -68,7 +68,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/title_other"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            style="@style/LauncherPill"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_vertical"
@@ -77,7 +77,7 @@
             android:nextFocusRight="@id/title_alert"
             android:theme="@style/AppTheme.Material.Browse"
             android:visibility="gone"
-            app:cornerRadius="24dp"
+            app:cornerRadius="21dp"
             tools:text="Каталог"
             tools:visibility="visible" />
 

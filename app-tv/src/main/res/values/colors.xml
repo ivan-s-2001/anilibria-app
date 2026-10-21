@@ -2,7 +2,7 @@
 <resources>
     <color name="alib_red">#FE3635</color>
     <color name="alib_gray">#383838</color>
-    <color name="alib_gray_dark">#282828</color>
+    <color name="alib_gray_dark">#1C1C1E</color>
     <color name="alib_red_launcher">#8f2929</color>
     <color name="alib_white_launcher">#fff</color>
     <color name="white">#fff</color>
@@ -21,25 +21,25 @@
     <color name="dark_colorPrimary">@color/dark_cardBackground</color>
     <color name="dark_colorPrimary1">#33000000</color>
     <color name="dark_colorPrimaryDark">@color/dark_cardBackground</color>
-    <color name="dark_colorAccent">@color/temp_red_</color>
+    <color name="dark_colorAccent">#F5FFFFFF</color>
 
-    <color name="dark_divider_line">#414141</color>
+    <color name="dark_divider_line">#33FFFFFF</color>
     <color name="dark_btn_border">#1Effffff</color>
-    <color name="dark_windowBackground">#191b1c</color>
-    <color name="dark_cardBackground">#282828</color>
-    <color name="dark_cardBackground_alpha">#00282828</color>
+    <color name="dark_windowBackground">#000000</color>
+    <color name="dark_cardBackground">#1C1C1E</color>
+    <color name="dark_cardBackground_alpha">#001C1C1E</color>
     <color name="dark_imageBackground">#1000</color>
 
-    <color name="dark_release_day_btn">#414141</color>
+    <color name="dark_release_day_btn">#33FFFFFF</color>
 
-    <color name="dark_contrast_icon">@color/white</color>
+    <color name="dark_contrast_icon">#FFFFFF</color>
     <color name="dark_base_icon">#909090</color>
 
-    <color name="dark_episode_even">#303030</color>
+    <color name="dark_episode_even">#141416</color>
 
-    <color name="dark_textDefault">#EEEEEE</color>
-    <color name="dark_textSecond">#B2B2B2</color>
-    <color name="dark_textLink">#c23838</color>
+    <color name="dark_textDefault">#FFFFFF</color>
+    <color name="dark_textSecond">#A6FFFFFF</color>
+    <color name="dark_textLink">#FFFFFF</color>
 
     <!-- Leanback -->
 
@@ -47,4 +47,5 @@
     <color name="app_guidedstep_actions_background_player">@color/dark_colorPrimary1</color>
     <color name="app_guidedstep_subactions_background">#1A1A1A</color>
 
+    <color name="launcher_on_accent">#111111</color>
 </resources>

@@ -4,13 +4,14 @@ import android.view.ViewGroup
 import androidx.leanback.widget.ImageCardView
 import androidx.leanback.widget.Presenter
 import ru.radiationx.anilibria.R
+import ru.radiationx.anilibria.ui.widget.LauncherCardView
 import ru.radiationx.anilibria.common.LibriaCard
 import ru.radiationx.shared_app.imageloader.showImageUrl
 
 class LibriaCardPresenter : Presenter() {
 
     override fun onCreateViewHolder(parent: ViewGroup): ViewHolder {
-        val cardView = ImageCardView(parent.context)
+        val cardView = LauncherCardView(parent.context)
         return LibriaCardViewHolder(cardView)
     }
 
