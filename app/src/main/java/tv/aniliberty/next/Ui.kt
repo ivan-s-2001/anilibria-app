@@ -17,7 +17,7 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import coil3.load
 
-const val RED = 0xFFFF3545.toInt()
+const val RED = 0xFFFE3635.toInt()
 const val WHITE = 0xFFF2F2F2.toInt()
 const val MUTED = 0xFF999999.toInt()
 fun View.dp(n: Int): Int = (n * resources.displayMetrics.density).toInt()

@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -37,7 +38,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         list = RecyclerView(this).apply {
-            setBackgroundColor(0xFF101010.toInt()); setPadding(dp(40),dp(20),dp(40),dp(32));clipToPadding=false;itemAnimator=null
+            setBackgroundColor(0xFF121212.toInt()); setPadding(dp(40),dp(20),dp(40),dp(32));clipToPadding=false;itemAnimator=null
         }
         grid=GridLayoutManager(this,6);list.layoutManager=grid
         adapter=PageAdapter(::navigate,::selectTab,::play,::favorite,{rememberFocus();model.open(Screen.Detail(it.id))},
@@ -143,8 +144,8 @@ class MainActivity : ComponentActivity() {
             val index=rows.indexOfFirst{it.key==key}.takeIf{it>=0}?:rows.indexOfFirst{it.kind in listOf(Kind.ACTION,Kind.POSTER,Kind.HERO)}
             if(index>=0&&!state.loading){list.doOnNextLayout{
                 val item=list.findViewHolderForAdapterPosition(index)?.itemView
-                if(item?.isFocusable==true)item.requestFocus()else if(item is ViewGroup)item.focusSearch(View.FOCUS_FORWARD)?.requestFocus()
-            };grid.scrollToPositionWithOffset(index,list.dp(12))}
+                if(item?.isFocusable==true)item.requestFocus()else if(item is ViewGroup)item.getFocusables(View.FOCUS_FORWARD).firstOrNull()?.requestFocus()
+            };grid.scrollToPositionWithOffset(if(key==null)0 else index,if(key==null)0 else list.dp(12))}
         }
     }
 }
