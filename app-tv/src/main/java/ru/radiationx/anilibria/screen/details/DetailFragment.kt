@@ -39,6 +39,7 @@ class DetailFragment : Fragment(R.layout.fragment_release_page) {
     }
     private val extra by lazy { DetailExtra(getExtraNotNull(ARG_ID)) }
     private val backgroundManager by inject<GradientBackgroundManager>()
+    private val pageData by viewModel<DetailsViewModel> { extra }
     private val header by viewModel<DetailHeaderViewModel> { extra }
     private val related by viewModel<DetailRelatedViewModel> { extra }
     private val recommends by viewModel<DetailRecommendsViewModel> { extra }
@@ -60,7 +61,7 @@ class DetailFragment : Fragment(R.layout.fragment_release_page) {
         val list = view as RecyclerView
         list.itemAnimator = null
         backgroundManager.clearGradient()
-        listOf(header, related, recommends, episodes, newEpisodes).forEach { viewLifecycleOwner.lifecycle.addObserver(it) }
+        listOf(pageData, header, related, recommends, episodes, newEpisodes).forEach { viewLifecycleOwner.lifecycle.addObserver(it) }
         val content = ReleaseTextAdapter()
         val relatedCards = ReleaseCardsAdapter(related::onLibriaCardClick)
         var pendingEpisodeRestore = focusedEpisode != null && selectedTab == 0
