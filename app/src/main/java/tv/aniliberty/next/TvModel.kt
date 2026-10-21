@@ -20,9 +20,16 @@ class TvModel : ViewModel() {
     val state = MutableStateFlow(UiState())
     private val stack = mutableListOf<Screen>()
     private var job: Job? = null
+    private var homeCache: HomeData? = null
+    private var homeLoadedAt = 0L
+    private var selectedHomeDay = 1
     fun open(screen: Screen, remember: Boolean = true) {
         if (remember && screen != state.value.screen) stack.add(state.value.screen)
         job?.cancel()
+        if (screen == Screen.Home && homeCache != null && android.os.SystemClock.elapsedRealtime() - homeLoadedAt < 300000) {
+            state.value = UiState(screen, home = homeCache, homeDay = selectedHomeDay)
+            return
+        }
         val previous = state.value
         if (screen is Screen.Detail && previous.detail?.id == screen.id) {
             state.value = previous.copy(screen = screen); return
@@ -32,7 +39,7 @@ class TvModel : ViewModel() {
         job = viewModelScope.launch {
             try {
                 state.value = when (screen) {
-                    Screen.Home -> UiState(screen, home = api.home())
+                    Screen.Home -> api.home().let { home -> homeCache = home; homeLoadedAt = android.os.SystemClock.elapsedRealtime(); UiState(screen, home = home, homeDay = selectedHomeDay) }
                     is Screen.Catalog -> api.catalog(screen.query, screen.page, screen.genre).let { (items, more) -> UiState(screen, releases = items, more = more) }
                     is Screen.Franchise -> UiState(screen, releases = api.franchise(screen.id))
                     is Screen.Detail -> UiState(screen, detail = api.release(screen.id))
@@ -42,11 +49,11 @@ class TvModel : ViewModel() {
             catch (e: Exception) { state.value = UiState(screen, error = e.message ?: "Не удалось загрузить данные") }
         }
     }
-    fun homeDay(index: Int) { state.value = state.value.copy(homeDay = index) }
+    fun homeDay(index: Int) { selectedHomeDay = index; state.value = state.value.copy(homeDay = index) }
     fun tab(index: Int) { (state.value.screen as? Screen.Detail)?.let { state.value = state.value.copy(screen = it.copy(tab = index)) } }
     fun back(): Boolean {
         if (stack.isEmpty()) return false
         open(stack.removeAt(stack.lastIndex), false); return true
     }
-    fun retry() = open(state.value.screen, false)
+    fun retry() { if (state.value.screen == Screen.Home) homeCache = null; open(state.value.screen, false) }
 }

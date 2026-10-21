@@ -83,7 +83,7 @@ class PageAdapter(
                 addView(TextView(context));addView(TextView(context),LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(6)})
             }
             Kind.POSTER, Kind.SPOTLIGHT, Kind.FEATURE -> FrameLayout(context).apply {
-                isFocusable = true; isClickable = true; focusBackground(); setPadding(dp(3),dp(3),dp(3),dp(3))
+                isFocusable = true; isClickable = true; focusBackground(); clipToOutline=true; setPadding(dp(3),dp(3),dp(3),dp(3))
                 addView(ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_CROP },FrameLayout.LayoutParams(-1,-1))
                 addView(View(context).apply { background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,intArrayOf(0xF5121212.toInt(),0x10121212)) },FrameLayout.LayoutParams(-1,-1))
                 addView(LinearLayout(context).apply {

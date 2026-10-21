@@ -32,6 +32,22 @@ class FocusTest {
         tab.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP,KeyEvent.KEYCODE_DPAD_DOWN))
         assertEquals(3,selected)
     }
+    @Test fun posterRevealsMetadataWithoutResizingGrid() {
+        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        val release=parseRelease(org.json.JSONObject("""{"id":10,"name":{"main":"Тайтл"},"year":2026,"latest_episode":{"id":"episode-3","ordinal":3}}"""))
+        adapter.submit(listOf(Row("release:10",Kind.POSTER,release=release)))
+        val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.POSTER.ordinal)
+        adapter.onBindViewHolder(holder,0)
+        val box=holder.itemView as FrameLayout
+        val content=box.getChildAt(2)as LinearLayout
+        val metadata=content.getChildAt(1)as android.widget.TextView
+        val height=box.layoutParams.height
+        assertEquals(android.view.View.GONE,metadata.visibility)
+        box.requestFocus()
+        assertEquals(android.view.View.VISIBLE,metadata.visibility)
+        assertTrue(metadata.text.contains("Эпизод 3"))
+        assertEquals(height,box.layoutParams.height)
+    }
     @Test fun headingsDoNotConsumeRemoteFocus() {
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
         adapter.submit(listOf(Row("heading",Kind.HEADING,"Новые эпизоды")))
