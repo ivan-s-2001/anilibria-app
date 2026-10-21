@@ -20,6 +20,8 @@ data class LibriaCard(
         val genres: String,
         val synopsis: String,
         val status: String,
+        val badge: String = "",
+        val actionLabel: String = "Подробнее",
     )
 
     sealed class Type {

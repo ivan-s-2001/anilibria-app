@@ -12,11 +12,12 @@ import ru.radiationx.shared.ktx.android.subscribeTo
 fun Fragment.createCardsRowBy(
     rowId: Long,
     rowsAdapter: ArrayObjectAdapter,
-    viewModel: BaseCardsViewModel
+    viewModel: BaseCardsViewModel,
+    homeStyle: Boolean = false,
 ): ListRow {
     val cardsPresenter = CardPresenterSelector {
         viewModel.onLinkCardBind()
-    }
+    }.apply { this.homeStyle = homeStyle }
     val cardsAdapter = ArrayObjectAdapter(cardsPresenter)
     val row = ListRow(rowId, HeaderItem(viewModel.defaultTitle), cardsAdapter)
     subscribeTo(viewModel.cardsData) {
@@ -25,7 +26,7 @@ fun Fragment.createCardsRowBy(
     subscribeTo(viewModel.rowTitle) {
         val position = rowsAdapter.indexOf(row)
         row.headerItem = HeaderItem(it)
-        rowsAdapter.notifyArrayItemRangeChanged(position, 1)
+        if (position >= 0) rowsAdapter.notifyArrayItemRangeChanged(position, 1)
     }
     return row
 }

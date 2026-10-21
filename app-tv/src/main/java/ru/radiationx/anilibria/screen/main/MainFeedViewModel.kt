@@ -15,7 +15,7 @@ class MainFeedViewModel @Inject constructor(
     private val cardRouter: LibriaCardRouter,
 ) : BaseCardsViewModel() {
 
-    override val defaultTitle: String = "Самое актуальное"
+    override val defaultTitle: String = "Новые эпизоды"
 
     override val preventClearOnRefresh: Boolean = true
 

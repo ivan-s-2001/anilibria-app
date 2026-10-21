@@ -26,6 +26,8 @@ open class CustomListRowPresenter @JvmOverloads constructor(
         initStatics(parent.context)
         val rowView = ListRowView(parent.context)
         setupFadingEffect(rowView)
+        val gap = (16 * parent.resources.displayMetrics.density).toInt()
+        rowView.gridView.setHorizontalSpacing(gap)
         if (rowHeight != 0) {
             rowView.gridView.setRowHeight(rowHeight)
         }

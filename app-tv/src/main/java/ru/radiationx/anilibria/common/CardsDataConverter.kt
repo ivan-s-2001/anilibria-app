@@ -39,6 +39,7 @@ class CardsDataConverter(
                 genres = genres.joinToString(" • "),
                 synopsis = description.orEmpty().parseAsHtml().toString().trim(),
                 status = status.orEmpty(),
+                badge = series?.takeIf { it.isNotBlank() }?.let { "Серии: $it" }.orEmpty(),
             )
         )
     }

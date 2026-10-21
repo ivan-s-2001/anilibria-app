@@ -116,7 +116,7 @@ class PosterFocusOverlay @JvmOverloads constructor(
             previewLayouts.clear()
             invalidate()
             removeCallbacks(showPreview)
-            if (card?.preview != null) postDelayed(showPreview, 420L)
+            if (card?.preview != null) postDelayed(showPreview, 180L)
             animationsEnabled = Settings.Global.getFloat(
                 context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f
             ) > 0f
@@ -145,12 +145,12 @@ class PosterFocusOverlay @JvmOverloads constructor(
     private fun drawPreview(canvas: Canvas) {
         val card = previewCard ?: return
         val info = card.preview ?: return
-        val margin = 16f * density
-        val panelWidth = min(310f * density, width - 2f * margin)
-        val panelHeight = min(322f * density, height - 2f * margin)
-        val left = frame.left.coerceIn(margin, (width - panelWidth - margin).coerceAtLeast(margin))
-        val top = frame.top.coerceIn(margin, (height - panelHeight - margin).coerceAtLeast(margin))
-        previewBox.set(left, top, left + panelWidth, top + panelHeight)
+        // Information stays inside the selected artwork, as on the web homepage.
+        val panelWidth = frame.width()
+        val panelHeight = frame.height()
+        val left = frame.left
+        val top = frame.top
+        previewBox.set(frame)
         val save = canvas.save()
         val path = android.graphics.Path().apply {
             addRoundRect(previewBox, 12f * density, 12f * density, android.graphics.Path.Direction.CW)
@@ -175,32 +175,25 @@ class PosterFocusOverlay @JvmOverloads constructor(
             canvas.restoreToCount(artSave)
             canvas.restoreToCount(filteredLayer)
         }
-        val padding = 18f * density
+        val padding = 12f * density
         val textWidth = (panelWidth - 2 * padding).toInt()
         if (previewLayouts.isEmpty()) {
-            var y = padding
-            fun add(text: String, size: Float, lines: Int, color: Int, bold: Boolean = false) {
+            fun text(text: String, size: Float, lines: Int, color: Int, topOffset: Float, bold: Boolean = false) {
                 if (text.isBlank()) return
                 val paint = TextPaint(previewText).apply {
                     textSize = size * resources.displayMetrics.scaledDensity
                     this.color = color
-                    typeface = if (bold) Typeface.create("sans-serif-medium", Typeface.NORMAL) else Typeface.create("sans-serif", Typeface.NORMAL)
+                    typeface = Typeface.create(if (bold) "sans-serif-medium" else "sans-serif", Typeface.NORMAL)
                 }
                 val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, textWidth)
-                    .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-                    .setIncludePad(false).setMaxLines(lines)
-                    .setEllipsize(TextUtils.TruncateAt.END).build()
-                previewLayouts.add(layout to y)
-                y += layout.height + 8f * density
+                    .setAlignment(Layout.Alignment.ALIGN_CENTER).setIncludePad(false)
+                    .setMaxLines(lines).setEllipsize(TextUtils.TruncateAt.END).build()
+                previewLayouts.add(layout to topOffset)
             }
-            add(card.title, 20f, 2, Color.WHITE, true)
-            add(info.alternateTitle, 14f, 1, 0xFFBDBDBD.toInt())
-            add(info.metadata, 14f, 2, 0xFFEEEEEE.toInt())
-            add(info.genres, 14f, 2, 0xFFBDBDBD.toInt())
-            add(info.status, 14f, 1, Color.WHITE)
-            val room = panelHeight - y - 48f * density
-            val synopsisLines = (room / (17f * resources.displayMetrics.scaledDensity)).toInt().coerceIn(0, 5)
-            if (synopsisLines > 0) add(info.synopsis, 15f, synopsisLines, 0xFFEEEEEE.toInt())
+            text(info.badge.ifBlank { info.status }, 13f, 1, Color.WHITE, padding)
+            text(card.title, 18f, 4, Color.WHITE, panelHeight * .26f, true)
+            text(info.metadata, 13f, 2, 0xFFCCCCCC.toInt(), panelHeight - 105f * density)
+            text(info.genres, 12f, 2, 0xFFBDBDBD.toInt(), panelHeight - 72f * density)
         }
         val bodySave = canvas.save()
         canvas.clipRect(left, top, previewBox.right, previewBox.bottom - 42f * density)
@@ -211,13 +204,13 @@ class PosterFocusOverlay @JvmOverloads constructor(
             canvas.restoreToCount(lineSave)
         }
         canvas.restoreToCount(bodySave)
-        panelPaint.color = Color.rgb(254, 54, 53)
+        panelPaint.color = Color.rgb(55, 55, 55)
         canvas.drawRoundRect(left + padding, previewBox.bottom - 36f * density,
             previewBox.right - padding, previewBox.bottom - 10f * density, 8f * density, 8f * density, panelPaint)
         previewText.color = Color.WHITE
         previewText.textSize = 14f * resources.displayMetrics.scaledDensity
         previewText.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-        canvas.drawText("OK · Открыть тайтл", left + padding + 12f * density, previewBox.bottom - 18f * density, previewText)
+        canvas.drawText("OK · ${info.actionLabel}", left + padding + 12f * density, previewBox.bottom - 18f * density, previewText)
         canvas.restoreToCount(save)
         canvas.drawRoundRect(previewBox, 12f * density, 12f * density, rim)
     }

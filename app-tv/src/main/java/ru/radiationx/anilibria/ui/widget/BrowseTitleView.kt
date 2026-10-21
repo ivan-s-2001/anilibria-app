@@ -97,6 +97,16 @@ open class BrowseTitleView @JvmOverloads constructor(
             clipToPadding = false
             setPadding(0, (8 * density).toInt(), 0, (8 * density).toInt())
         }
+        row.addView(AppCompatTextView(context).apply {
+            text = "AniLiberty"
+            textSize = 20f
+            setTextColor(ContextCompat.getColor(context, R.color.white))
+            gravity = Gravity.CENTER_VERTICAL
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+            resources.getDimensionPixelSize(R.dimen.tv_navigation_height)).apply {
+            marginEnd = (24 * density).toInt()
+        })
         homeButtons.clear()
         items.forEach { (label, action) ->
             val button = AppCompatTextView(context).apply {

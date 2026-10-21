@@ -4,6 +4,8 @@ import android.os.Bundle
 import android.view.View
 import androidx.leanback.app.RowsSupportFragment
 import androidx.leanback.widget.ArrayObjectAdapter
+import ru.radiationx.anilibria.ui.presenter.HomeHeroCard
+import ru.radiationx.anilibria.ui.presenter.HomeHeroPresenter
 import androidx.leanback.widget.ListRow
 import androidx.leanback.widget.OnItemViewSelectedListener
 import androidx.leanback.widget.Presenter
@@ -60,6 +62,7 @@ class MainFragment : RowsSupportFragment() {
         viewLifecycleOwner.lifecycle.addObserver(favoritesViewModel)
         viewLifecycleOwner.lifecycle.addObserver(youtubeViewModel)
 
+        backgroundManager.clearGradient()
         adapter = rowsAdapter
         onItemViewSelectedListener = ItemViewSelectedListener()
 
@@ -67,6 +70,10 @@ class MainFragment : RowsSupportFragment() {
             if (rowViewHolder is CustomListRowViewHolder) {
                 val viewMode: BaseCardsViewModel? = getViewModel((row as ListRow).id)
                 when (item) {
+                    is HomeHeroCard -> {
+                        feedViewModel.onLibriaCardClick(item.release)
+                    }
+
                     is LinkCard -> {
                         viewMode?.onLinkCardClick()
                     }
@@ -87,14 +94,27 @@ class MainFragment : RowsSupportFragment() {
         }
 
         val rowMap = mutableMapOf<Long, ListRow>()
-        subscribeTo(mainViewModel.rowListData) { rowList ->
-            val rows = rowList.map { rowId ->
-                val row =
-                    rowMap[rowId] ?: createCardsRowBy(rowId, rowsAdapter, getViewModel(rowId)!!)
-                rowMap[rowId] = row
-                row
+        val heroAdapter = ArrayObjectAdapter(HomeHeroPresenter())
+        val heroRow = ListRow(100L, null, heroAdapter)
+        var currentRows = emptyList<Long>()
+        fun renderRows() {
+            val sections = currentRows.map { rowId ->
+                rowMap.getOrPut(rowId) {
+                    createCardsRowBy(rowId, rowsAdapter, getViewModel(rowId)!!, homeStyle = true)
+                }
             }
-            rowsAdapter.setItems(rows, RowDiffCallback)
+            rowsAdapter.setItems(if (heroAdapter.size() > 0) listOf(heroRow) + sections else sections, RowDiffCallback)
+        }
+        subscribeTo(mainViewModel.rowListData) {
+            currentRows = it
+            renderRows()
+        }
+        subscribeTo(feedViewModel.cardsData) { cards ->
+            val featured = cards.filterIsInstance<LibriaCard>().firstOrNull { it.type is LibriaCard.Type.Release }
+            if (featured != null) {
+                heroAdapter.setItems(listOf(HomeHeroCard(featured)), null)
+            }
+            renderRows()
         }
     }
 
@@ -113,7 +133,7 @@ class MainFragment : RowsSupportFragment() {
             rowViewHolder: RowPresenter.ViewHolder, row: Row,
         ) {
             if (rowViewHolder is CustomListRowViewHolder) {
-                backgroundManager.applyCard(item)
+                // Web homepage keeps one neutral canvas while cards change focus.
                 when (item) {
                     is LibriaCard -> {
                         rowViewHolder.setDescription(item.title, item.description)

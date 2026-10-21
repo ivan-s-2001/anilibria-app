@@ -10,6 +10,8 @@ class CardPresenterSelector(
     private val linkBindListener: (() -> Unit)?,
 ) : PresenterSelector() {
 
+    var homeStyle: Boolean = false
+
     private val presentersMap = mutableMapOf<Class<*>, Presenter>()
 
     override fun getPresenter(item: Any?): Presenter? {
@@ -19,7 +21,7 @@ class CardPresenterSelector(
             return presenter
         }
         presentersMap[item::class.java] = when (item) {
-            is LibriaCard -> LibriaCardPresenter()
+            is LibriaCard -> LibriaCardPresenter(homeStyle)
             is LinkCard -> LinkCardPresenter(linkBindListener)
             is LoadingCard -> LoadingCardPresenter()
             else -> throw RuntimeException("No presenter for $item")

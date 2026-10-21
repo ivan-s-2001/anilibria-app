@@ -132,3 +132,7 @@ Navigation now has a direct Schedule destination. The selected page uses the red
 Windows update: after pulling, run `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Update-TV.ps1`. The script stops on update/build/install failure and never uninstalls the existing app. Hardware validation of the preview placement, readability and DPAD navigation is still required.
 
 Saved official web assets confirm `brightness(5%) contrast(90%)` for poster overlays, 12px card corners, Inter body text and Montserrat headings (`entry.BnrmNrTc.css`). The native preview applies the CSS filter as a color matrix without modifying the shared poster drawable. The supplied archive does not contain font binaries or the lazy-loaded hover component implementation; native system fonts remain a fallback for now.
+
+## Homepage composition from the supplied saved page
+
+The main screen now has a wide featured release above the existing sections, a branded navigation bar, larger 188x270dp home posters, 16dp card gaps, and a fixed neutral background. Focus information stays inside the poster instead of expanding over neighbors. The primary feed is labelled New episodes. Existing continue, schedule, favorites and team-video sources remain in use. The featured release comes from the loaded feed; this is not the official website promotions feed. Support, franchise, genre and torrent homepage modules are not implemented by this change. Existing server contracts are unchanged.
