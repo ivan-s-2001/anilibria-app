@@ -4,8 +4,6 @@ import android.os.Bundle
 import android.view.View
 import androidx.leanback.app.RowsSupportFragment
 import androidx.leanback.widget.ArrayObjectAdapter
-import ru.radiationx.anilibria.ui.presenter.HomeHeroCard
-import ru.radiationx.anilibria.ui.presenter.HomeHeroPresenter
 import androidx.leanback.widget.ListRow
 import androidx.leanback.widget.OnItemViewSelectedListener
 import androidx.leanback.widget.Presenter
@@ -18,7 +16,6 @@ import ru.radiationx.anilibria.common.LibriaCard
 import ru.radiationx.anilibria.common.LinkCard
 import ru.radiationx.anilibria.common.LoadingCard
 import ru.radiationx.anilibria.common.RowDiffCallback
-import ru.radiationx.anilibria.extension.applyCard
 import ru.radiationx.anilibria.extension.createCardsRowBy
 import ru.radiationx.anilibria.ui.presenter.cust.CustomListRowPresenter
 import ru.radiationx.anilibria.ui.presenter.cust.CustomListRowViewHolder
@@ -70,10 +67,6 @@ class MainFragment : RowsSupportFragment() {
             if (rowViewHolder is CustomListRowViewHolder) {
                 val viewMode: BaseCardsViewModel? = getViewModel((row as ListRow).id)
                 when (item) {
-                    is HomeHeroCard -> {
-                        feedViewModel.onLibriaCardClick(item.release)
-                    }
-
                     is LinkCard -> {
                         viewMode?.onLinkCardClick()
                     }
@@ -94,27 +87,22 @@ class MainFragment : RowsSupportFragment() {
         }
 
         val rowMap = mutableMapOf<Long, ListRow>()
-        val heroAdapter = ArrayObjectAdapter(HomeHeroPresenter())
-        val heroRow = ListRow(100L, null, heroAdapter)
-        var currentRows = emptyList<Long>()
-        fun renderRows() {
-            val sections = currentRows.map { rowId ->
+        subscribeTo(mainViewModel.rowListData) { rowIds ->
+            // Keep adapters alive when optional rows appear: their selection and
+            // loaded cards belong to the screen, not to each list emission.
+            val selectedRowId = (if (selectedPosition in 0 until rowsAdapter.size()) rowsAdapter[selectedPosition] as? ListRow else null)?.id
+            val sections = rowIds.map { rowId ->
                 rowMap.getOrPut(rowId) {
-                    createCardsRowBy(rowId, rowsAdapter, getViewModel(rowId)!!, homeStyle = true)
+                    createCardsRowBy(rowId, rowsAdapter, requireNotNull(getViewModel(rowId)), homeStyle = true)
                 }
             }
-            rowsAdapter.setItems(if (heroAdapter.size() > 0) listOf(heroRow) + sections else sections, RowDiffCallback)
-        }
-        subscribeTo(mainViewModel.rowListData) {
-            currentRows = it
-            renderRows()
-        }
-        subscribeTo(feedViewModel.cardsData) { cards ->
-            val featured = cards.filterIsInstance<LibriaCard>().firstOrNull { it.type is LibriaCard.Type.Release }
-            if (featured != null) {
-                heroAdapter.setItems(listOf(HomeHeroCard(featured)), null)
+            rowsAdapter.setItems(sections, RowDiffCallback)
+            selectedRowId?.let { id ->
+                val position = sections.indexOfFirst { it.id == id }
+                if (position >= 0 && position != selectedPosition) {
+                    setSelectedPosition(position, false)
+                }
             }
-            renderRows()
         }
     }
 

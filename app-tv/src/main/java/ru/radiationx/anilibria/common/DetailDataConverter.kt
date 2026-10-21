@@ -17,6 +17,10 @@ class DetailDataConverter @Inject constructor() {
         isFull: Boolean,
         accesses: List<EpisodeAccess>,
     ): LibriaDetails = releaseItem.run {
+        val lastAccess = accesses
+            .filter { access -> episodes.any { it.id == access.id } }
+            .filter { it.lastValidAccess != null || it.seek > 0 }
+            .maxByOrNull { it.lastAccessRaw }
         LibriaDetails(
             id = id,
             titleRu = title.orEmpty(),
@@ -26,7 +30,7 @@ class DetailDataConverter @Inject constructor() {
                 "${year.orEmpty()} ${season.orEmpty()}",
                 types.firstOrNull()?.trim(),
                 "Серии: ${series?.trim() ?: "Не доступно"}"
-            ).joinToString(" • "),
+            ).mapNotNull { it?.trim()?.takeIf(String::isNotEmpty) }.joinToString(" • "),
             description = description.orEmpty().parseAsHtml().toString().trim()
                 .trim('"')/*.replace('\n', ' ')*/,
             announce = getAnnounce(isFull),
@@ -35,8 +39,8 @@ class DetailDataConverter @Inject constructor() {
             hasFullHd = episodes.any { PlayerQuality.FULLHD in it.qualityInfo },
             isFavorite = favoriteInfo.isAdded,
             hasEpisodes = episodes.isNotEmpty(),
-            hasViewed = accesses.any { it.isViewed },
-            continueLabel = accesses.maxByOrNull { it.lastAccessRaw }?.let {
+            hasViewed = lastAccess != null,
+            continueLabel = lastAccess?.let {
                 "Продолжить · серия ${it.id.id}"
             } ?: "Продолжить",
             hasWebPlayer = moonwalkLink != null

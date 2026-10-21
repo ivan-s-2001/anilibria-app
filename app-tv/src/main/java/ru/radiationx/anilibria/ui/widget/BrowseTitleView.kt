@@ -16,6 +16,7 @@ package ru.radiationx.anilibria.ui.widget
 import android.content.Context
 import android.graphics.Rect
 import android.view.Gravity
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
@@ -112,6 +113,8 @@ open class BrowseTitleView @JvmOverloads constructor(
             val button = AppCompatTextView(context).apply {
                 id = View.generateViewId()
                 text = label
+                isSingleLine = true
+                minWidth = (72 * density).toInt()
                 setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, resources.getDimension(R.dimen.tv_navigation_text))
                 gravity = Gravity.CENTER
                 isFocusable = true
@@ -133,7 +136,21 @@ open class BrowseTitleView @JvmOverloads constructor(
             button.nextFocusDownId = androidx.leanback.R.id.browse_container_dock
         }
         binding.titleControls.removeAllViews()
-        binding.titleControls.addView(row)
+        // A wide label or increased system font must not clip the final tab.
+        // HorizontalScrollView scrolls the focused descendant into view for D-pad.
+        val navigation = HorizontalScrollView(context).apply {
+            isHorizontalScrollBarEnabled = false
+            isFillViewport = true
+            clipToPadding = false
+            isFocusable = false
+            descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            addView(row, ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ))
+        }
+        binding.titleControls.addView(navigation, android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
         binding.titleControls.isVisible = true
         binding.titleControls.setPadding(0, 0, 0, 0)
         updateComponentsVisibility(flags)

@@ -2,7 +2,6 @@ package ru.radiationx.anilibria.screen.details
 
 import android.os.Bundle
 import android.view.View
-import androidx.core.graphics.ColorUtils
 import androidx.leanback.app.RowsSupportFragment
 import androidx.leanback.widget.ArrayObjectAdapter
 import androidx.leanback.widget.ClassPresenterSelector
@@ -16,7 +15,6 @@ import ru.radiationx.anilibria.common.LibriaDetailsRow
 import ru.radiationx.anilibria.common.LinkCard
 import ru.radiationx.anilibria.common.LoadingCard
 import ru.radiationx.anilibria.common.RowDiffCallback
-import ru.radiationx.anilibria.extension.applyCard
 import ru.radiationx.anilibria.extension.createCardsRowBy
 import ru.radiationx.anilibria.ui.presenter.ReleaseDetailsPresenter
 import ru.radiationx.anilibria.ui.presenter.cust.CustomListRowPresenter
@@ -88,10 +86,11 @@ class DetailFragment : RowsSupportFragment() {
         viewLifecycleOwner.lifecycle.addObserver(recommendsViewModel)
 
         adapter = rowsAdapter
+        backgroundManager.clearGradient()
 
         setOnItemViewClickedListener { _, item, _, row ->
             val viewMode: BaseCardsViewModel? =
-                getViewModel((row as ListRow).id) as? BaseCardsViewModel
+                getViewModel((row as? ListRow)?.id ?: return@setOnItemViewClickedListener) as? BaseCardsViewModel
             when (item) {
                 is LinkCard -> viewMode?.onLinkCardClick()
                 is LoadingCard -> viewMode?.onLoadingCardClick()
@@ -100,11 +99,6 @@ class DetailFragment : RowsSupportFragment() {
         }
 
         setOnItemViewSelectedListener { _, item, rowViewHolder, row ->
-            if (row is ListRow) {
-                backgroundManager.applyCard(item)
-            } else if (row is LibriaDetailsRow) {
-                applyImage(row.details?.image.orEmpty())
-            }
             if (rowViewHolder is CustomListRowViewHolder) {
                 when (item) {
                     is LibriaCard -> {
@@ -148,7 +142,7 @@ class DetailFragment : RowsSupportFragment() {
             viewModel as DetailHeaderViewModel
         )
 
-        else -> createCardsRowBy(rowId, rowsAdapter, viewModel as BaseCardsViewModel)
+        else -> createCardsRowBy(rowId, rowsAdapter, viewModel as BaseCardsViewModel, homeStyle = true)
     }
 
     private fun createHeaderRowBy(
@@ -160,24 +154,14 @@ class DetailFragment : RowsSupportFragment() {
         subscribeTo(viewModel.releaseData) {
             val position = rowsAdapter.indexOf(row)
             row.details = it
-            rowsAdapter.notifyArrayItemRangeChanged(position, 1)
+            if (position >= 0) rowsAdapter.notifyArrayItemRangeChanged(position, 1)
         }
         subscribeTo(viewModel.progressState) {
             val position = rowsAdapter.indexOf(row)
             row.state = it
-            rowsAdapter.notifyArrayItemRangeChanged(position, 1)
+            if (position >= 0) rowsAdapter.notifyArrayItemRangeChanged(position, 1)
         }
         return row
-    }
-
-    private fun applyImage(image: String) {
-        backgroundManager.applyImage(image, colorSelector = { null }) {
-            val hslColor = FloatArray(3)
-            ColorUtils.colorToHSL(it, hslColor)
-            hslColor[1] = (hslColor[1] + 0.05f).coerceAtMost(1.0f)
-            hslColor[2] = (hslColor[2] + 0.05f).coerceAtMost(1.0f)
-            ColorUtils.HSLToColor(hslColor)
-        }
     }
 
 }

@@ -156,6 +156,21 @@ class LibriaReleaseViewHolder(
         } else {
             "Добавить в избранное"
         }
+        val actions = listOf(
+            binding.rowReleaseActionContinue,
+            binding.rowReleaseActionPlay,
+            binding.rowReleaseActionFavorite,
+            binding.rowReleaseActionOther,
+        ).filter { it.isVisible }
+        actions.forEachIndexed { index, action ->
+            action.nextFocusLeftId = actions.getOrNull(index - 1)?.id ?: action.id
+            action.nextFocusRightId = actions.getOrNull(index + 1)?.id ?: action.id
+            action.nextFocusUpId = action.id
+            action.nextFocusDownId = if (binding.rowReleaseDescriptionCard.isVisible) {
+                binding.rowReleaseDescriptionCard.id
+            } else View.NO_ID
+        }
+        binding.rowReleaseDescriptionCard.nextFocusUpId = actions.firstOrNull()?.id ?: View.NO_ID
         if (firstBind && (!binding.root.hasFocus() || binding.root.isFocused)) {
             when {
                 details.hasEpisodes -> binding.rowReleaseActionContinue.requestFocus()
