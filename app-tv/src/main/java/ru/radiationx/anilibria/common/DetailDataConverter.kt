@@ -26,11 +26,11 @@ class DetailDataConverter @Inject constructor() {
             titleRu = title.orEmpty(),
             titleEn = titleEng.orEmpty(),
             extra = listOf(
-                genres.firstOrNull()?.capitalizeDefault()?.trim(),
-                "${year.orEmpty()} ${season.orEmpty()}",
-                types.firstOrNull()?.trim(),
+                "Жанры: ${genres.joinToString(" • ")}".takeIf { genres.isNotEmpty() },
+                "${year.orEmpty()} • ${season.orEmpty()}".trim(' ', '•'),
+                types.firstOrNull()?.trim()?.let { "Тип: $it" },
                 "Серии: ${series?.trim() ?: "Не доступно"}"
-            ).mapNotNull { it?.trim()?.takeIf(String::isNotEmpty) }.joinToString(" • "),
+            ).mapNotNull { it?.trim()?.takeIf(String::isNotEmpty) }.joinToString("\n"),
             description = description.orEmpty().parseAsHtml().toString().trim()
                 .trim('"')/*.replace('\n', ' ')*/,
             announce = getAnnounce(isFull),

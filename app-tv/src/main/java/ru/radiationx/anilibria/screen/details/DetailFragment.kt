@@ -1,24 +1,25 @@
 package ru.radiationx.anilibria.screen.details
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.View
-import androidx.leanback.app.RowsSupportFragment
-import androidx.leanback.widget.ArrayObjectAdapter
-import androidx.leanback.widget.ClassPresenterSelector
-import androidx.leanback.widget.ListRow
-import androidx.leanback.widget.Row
-import androidx.lifecycle.ViewModel
-import ru.radiationx.anilibria.common.BaseCardsViewModel
+import android.widget.Toast
+import androidx.core.view.doOnNextLayout
+import androidx.fragment.app.Fragment
+import androidx.recyclerview.widget.ConcatAdapter
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import ru.radiationx.anilibria.R
 import ru.radiationx.anilibria.common.GradientBackgroundManager
 import ru.radiationx.anilibria.common.LibriaCard
-import ru.radiationx.anilibria.common.LibriaDetailsRow
-import ru.radiationx.anilibria.common.LinkCard
 import ru.radiationx.anilibria.common.LoadingCard
-import ru.radiationx.anilibria.common.RowDiffCallback
-import ru.radiationx.anilibria.extension.createCardsRowBy
-import ru.radiationx.anilibria.ui.presenter.ReleaseDetailsPresenter
-import ru.radiationx.anilibria.ui.presenter.cust.CustomListRowPresenter
-import ru.radiationx.anilibria.ui.presenter.cust.CustomListRowViewHolder
+import ru.radiationx.anilibria.screen.player.PlayerExtra
+import ru.radiationx.anilibria.screen.player.episodes.EpisodeListAdapter
+import ru.radiationx.anilibria.screen.player.episodes.PlayerEpisodesViewModel
+import ru.radiationx.anilibria.screen.player.episodes.episodeRows
+import ru.radiationx.data.entity.domain.types.EpisodeId
 import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.quill.QuillExtra
 import ru.radiationx.quill.inject
@@ -27,141 +28,165 @@ import ru.radiationx.shared.ktx.android.getExtraNotNull
 import ru.radiationx.shared.ktx.android.putExtra
 import ru.radiationx.shared.ktx.android.subscribeTo
 
-data class DetailExtra(
-    val id: ReleaseId,
-) : QuillExtra
+data class DetailExtra(val id: ReleaseId) : QuillExtra
 
-class DetailFragment : RowsSupportFragment() {
-
+/** A single virtualized page: title, synopsis, tabs and their content share one scroll. */
+class DetailFragment : Fragment(R.layout.fragment_release_page) {
     companion object {
         private const val ARG_ID = "id"
-
-        fun newInstance(releaseId: ReleaseId) = DetailFragment().putExtra {
-            putParcelable(ARG_ID, releaseId)
-        }
+        fun newInstance(releaseId: ReleaseId) = DetailFragment().putExtra { putParcelable(ARG_ID, releaseId) }
     }
-
+    private val extra by lazy { DetailExtra(getExtraNotNull(ARG_ID)) }
     private val backgroundManager by inject<GradientBackgroundManager>()
+    private val header by viewModel<DetailHeaderViewModel> { extra }
+    private val related by viewModel<DetailRelatedViewModel> { extra }
+    private val recommends by viewModel<DetailRecommendsViewModel> { extra }
+    private val episodes by viewModel<PlayerEpisodesViewModel> { PlayerExtra(extra.id, null) }
+    private var selectedTab = 0
+    private var descending = false
+    private var focusedEpisode: EpisodeId? = null
 
-    private val argExtra by lazy {
-        DetailExtra(id = getExtraNotNull(ARG_ID))
+    override fun onCreate(state: Bundle?) {
+        super.onCreate(state)
+        selectedTab = state?.getInt("tab") ?: 0
+        descending = state?.getBoolean("descending") ?: false
+        @Suppress("DEPRECATION")
+        focusedEpisode = state?.getParcelable("episode")
     }
 
-    private val rowsPresenter by lazy {
-        ClassPresenterSelector().apply {
-            addClassPresenter(ListRow::class.java, CustomListRowPresenter())
-            addClassPresenter(
-                LibriaDetailsRow::class.java, ReleaseDetailsPresenter(
-                    continueClickListener = headerViewModel::onContinueClick,
-                    playClickListener = headerViewModel::onPlayClick,
-                    favoriteClickListener = headerViewModel::onFavoriteClick,
-                    otherClickListener = headerViewModel::onOtherClick
-                )
-            )
-        }
-    }
-    private val rowsAdapter by lazy { ArrayObjectAdapter(rowsPresenter) }
-
-    private val detailsViewModel by viewModel<DetailsViewModel> { argExtra }
-
-    private val headerViewModel by viewModel<DetailHeaderViewModel> { argExtra }
-
-    private val relatedViewModel by viewModel<DetailRelatedViewModel> { argExtra }
-
-    private val recommendsViewModel by viewModel<DetailRecommendsViewModel> { argExtra }
-
-    private fun getViewModel(rowId: Long): ViewModel? = when (rowId) {
-        DetailsViewModel.RELEASE_ROW_ID -> headerViewModel
-        DetailsViewModel.RELATED_ROW_ID -> relatedViewModel
-        DetailsViewModel.RECOMMENDS_ROW_ID -> recommendsViewModel
-        else -> null
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-
-        viewLifecycleOwner.lifecycle.addObserver(detailsViewModel)
-        viewLifecycleOwner.lifecycle.addObserver(headerViewModel)
-        viewLifecycleOwner.lifecycle.addObserver(relatedViewModel)
-        viewLifecycleOwner.lifecycle.addObserver(recommendsViewModel)
-
-        adapter = rowsAdapter
+    override fun onViewCreated(view: View, state: Bundle?) {
+        val list = view as RecyclerView
+        list.itemAnimator = null
         backgroundManager.clearGradient()
+        listOf(header, related, recommends, episodes).forEach { viewLifecycleOwner.lifecycle.addObserver(it) }
+        val content = ReleaseTextAdapter()
+        val relatedCards = ReleaseCardsAdapter(related::onLibriaCardClick)
+        val recommendationHeading = ReleaseTextAdapter()
+        val recommendationCards = ReleaseCardsAdapter(recommends::onLibriaCardClick)
+        val episodeCards = EpisodeListAdapter(
+            play = { episodes.applyEpisode(it.id) }, focused = { focusedEpisode = it },
+        ).apply { previewMode = true }
+        val toolbar = ReleaseTextAdapter()
+        lateinit var page: ConcatAdapter
+        lateinit var tabs: ReleaseTabsAdapter
+        lateinit var title: ReleaseHeaderAdapter
+        val grid = GridLayoutManager(requireContext(), 3)
+        list.layoutManager = grid
 
-        setOnItemViewClickedListener { _, item, _, row ->
-            val viewMode: BaseCardsViewModel? =
-                getViewModel((row as? ListRow)?.id ?: return@setOnItemViewClickedListener) as? BaseCardsViewModel
-            when (item) {
-                is LinkCard -> viewMode?.onLinkCardClick()
-                is LoadingCard -> viewMode?.onLoadingCardClick()
-                is LibriaCard -> viewMode?.onLibriaCardClick(item)
+        fun positionOf(adapter: RecyclerView.Adapter<*>): Int =
+            page.adapters.takeWhile { it !== adapter }.sumOf { it.itemCount }
+
+        fun focusEpisode() {
+            val index = episodeCards.rows.indexOfFirst { it.episode?.episodeId == focusedEpisode }
+                .takeIf { it >= 0 } ?: episodeCards.rows.indexOfFirst { it.episode != null }
+            if (index < 0) return
+            val target = positionOf(episodeCards) + index
+            list.doOnNextLayout { list.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus() }
+            grid.scrollToPositionWithOffset(target, list.dp(12))
+        }
+
+        fun renderEpisodes() {
+            val hadEpisodeFocus = list.findFocus()?.let { focused ->
+                list.findContainingViewHolder(focused)?.bindingAdapter === episodeCards
+            } == true
+            episodeCards.submit(episodeRows(episodes.episodesData.value, descending, false))
+            val count = episodeCards.rows.count { it.episode != null }
+            toolbar.rows = listOf(ReleasePageText(
+                when {
+                    episodes.loading.value -> "Загрузка эпизодов…"
+                    episodes.loadError.value != null -> "Не удалось загрузить эпизоды · Повторить"
+                    count == 0 -> "Эпизоды пока не доступны"
+                    else -> "$count эпизодов · ${if (descending) "Сначала новые" else "Сначала первые"}"
+                }, if (count > 0) "OK — изменить порядок" else "",
+                { if (episodes.loadError.value != null) episodes.loadEpisodes() else { descending = !descending; renderEpisodes() } },
+            ))
+            if (hadEpisodeFocus) focusEpisode()
+        }
+
+        fun renderTextContent() {
+            val release = header.fullRelease.value
+            content.rows = when (selectedTab) {
+                1 -> if (related.cardsData.value.any { it is LoadingCard })
+                    listOf(ReleasePageText("Связанное", "Загрузка… / OK — повторить", related::onRefreshClick))
+                    else if (relatedCards.itemCount == 0) listOf(ReleasePageText("Связанное", "Другие релизы не найдены")) else emptyList()
+                2 -> listOf(ReleasePageText("Комментарии", "Открыть обсуждение на сайте", {
+                    openLink("https://aniliberty.top/anime/releases/${release?.code?.code ?: extra.id.id}")
+                }))
+                3 -> release?.members?.let { members ->
+                    listOf("Озвучивание" to members.voicing, "Перевод" to members.translating,
+                        "Тайминг" to members.timing, "Редактирование" to members.editing,
+                        "Оформление" to members.decorating)
+                        .filter { it.second.isNotEmpty() }.map { ReleasePageText(it.first, it.second.joinToString(" • ")) }
+                }?.takeIf { it.isNotEmpty() } ?: listOf(ReleasePageText("Работа над релизом", "Состав команды пока не указан"))
+                4 -> release?.torrents?.map { torrent ->
+                    ReleasePageText(listOfNotNull(torrent.quality, torrent.series?.let { "Эпизоды $it" }).joinToString(" · "),
+                        "%.2f ГБ · Раздают: %d · Скачивают: %d".format(torrent.size / 1073741824.0, torrent.seeders, torrent.leechers),
+                        torrent.url?.let { url -> { openLink(url) } })
+                }?.takeIf { it.isNotEmpty() } ?: listOf(ReleasePageText("Торренты", "Раздачи пока не доступны"))
+                else -> emptyList()
             }
         }
 
-        setOnItemViewSelectedListener { _, item, rowViewHolder, row ->
-            if (rowViewHolder is CustomListRowViewHolder) {
-                when (item) {
-                    is LibriaCard -> {
-                        rowViewHolder.setDescription(item.title, item.description)
-                    }
-
-                    is LinkCard -> {
-                        rowViewHolder.setDescription(item.title, "")
-                    }
-
-                    is LoadingCard -> {
-                        rowViewHolder.setDescription(item.title, item.description)
-                    }
-
-                    else -> {
-                        rowViewHolder.setDescription("", "")
-                    }
+        fun selectTab(index: Int) {
+            selectedTab = index
+            tabs.selected = index
+            val desired = mutableListOf<RecyclerView.Adapter<*>>(title, tabs)
+            if (index == 0) desired.addAll(listOf(toolbar, episodeCards)) else {
+                desired.add(content)
+                if (index == 1) desired.add(relatedCards)
+            }
+            desired.addAll(listOf(recommendationHeading, recommendationCards))
+            page.adapters.filter { it !in desired }.forEach(page::removeAdapter)
+            desired.forEachIndexed { position, adapter ->
+                if (adapter !in page.adapters) page.addAdapter(position, adapter)
+            }
+            renderTextContent()
+        }
+        tabs = ReleaseTabsAdapter(::selectTab).apply { selected = selectedTab }
+        title = ReleaseHeaderAdapter(header::onContinueClick, { selectTab(0); focusEpisode() }, header::onFavoriteClick, header::onOtherClick)
+        page = ConcatAdapter(title, tabs)
+        grid.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+            override fun getSpanSize(position: Int): Int {
+                var offset = position
+                page.adapters.forEach { adapter ->
+                    if (offset < adapter.itemCount) return if (adapter === episodeCards) {
+                        if (episodeCards.rows.getOrNull(offset)?.episode != null) 1 else 3
+                    } else if (adapter === relatedCards || adapter === recommendationCards) 1 else 3
+                    offset -= adapter.itemCount
                 }
+                return 3
             }
         }
-
-        val rowMap = mutableMapOf<Long, Row>()
-        subscribeTo(detailsViewModel.rowListData) { rowList ->
-            val rows = rowList.map { rowId ->
-                val row = rowMap[rowId] ?: createRowBy(rowId, rowsAdapter, getViewModel(rowId)!!)
-                rowMap[rowId] = row
-                row
+        list.adapter = page
+        selectTab(selectedTab)
+        renderEpisodes()
+        subscribeTo(header.releaseData) { title.row.details = it; title.notifyItemChanged(0); renderTextContent() }
+        subscribeTo(header.progressState) { title.row.state = it; title.notifyItemChanged(0) }
+        subscribeTo(header.fullRelease) { renderTextContent() }
+        subscribeTo(episodes.episodesData) { renderEpisodes() }
+        subscribeTo(episodes.loading) { renderEpisodes() }
+        subscribeTo(episodes.loadError) { renderEpisodes() }
+        subscribeTo(related.cardsData) {
+            relatedCards.cards = it.filterIsInstance<LibriaCard>(); if (selectedTab == 1) renderTextContent()
+        }
+        subscribeTo(recommends.cardsData) {
+            recommendationCards.cards = it.filterIsInstance<LibriaCard>().take(9)
+            recommendationHeading.rows = when {
+                recommendationCards.itemCount > 0 -> listOf(ReleasePageText("Рекомендуем", "Похожие по жанрам"))
+                it.any { card -> card is LoadingCard } -> listOf(ReleasePageText("Рекомендации · Повторить загрузку", click = recommends::onRefreshClick))
+                else -> emptyList()
             }
-            rowsAdapter.setItems(rows, RowDiffCallback)
         }
     }
 
-    private fun createRowBy(
-        rowId: Long,
-        rowsAdapter: ArrayObjectAdapter,
-        viewModel: ViewModel,
-    ): Row = when (rowId) {
-        DetailsViewModel.RELEASE_ROW_ID -> createHeaderRowBy(
-            rowId,
-            rowsAdapter,
-            viewModel as DetailHeaderViewModel
-        )
-
-        else -> createCardsRowBy(rowId, rowsAdapter, viewModel as BaseCardsViewModel, homeStyle = true)
+    private fun openLink(url: String) {
+        if (!url.startsWith("https://") && !url.startsWith("http://") && !url.startsWith("magnet:")) return
+        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+        catch (_: ActivityNotFoundException) { Toast.makeText(requireContext(), "Нет приложения для открытия ссылки", Toast.LENGTH_LONG).show() }
     }
-
-    private fun createHeaderRowBy(
-        rowId: Long,
-        rowsAdapter: ArrayObjectAdapter,
-        viewModel: DetailHeaderViewModel,
-    ): Row {
-        val row = LibriaDetailsRow(rowId)
-        subscribeTo(viewModel.releaseData) {
-            val position = rowsAdapter.indexOf(row)
-            row.details = it
-            if (position >= 0) rowsAdapter.notifyArrayItemRangeChanged(position, 1)
-        }
-        subscribeTo(viewModel.progressState) {
-            val position = rowsAdapter.indexOf(row)
-            row.state = it
-            if (position >= 0) rowsAdapter.notifyArrayItemRangeChanged(position, 1)
-        }
-        return row
+    override fun onSaveInstanceState(state: Bundle) {
+        state.putInt("tab", selectedTab); state.putBoolean("descending", descending)
+        state.putParcelable("episode", focusedEpisode)
+        super.onSaveInstanceState(state)
     }
-
 }

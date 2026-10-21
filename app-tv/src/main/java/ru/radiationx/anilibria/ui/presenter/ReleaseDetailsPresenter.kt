@@ -179,5 +179,6 @@ class LibriaReleaseViewHolder(
         }
 
         binding.rowReleaseImageCard.showImageUrl(details.image)
+        binding.detailBackdrop.showImageUrl(details.image)
     }
 }

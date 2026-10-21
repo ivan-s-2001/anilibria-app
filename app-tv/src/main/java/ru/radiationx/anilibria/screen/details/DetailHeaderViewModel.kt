@@ -41,6 +41,8 @@ class DetailHeaderViewModel @Inject constructor(
 
     private val releaseId = argExtra.id
 
+    val fullRelease = MutableStateFlow<Release?>(null)
+
     val releaseData = MutableStateFlow<LibriaDetails?>(null)
     val progressState = MutableStateFlow(DetailsState())
 
@@ -140,6 +142,7 @@ class DetailHeaderViewModel @Inject constructor(
 
     private fun updateRelease(release: Release, accesses: List<EpisodeAccess>) {
         currentRelease = release
+        fullRelease.value = release
         releaseData.value = converter.toDetail(release, isFullLoaded, accesses)
         updateProgress()
     }

@@ -55,6 +55,12 @@ class PlayerEpisodesViewModel @Inject constructor(
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        applyingEpisode = false
+        if (lastReleases.isNotEmpty()) viewModelScope.launch { updateEpisodes(lastReleases) }
+    }
+
     fun loadEpisodes() {
         loadJob?.cancel()
         loading.value = true
