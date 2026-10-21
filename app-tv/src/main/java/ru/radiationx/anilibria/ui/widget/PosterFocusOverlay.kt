@@ -7,6 +7,8 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Color
 import android.text.Layout
 import android.text.StaticLayout
@@ -42,6 +44,15 @@ class PosterFocusOverlay @JvmOverloads constructor(
     private var previewVisible = false
     private val previewBox = RectF()
     private val panelPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    // CSS filter order: brightness(.05), then contrast(.90).
+    private val artworkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        colorFilter = ColorMatrixColorFilter(ColorMatrix(floatArrayOf(
+            .045f, 0f, 0f, 0f, 12.75f,
+            0f, .045f, 0f, 0f, 12.75f,
+            0f, 0f, .045f, 0f, 12.75f,
+            0f, 0f, 0f, 1f, 0f,
+        )))
+    }
     private val previewText = TextPaint(Paint.ANTI_ALIAS_FLAG)
     private val previewLayouts = mutableListOf<Pair<StaticLayout, Float>>()
     private val showPreview = Runnable {
@@ -103,6 +114,7 @@ class PosterFocusOverlay @JvmOverloads constructor(
             previewCard = card
             previewVisible = false
             previewLayouts.clear()
+            invalidate()
             removeCallbacks(showPreview)
             if (card?.preview != null) postDelayed(showPreview, 420L)
             animationsEnabled = Settings.Global.getFloat(
@@ -151,6 +163,7 @@ class PosterFocusOverlay @JvmOverloads constructor(
         val artwork = (lastFocused as? LauncherCardView)?.mainImageView?.drawable
         if (artwork != null && artwork.intrinsicWidth > 0 && artwork.intrinsicHeight > 0) {
             val oldBounds = Rect(artwork.bounds)
+            val filteredLayer = canvas.saveLayer(previewBox, artworkPaint)
             val artSave = canvas.save()
             val scale = maxOf(panelWidth / artwork.intrinsicWidth, panelHeight / artwork.intrinsicHeight)
             canvas.translate(left + (panelWidth - artwork.intrinsicWidth * scale) / 2f,
@@ -160,10 +173,8 @@ class PosterFocusOverlay @JvmOverloads constructor(
             artwork.draw(canvas)
             artwork.bounds = oldBounds
             canvas.restoreToCount(artSave)
+            canvas.restoreToCount(filteredLayer)
         }
-        // The web card uses a very dark artwork overlay; keep white text readable.
-        panelPaint.color = 0xF0121212.toInt()
-        canvas.drawRect(previewBox, panelPaint)
         val padding = 18f * density
         val textWidth = (panelWidth - 2 * padding).toInt()
         if (previewLayouts.isEmpty()) {

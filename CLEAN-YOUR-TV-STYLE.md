@@ -130,3 +130,5 @@ Focused release posters show a delayed information overlay after 420ms: title, a
 Navigation now has a direct Schedule destination. The selected page uses the red web accent, while focus has its own high-contrast state. Welcome text sizes share theme resources.
 
 Windows update: after pulling, run `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Update-TV.ps1`. The script stops on update/build/install failure and never uninstalls the existing app. Hardware validation of the preview placement, readability and DPAD navigation is still required.
+
+Saved official web assets confirm `brightness(5%) contrast(90%)` for poster overlays, 12px card corners, Inter body text and Montserrat headings (`entry.BnrmNrTc.css`). The native preview applies the CSS filter as a color matrix without modifying the shared poster drawable. The supplied archive does not contain font binaries or the lazy-loaded hover component implementation; native system fonts remain a fallback for now.
