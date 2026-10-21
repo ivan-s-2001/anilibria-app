@@ -110,8 +110,10 @@ class PageAdapter(
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         val row = rows[position]; val view = holder.itemView
         view.tag = row.key
+        val firstContent = if(contentStart>=0) (contentStart until rows.size).firstOrNull{rows[it].kind!=Kind.HEADING} else null
+        val firstRowCount = when(firstContent?.let{rows[it].kind}){Kind.POSTER->6;Kind.EPISODE->3;else->1}
         view.setOnKeyListener { _, key, event ->
-            if (contentStart >= 0 && position in contentStart..(contentStart + 2) && row.kind == Kind.EPISODE && key == KeyEvent.KEYCODE_DPAD_UP) {
+            if (firstContent != null && position in firstContent until (firstContent+firstRowCount) && key == KeyEvent.KEYCODE_DPAD_UP) {
                 if (event.action == KeyEvent.ACTION_UP) returnToTabs(); true
             } else false
         }
@@ -160,7 +162,7 @@ class PageAdapter(
                     if(value.isBlank())return
                     info.addView(TextView(view.context).apply { label(value,size,color,bold); maxLines=lines;ellipsize=android.text.TextUtils.TruncateAt.END },LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=view.dp(8)})
                 }
-                text(r.title,29f,WHITE,true,2);text(r.english,15f,MUTED,false,1);text(r.metadata,16f);text(r.genres.joinToString(" · "),15f,MUTED,false,2)
+                text(r.title,29f,WHITE,true,2);text(r.english,15f,MUTED,false,1);text(r.metadata,16f);text(r.genres.joinToString(" · "),15f,MUTED,false,2);text(r.ratings.joinToString(" · "){"${it.source} ${"%.1f".format(it.value)}"},14f,MUTED,false,1)
                 val controls=LinearLayout(view.context)
                 info.addView(controls,LinearLayout.LayoutParams(-1,view.dp(48)).apply{topMargin=view.dp(10)})
                 val episode = r.episodes.firstOrNull { it.id == lastEpisode(r.id) } ?: r.episodes.firstOrNull()

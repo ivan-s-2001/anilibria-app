@@ -17,7 +17,7 @@ data class Episode(val id: String, val ordinal: Double, val name: String, val pr
 }
 data class Credit(val role: String, val name: String)
 data class Torrent(val label: String, val description: String, val magnet: String?)
-data class Release(val id: Int, val alias: String, val title: String, val english: String, val poster: String?, val year: String, val season: String, val type: String, val age: String, val genres: List<String>, val description: String, val episodes: List<Episode>, val credits: List<Credit>, val torrents: List<Torrent>, val blocked: Boolean, val latestEpisode: Episode? = null) {
+data class Release(val id: Int, val alias: String, val title: String, val english: String, val poster: String?, val year: String, val season: String, val type: String, val age: String, val genres: List<String>, val description: String, val episodes: List<Episode>, val credits: List<Credit>, val torrents: List<Torrent>, val blocked: Boolean, val latestEpisode: Episode? = null, val externalIds: ExternalIds = ExternalIds(), val ratings: List<Rating> = emptyList()) {
     val metadata: String get() = listOf(year, season, type, age).filter(String::isNotBlank).joinToString(" · ")
 }
 fun number(value: Double): String = java.math.BigDecimal.valueOf(value).stripTrailingZeros().toPlainString()
@@ -41,11 +41,14 @@ fun parseRelease(json: JSONObject): Release {
         json.optJSONArray("members").objects().map { Credit(it.display("role"), it.text("nickname")) },
         json.optJSONArray("torrents").objects().map { Torrent(it.text("label"), listOf(it.text("description"), it.display("quality"), it.display("codec"), "%.2f ГБ".format(it.optDouble("size") / 1073741824.0), "↑ ${it.optInt("seeders")}").filter(String::isNotBlank).joinToString(" · "), it.text("magnet").takeIf { m -> m.startsWith("magnet:") }) },
         json.optBoolean("is_blocked_by_geo") || json.optBoolean("is_blocked_by_copyrights"),
-        json.optJSONObject("latest_episode")?.let { parseRelease(JSONObject().put("id",json.getInt("id")).put("episodes",JSONArray().put(it))).episodes.firstOrNull() })
+        json.optJSONObject("latest_episode")?.let { parseRelease(JSONObject().put("id",json.getInt("id")).put("episodes",JSONArray().put(it))).episodes.firstOrNull() },
+        ExternalIds(json.optJSONObject("shikimori")?.optInt("id")?.takeIf { it > 0 },json.optJSONObject("mal")?.optInt("id")?.takeIf { it > 0 }),
+        listOf("Shikimori" to "shikimori", "MyAnimeList" to "mal").mapNotNull { (source,key) -> json.optJSONObject(key)?.let { site -> site.optDouble("rating",Double.NaN).takeIf { it.isFinite() && it in 1.0..10.0 }?.let { Rating(source,it,site.optInt("votes").takeIf { it > 0 }) } } })
 }
 
 class Api {
     private val cache = linkedMapOf<Int, Release>()
+    private val discoveryCache = linkedMapOf<Int, Pair<Long,Discovery>>()
     private suspend fun request(path: String): String = withContext(Dispatchers.IO) {
         val connection = URI("https://aniliberty.top/api/v1$path").toURL().openConnection() as HttpURLConnection
         try {
@@ -65,6 +68,20 @@ class Api {
         val videos = async { optional { JSONObject(request("/media/videos?limit=3")).optJSONArray("data").objects().map { HomeVideo(it.text("id"),it.text("title"),"${it.optInt("views")} просмотров · ${it.optInt("comments")} комментариев",it.optJSONObject("image")?.image(),it.text("url")) } } }
         val torrents = async { optional { JSONObject(request("/anime/torrents?limit=4&page=1")).optJSONArray("data").objects().map { torrent -> HomeTorrent(torrent.optJSONObject("release")?.let(::parseRelease),torrent.text("label"),listOf(torrent.text("description"),torrent.display("quality"),torrent.display("codec"),"%.2f ГБ".format(torrent.optDouble("size",0.0)/1073741824.0),"↑ ${torrent.optInt("seeders")}  ↓ ${torrent.optInt("leechers")}").filter(String::isNotBlank).joinToString(" · "),torrent.text("magnet")) } } }
         HomeData(promotions.await(),latest.await(),schedule.await(),franchises.await(),genres.await(),torrents.await(),videos.await())
+    }
+    suspend fun discovery(releaseId: Int): Discovery {
+        synchronized(discoveryCache) { discoveryCache[releaseId] }?.takeIf { android.os.SystemClock.elapsedRealtime()-it.first < 86400000 }?.let { return it.second }
+        val result = supervisorScope {
+            suspend fun <T> optional(block: suspend () -> T): T? = try { block() } catch(e: CancellationException) { throw e } catch (_: Exception) { null }
+            val groups = async { optional { parseFranchiseGroups(JSONArray(request("/anime/franchises/release/$releaseId"))) } }
+            val recommendations = async { optional { uniqueRecommendations(releaseId,JSONArray(request("/anime/releases/recommended?release_id=$releaseId&limit=12")).objects().map(::parseRelease)) } }
+            Discovery(groups.await(), recommendations.await())
+        }
+        if(result.franchises != null && result.recommendations != null) synchronized(discoveryCache) {
+            if(discoveryCache.size>=32)discoveryCache.remove(discoveryCache.keys.first())
+            discoveryCache[releaseId]=android.os.SystemClock.elapsedRealtime() to result
+        }
+        return result
     }
     suspend fun franchise(id: String): List<Release> = JSONObject(request("/anime/franchises/${URLEncoder.encode(id,"UTF-8")}")).optJSONArray("franchise_releases").objects().sortedBy { it.optInt("sort_order") }.mapNotNull { it.optJSONObject("release")?.let(::parseRelease) }
     suspend fun latest(): List<Release> = JSONArray(request("/anime/releases/latest?limit=24")).objects().map(::parseRelease)
@@ -91,3 +108,12 @@ data class HomeTorrent(val release: Release?, val title: String, val subtitle: S
 data class HomeData(val promotions: List<Promotion>?, val latest: List<Release>, val schedule: List<List<Release>>?, val franchises: List<Feature>?, val genres: List<Feature>?, val torrents: List<HomeTorrent>?, val videos: List<HomeVideo>? = null)
 
 data class HomeVideo(val id: String, val title: String, val subtitle: String, val image: String?, val url: String)
+
+data class ExternalIds(val shikimori: Int? = null, val mal: Int? = null)
+data class Rating(val source: String, val value: Double, val votes: Int?)
+data class FranchiseGroup(val id: String, val title: String, val releases: List<Release>)
+data class Discovery(val franchises: List<FranchiseGroup>?, val recommendations: List<Release>?)
+fun uniqueRecommendations(currentId: Int, releases: List<Release>): List<Release> = releases.filter { it.id != currentId }.distinctBy { it.id }
+fun parseFranchiseGroups(json: JSONArray): List<FranchiseGroup> = json.objects().map { group ->
+    FranchiseGroup(group.text("id"), group.text("name"), group.optJSONArray("franchise_releases").objects().sortedBy { it.optInt("sort_order") }.mapNotNull { it.optJSONObject("release")?.let(::parseRelease) }.distinctBy { it.id })
+}

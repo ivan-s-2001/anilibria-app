@@ -98,6 +98,7 @@ class MainActivity : ComponentActivity() {
         try{startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url)))}catch(_:ActivityNotFoundException){Toast.makeText(this,"Нет приложения для открытия ссылки",Toast.LENGTH_LONG).show()}
     }
     private fun render(state:UiState){
+        val retainedFocus = if(current==state.screen) list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String } else null
         current=state.screen
         val rows=mutableListOf<Row>()
         if(state.screen==Screen.Welcome){
@@ -157,10 +158,29 @@ class MainActivity : ComponentActivity() {
                     rows+=Row("tabs",Kind.TABS,selected=screen.tab)
                     when(screen.tab){
                         0->{rows+=r.episodes.map{Row("episode:${it.id}",Kind.EPISODE,episode=it)};if(r.episodes.isEmpty())rows+=Row("empty",Kind.TEXT,"Эпизоды пока недоступны")}
-                        1->rows+=Row("related",Kind.ACTION,"Связанные релизы на сайте",click={openLink("https://aniliberty.top/anime/releases/${r.alias}/franchises")})
+                        1->{
+                            val franchises=state.discovery?.franchises
+                            when {
+                                state.discoveryLoading -> rows+=Row("related-loading",Kind.TEXT,"Загрузка франшизы…")
+                                franchises==null -> rows+=Row("related-retry",Kind.ACTION,"Не удалось загрузить франшизу · Повторить",click=model::retryDiscovery)
+                                franchises.isEmpty() -> rows+=Row("related-empty",Kind.TEXT,"Релиз не связан ни с одной франшизой")
+                                else -> franchises.forEach { group ->
+                                    rows+=Row("franchise-heading:${group.id}",Kind.HEADING,group.title,"Порядок просмотра")
+                                    rows+=group.releases.map { part -> Row("franchise-part:${part.id}",Kind.POSTER,release=part) }
+                                }
+                            }
+                        }
                         2->rows+=Row("comments",Kind.ACTION,"Обсуждение на сайте",click={openLink("https://aniliberty.top/anime/releases/${r.alias}")})
                         3->{rows+=r.credits.groupBy{it.role}.map{(role,people)->Row("role:$role",Kind.TEXT,role,people.joinToString(" · "){it.name})};if(r.credits.isEmpty())rows+=Row("empty",Kind.TEXT,"Участники пока не указаны")}
                         4->{rows+=r.torrents.mapIndexed{i,t->Row("torrent:$i",Kind.ACTION,t.label,t.description,click={openLink(t.magnet)})};if(r.torrents.isEmpty())rows+=Row("empty",Kind.TEXT,"Раздачи пока недоступны")}
+                    }
+                    rows+=Row("similar-heading",Kind.HEADING,"Похожие аниме","Рекомендации AniLiberty для этого тайтла")
+                    val similar=state.discovery?.recommendations
+                    when {
+                        state.discoveryLoading -> rows+=Row("similar-loading",Kind.TEXT,"Подбираем аниме…")
+                        similar==null -> rows+=Row("similar-retry",Kind.ACTION,"Не удалось загрузить рекомендации · Повторить",click=model::retryDiscovery)
+                        similar.isEmpty() -> rows+=Row("similar-empty",Kind.TEXT,"Рекомендации пока отсутствуют")
+                        else -> rows+=similar.map { item -> Row("similar:${item.id}",Kind.POSTER,release=item) }
                     }
                 }
                 else->Unit
@@ -173,12 +193,14 @@ class MainActivity : ComponentActivity() {
             if(index>=0){list.doOnNextLayout{list.findViewHolderForAdapterPosition(index)?.itemView?.let{item->if(item.isFocusable)item.requestFocus()else if(item is ViewGroup)item.getFocusables(View.FOCUS_FORWARD).firstOrNull()?.requestFocus()}};grid.scrollToPositionWithOffset(index,list.dp(64))}
         }else if(enterContent && adapter.contentStart in rows.indices){
             enterContent=false
-            val index=adapter.contentStart
+            val index=(adapter.contentStart until rows.size).firstOrNull { rows[it].kind != Kind.HEADING } ?: adapter.contentStart
             list.doOnNextLayout{list.findViewHolderForAdapterPosition(index)?.itemView?.requestFocus()}
             grid.scrollToPositionWithOffset(index,list.dp(64))
         }else{
-            val key=focusMemory[state.screen]
-            val index=rows.indexOfFirst{it.key==key}.takeIf{it>=0}?:rows.indexOfFirst{it.kind in listOf(Kind.ACTION,Kind.POSTER,Kind.HERO,Kind.SPOTLIGHT)}
+            val key=retainedFocus?:focusMemory[state.screen]
+            val index=rows.indexOfFirst{it.key==key}.takeIf{it>=0}
+                ?: if(key!=null && adapter.contentStart>=0) (adapter.contentStart until rows.size).firstOrNull{rows[it].kind!=Kind.HEADING}?:adapter.contentStart
+                else rows.indexOfFirst{it.kind in listOf(Kind.ACTION,Kind.POSTER,Kind.HERO,Kind.SPOTLIGHT)}
             if(index>=0&&!state.loading){list.doOnNextLayout{
                 val item=list.findViewHolderForAdapterPosition(index)?.itemView
                 if(item?.isFocusable==true)item.requestFocus()else if(item is ViewGroup)item.getFocusables(View.FOCUS_FORWARD).firstOrNull()?.requestFocus()

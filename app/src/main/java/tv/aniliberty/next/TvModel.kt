@@ -14,7 +14,7 @@ sealed interface Screen {
     data class Franchise(val id: String, val title: String) : Screen
     data class Detail(val id: Int, val tab: Int = 0) : Screen
 }
-data class UiState(val screen: Screen = Screen.Welcome, val loading: Boolean = false, val error: String? = null, val releases: List<Release> = emptyList(), val detail: Release? = null, val more: Boolean = false, val home: HomeData? = null, val homeDay: Int = 1)
+data class UiState(val screen: Screen = Screen.Welcome, val loading: Boolean = false, val error: String? = null, val releases: List<Release> = emptyList(), val detail: Release? = null, val more: Boolean = false, val home: HomeData? = null, val homeDay: Int = 1, val discovery: Discovery? = null, val discoveryLoading: Boolean = false)
 class TvModel : ViewModel() {
     val api = Api()
     val state = MutableStateFlow(UiState())
@@ -45,6 +45,12 @@ class TvModel : ViewModel() {
                     is Screen.Detail -> UiState(screen, detail = api.release(screen.id))
                     else -> UiState(screen)
                 }
+                if (screen is Screen.Detail) {
+                    state.value = state.value.copy(discoveryLoading = true)
+                    val discovery = api.discovery(screen.id)
+                    val active = state.value.screen as? Screen.Detail
+                    if (active?.id == screen.id) state.value = state.value.copy(discovery = discovery, discoveryLoading = false)
+                }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { state.value = UiState(screen, error = e.message ?: "Не удалось загрузить данные") }
         }
@@ -54,6 +60,15 @@ class TvModel : ViewModel() {
     fun back(): Boolean {
         if (stack.isEmpty()) return false
         open(stack.removeAt(stack.lastIndex), false); return true
+    }
+    fun retryDiscovery() {
+        val screen=state.value.screen as? Screen.Detail?:return
+        job?.cancel()
+        state.value=state.value.copy(discoveryLoading=true)
+        job=viewModelScope.launch {
+            val result=api.discovery(screen.id)
+            if((state.value.screen as? Screen.Detail)?.id==screen.id)state.value=state.value.copy(discovery=result,discoveryLoading=false)
+        }
     }
     fun retry() { if (state.value.screen == Screen.Home) homeCache = null; open(state.value.screen, false) }
 }
