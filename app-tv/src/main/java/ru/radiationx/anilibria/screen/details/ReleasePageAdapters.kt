@@ -101,7 +101,7 @@ internal class ReleaseTextAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder
             isFocusable = !row.heading
             isClickable = row.click != null
             background = if (row.heading) null else context.getDrawable(R.drawable.bg_details_description)
-            setOnClickListener { row.click?.invoke() }
+            setOnClickListener(row.click?.let { action -> View.OnClickListener { action() } })
         }
     }
 }
