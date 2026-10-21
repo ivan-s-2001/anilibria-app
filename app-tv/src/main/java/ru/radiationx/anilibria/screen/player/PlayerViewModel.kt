@@ -9,7 +9,7 @@ import ru.radiationx.anilibria.common.fragment.GuidedRouter
 import ru.radiationx.anilibria.screen.LifecycleViewModel
 import ru.radiationx.anilibria.screen.PlayerEndEpisodeGuidedScreen
 import ru.radiationx.anilibria.screen.PlayerEndSeasonGuidedScreen
-import ru.radiationx.anilibria.screen.PlayerEpisodesGuidedScreen
+import ru.radiationx.anilibria.screen.PlayerEpisodesScreen
 import ru.radiationx.anilibria.screen.PlayerQualityGuidedScreen
 import ru.radiationx.anilibria.screen.PlayerSpeedGuidedScreen
 import ru.radiationx.data.datasource.holders.PreferencesHolder
@@ -123,7 +123,7 @@ class PlayerViewModel @Inject constructor(
         val release = getCurrentRelease() ?: return
         val episode = currentEpisode ?: return
         saveEpisode(position)
-        guidedRouter.open(PlayerEpisodesGuidedScreen(release.id, episode.id))
+        guidedRouter.open(PlayerEpisodesScreen(release.id, episode.id))
     }
 
 

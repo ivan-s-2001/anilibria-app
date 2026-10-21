@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
-import ru.radiationx.anilibria.common.fragment.GuidedRouter
 import ru.radiationx.anilibria.screen.LifecycleViewModel
 import ru.radiationx.anilibria.screen.player.PlayerController
 import ru.radiationx.anilibria.screen.player.PlayerExtra
@@ -24,7 +23,6 @@ import javax.inject.Inject
 class PlayerEpisodesViewModel @Inject constructor(
     private val argExtra: PlayerExtra,
     private val releaseInteractor: ReleaseInteractor,
-    private val guidedRouter: GuidedRouter,
     private val playerController: PlayerController,
 ) : LifecycleViewModel() {
 
@@ -74,7 +72,6 @@ class PlayerEpisodesViewModel @Inject constructor(
         val action = episodesData.value.findAction { it.id == actionId } ?: return
         if (applyingEpisode) return
         applyingEpisode = true
-        guidedRouter.close()
         playerController.selectEpisodeRelay.emit(action.episodeId)
     }
 
@@ -122,7 +119,7 @@ class PlayerEpisodesViewModel @Inject constructor(
                 Action(
                     id = id++,
                     episodeId = episode.id,
-                    title = episode.title?.takeIf { it.isNotBlank() } ?: "Серия ${episode.id.id}",
+                    title = episodeDisplayTitle(episode.title, episode.id.id),
                     description = description,
                     number = episode.id.id,
                     watched = access?.isViewed == true,

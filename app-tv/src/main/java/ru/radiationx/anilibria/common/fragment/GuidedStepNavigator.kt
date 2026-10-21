@@ -63,7 +63,13 @@ class GuidedStepNavigator(
     }
 
     private fun guidedForward(command: Forward) {
-        if (command.screen is GuidedAppScreen) {
+        if (command.screen is DialogAppScreen) {
+            val screen = command.screen as DialogAppScreen
+            if (fragmentManager.findFragmentByTag(screen.screenKey) == null) {
+                screen.createFragment(fragmentManager.fragmentFactory)
+                    .showNow(fragmentManager, screen.screenKey)
+            }
+        } else if (command.screen is GuidedAppScreen) {
             val screen = command.screen as GuidedAppScreen
             val fragment = screen.createFragment(fragmentManager.fragmentFactory)
 

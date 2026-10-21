@@ -15,7 +15,7 @@ import ru.radiationx.anilibria.common.fragment.GuidedRouter
 import ru.radiationx.anilibria.screen.AuthGuidedScreen
 import ru.radiationx.anilibria.screen.DetailOtherGuidedScreen
 import ru.radiationx.anilibria.screen.LifecycleViewModel
-import ru.radiationx.anilibria.screen.PlayerEpisodesGuidedScreen
+import ru.radiationx.anilibria.screen.PlayerEpisodesScreen
 import ru.radiationx.anilibria.screen.PlayerScreen
 import ru.radiationx.anilibria.screen.player.PlayerController
 import ru.radiationx.data.entity.common.AuthState
@@ -98,7 +98,7 @@ class DetailHeaderViewModel @Inject constructor(
         viewModelScope.launch {
             val episodeId = releaseInteractor.getAccesses(releaseId)
                 .maxByOrNull { it.lastAccessRaw }?.id
-            guidedRouter.open(PlayerEpisodesGuidedScreen(releaseId, episodeId))
+            guidedRouter.open(PlayerEpisodesScreen(releaseId, episodeId))
         }
     }
 

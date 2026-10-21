@@ -42,6 +42,10 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     signingConfigs {
         if (hasReleaseSigningConfig) {
             create("release") {
@@ -119,6 +123,8 @@ kotlin {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
     implementation(libs.kotlin.stdlib)
 
     implementation(project(":data"))

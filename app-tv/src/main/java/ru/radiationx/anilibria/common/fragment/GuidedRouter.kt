@@ -9,6 +9,10 @@ class GuidedRouter : Router() {
         navigateTo(screen)
     }
 
+    fun open(screen: DialogAppScreen) {
+        navigateTo(screen)
+    }
+
     fun replace(screen: GuidedAppScreen) {
         replaceScreen(screen)
     }

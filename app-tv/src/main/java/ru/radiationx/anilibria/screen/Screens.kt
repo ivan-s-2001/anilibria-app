@@ -4,6 +4,7 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentFactory
 import com.github.terrakok.cicerone.androidx.FragmentScreen
 import ru.radiationx.anilibria.common.fragment.FakeGuidedStepFragment
+import ru.radiationx.anilibria.common.fragment.DialogAppScreen
 import ru.radiationx.anilibria.common.fragment.GuidedAppScreen
 import ru.radiationx.anilibria.screen.auth.credentials.AuthCredentialsGuidedFragment
 import ru.radiationx.anilibria.screen.auth.main.AuthGuidedFragment
@@ -15,7 +16,7 @@ import ru.radiationx.anilibria.screen.mainpages.MainPagesFragment
 import ru.radiationx.anilibria.screen.player.PlayerFragment
 import ru.radiationx.anilibria.screen.player.end_episode.EndEpisodeGuidedFragment
 import ru.radiationx.anilibria.screen.player.end_season.EndSeasonGuidedFragment
-import ru.radiationx.anilibria.screen.player.episodes.PlayerEpisodesGuidedFragment
+import ru.radiationx.anilibria.screen.player.episodes.EpisodesDialogFragment
 import ru.radiationx.anilibria.screen.player.putIds
 import ru.radiationx.anilibria.screen.player.quality.PlayerQualityGuidedFragment
 import ru.radiationx.anilibria.screen.player.speed.PlayerSpeedGuidedFragment
@@ -178,13 +179,12 @@ class PlayerSpeedGuidedScreen(
     }
 }
 
-class PlayerEpisodesGuidedScreen(
+class PlayerEpisodesScreen(
     private val releaseId: ReleaseId,
     private val episodeId: EpisodeId?,
-) : GuidedAppScreen() {
-    override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
-        return PlayerEpisodesGuidedFragment().putIds(releaseId, episodeId)
-    }
+) : DialogAppScreen() {
+    override fun createFragment(factory: FragmentFactory) =
+        EpisodesDialogFragment.newInstance(releaseId, episodeId)
 }
 
 class PlayerEndEpisodeGuidedScreen(
