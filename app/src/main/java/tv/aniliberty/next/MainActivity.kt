@@ -39,13 +39,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         list = RecyclerView(this).apply {
-            setBackgroundColor(0xFF121212.toInt()); setPadding(dp(40),dp(20),dp(40),dp(32));clipToPadding=false;itemAnimator=null
+            setBackgroundColor(0xFF121212.toInt()); setPadding(dp(32),dp(8),dp(32),dp(24));clipToPadding=false;itemAnimator=null
         }
-        grid=GridLayoutManager(this,6);list.layoutManager=grid
+        grid=GridLayoutManager(this,24);list.layoutManager=grid
         adapter=PageAdapter(::navigate,::selectTab,::play,::favorite,{rememberFocus();model.open(Screen.Detail(it.id))},
             { id -> prefs.getLong("position:$id",0) to prefs.getLong("duration:$id",0) },
-            { id -> prefs.getString("last:$id",null) },::returnToTabs, { index -> enterDay=true;val previous=model.state.value;model.homeDay(index);if(previous==model.state.value)render(model.state.value) })
-        grid.spanSizeLookup=object:GridLayoutManager.SpanSizeLookup(){override fun getSpanSize(position:Int)=when(adapter.rows[position].kind){Kind.POSTER->1;Kind.EPISODE,Kind.FEATURE->2;else->6}}
+            { id -> prefs.getString("last:$id",null) },::returnToTabs, { index -> enterDay=true;val previous=model.state.value;model.homeDay(index);if(previous==model.state.value)render(model.state.value) },::quickActions)
+        grid.spanSizeLookup=object:GridLayoutManager.SpanSizeLookup(){override fun getSpanSize(position:Int)=when(adapter.rows[position].kind){Kind.POSTER->3;Kind.EPISODE,Kind.FEATURE->8;else->24}}
         list.adapter=adapter;setContentView(list)
         onBackPressedDispatcher.addCallback(this,object:OnBackPressedCallback(true){override fun handleOnBackPressed(){rememberFocus();if(!model.back())finish()}})
         lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED){model.state.collect{render(it)}} }
@@ -74,6 +74,24 @@ class MainActivity : ComponentActivity() {
         if(!found)next.put(JSONObject().put("id",release.id).put("title",release.title))
         prefs.edit().putString("library",next.toString()).apply()
         Toast.makeText(this,if(found)"Удалено из библиотеки"else"Добавлено в библиотеку",Toast.LENGTH_SHORT).show()
+    }
+    private fun quickActions(item:Release){
+        val resume=prefs.getString("last:${item.id}",null)!=null
+        AlertDialog.Builder(this).setTitle(item.title).setItems(arrayOf(if(resume)"Продолжить просмотр"else"Смотреть", "В библиотеку / Убрать", "Подробнее")){_,choice->
+            when(choice){
+                0->lifecycleScope.launch {
+                    try {
+                        val release=model.api.release(item.id)
+                        val last=prefs.getString("last:${release.id}",null)
+                        val episode=release.episodes.firstOrNull{it.id==last}?:release.episodes.firstOrNull()
+                        if(release.blocked||episode==null||episode.streams.isEmpty())Toast.makeText(this@MainActivity,"Просмотр пока недоступен",Toast.LENGTH_LONG).show()
+                        else {rememberFocus();startActivity(Intent(this@MainActivity,PlayerActivity::class.java).putExtra("release",release.id).putExtra("episode",episode.id))}
+                    } catch(e:kotlinx.coroutines.CancellationException){throw e} catch(_:Exception){Toast.makeText(this@MainActivity,"Не удалось загрузить тайтл",Toast.LENGTH_LONG).show()}
+                }
+                1->favorite(item)
+                2->{rememberFocus();model.open(Screen.Detail(item.id))}
+            }
+        }.show()
     }
     private fun play(episode:Episode){
         val release=model.state.value.detail?:return

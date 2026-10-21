@@ -33,7 +33,7 @@ fun View.focusBackground(primary: Boolean = false) {
 }
 fun TextView.label(value: String, size: Float, color: Int = WHITE, bold: Boolean = false) {
     text = value; textSize = size; setTextColor(color)
-    typeface = Typeface.create(resources.getFont(if (bold) R.font.montserrat else R.font.inter), if (bold) Typeface.BOLD else Typeface.NORMAL)
+    typeface = resources.getFont(if (bold) R.font.montserrat else R.font.inter)
 }
 fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int = 0, click: () -> Unit): TextView = TextView(parent.context).apply {
     label(title, 16f, WHITE, true); gravity = Gravity.CENTER
@@ -60,6 +60,7 @@ class PageAdapter(
     private val lastEpisode: (Int) -> String?,
     private val returnToTabs: () -> Unit,
     private val day: (Int) -> Unit = {},
+    private val quickActions: (Release) -> Unit = {},
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     var rows: List<Row> = emptyList(); private set
     var tabStart: Int = -1; private set
@@ -79,8 +80,8 @@ class PageAdapter(
             }
             Kind.HERO -> LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
             Kind.HEADING -> LinearLayout(context).apply {
-                orientation=LinearLayout.VERTICAL;setPadding(0,dp(16),0,dp(8))
-                addView(TextView(context));addView(TextView(context),LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(6)})
+                orientation=LinearLayout.VERTICAL;setPadding(0,dp(8),0,dp(4))
+                addView(TextView(context));addView(TextView(context),LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(4)})
             }
             Kind.POSTER, Kind.SPOTLIGHT, Kind.FEATURE -> FrameLayout(context).apply {
                 isFocusable = true; isClickable = true; focusBackground(); clipToOutline=true; setPadding(dp(3),dp(3),dp(3),dp(3))
@@ -89,7 +90,7 @@ class PageAdapter(
                 addView(LinearLayout(context).apply {
                     orientation=LinearLayout.VERTICAL;setPadding(dp(12),dp(12),dp(12),dp(12))
                     addView(TextView(context).apply{maxLines=2;ellipsize=android.text.TextUtils.TruncateAt.END})
-                    addView(TextView(context).apply{maxLines=4;ellipsize=android.text.TextUtils.TruncateAt.END},LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(6)})
+                    addView(TextView(context).apply{maxLines=4;ellipsize=android.text.TextUtils.TruncateAt.END},LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(4)})
                 },FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM))
             }
             Kind.EPISODE -> FrameLayout(context).apply {
@@ -101,9 +102,9 @@ class PageAdapter(
             }
             else -> TextView(context)
         }
-        view.layoutParams = RecyclerView.LayoutParams(-1, when(Kind.entries[type]){Kind.EPISODE->view.dp(160);Kind.POSTER->view.dp(242);Kind.SPOTLIGHT->view.dp(300);Kind.FEATURE->view.dp(156);else->-2}).apply {
+        view.layoutParams = RecyclerView.LayoutParams(-1, when(Kind.entries[type]){Kind.EPISODE->view.dp(160);Kind.POSTER->view.dp(200);Kind.SPOTLIGHT->view.dp(220);Kind.FEATURE->view.dp(126);else->-2}).apply {
             val card = Kind.entries[type] in listOf(Kind.POSTER,Kind.EPISODE,Kind.FEATURE)
-            setMargins(view.dp(if (card) 6 else 8), view.dp(if (card) 6 else 8),view.dp(if (card) 6 else 8),view.dp(if (card) 6 else 8))
+            setMargins(view.dp(4), view.dp(4),view.dp(4),view.dp(4))
         }
         return object : RecyclerView.ViewHolder(view) {}
     }
@@ -111,7 +112,7 @@ class PageAdapter(
         val row = rows[position]; val view = holder.itemView
         view.tag = row.key
         val firstContent = if(contentStart>=0) (contentStart until rows.size).firstOrNull{rows[it].kind!=Kind.HEADING} else null
-        val firstRowCount = when(firstContent?.let{rows[it].kind}){Kind.POSTER->6;Kind.EPISODE->3;else->1}
+        val firstRowCount = when(firstContent?.let{rows[it].kind}){Kind.POSTER->8;Kind.EPISODE->3;else->1}
         view.setOnKeyListener { _, key, event ->
             if (firstContent != null && position in firstContent until (firstContent+firstRowCount) && key == KeyEvent.KEYCODE_DPAD_UP) {
                 if (event.action == KeyEvent.ACTION_UP) returnToTabs(); true
@@ -126,9 +127,14 @@ class PageAdapter(
             }
             Kind.NAV -> {
                 val line = (view as HorizontalScrollView).getChildAt(0) as LinearLayout; line.removeAllViews()
-                line.addView(TextView(view.context).apply { label("AniLiberty",22f,WHITE,true); setPadding(0,0,dp(28),0) })
+                line.addView(TextView(view.context).apply { label("AniLiberty",20f,WHITE,true); setPadding(0,0,dp(28),0) })
                 listOf("Главная", "Каталог", "Поиск", "Моя библиотека").forEachIndexed { i, text ->
-                    line.addView(action(line,text,click={navigate(i)}), LinearLayout.LayoutParams(-2,view.dp(46)).apply { marginEnd=view.dp(8) })
+                    line.addView(action(line,text,click={navigate(i)}).apply {
+                        background=StateListDrawable().apply {
+                            addState(intArrayOf(android.R.attr.state_focused),shape(0xFF292929.toInt(),dp(4).toFloat()))
+                            addState(intArrayOf(),shape(Color.TRANSPARENT))
+                        }
+                    }, LinearLayout.LayoutParams(-2,view.dp(40)).apply { marginEnd=view.dp(8) })
                 }
             }
             Kind.TABS -> {
@@ -178,8 +184,12 @@ class PageAdapter(
                 val release=row.release
                 val poster=row.kind==Kind.POSTER
                 val spotlight=row.kind==Kind.SPOTLIGHT
-                (box.getChildAt(0)as ImageView).load(if(poster)release?.poster else row.image)
-                title.label(release?.title?:row.title,if(spotlight)30f else if(poster)15f else 19f,WHITE,true)
+                (box.getChildAt(0)as ImageView).apply {
+                    layoutParams=FrameLayout.LayoutParams(-1,if(poster)view.dp(152)else -1,Gravity.TOP)
+                    load(if(poster)release?.poster else row.image)
+                }
+                box.getChildAt(1).visibility=if(poster)View.GONE else View.VISIBLE
+                title.label(release?.title?:row.title,if(spotlight)30f else if(poster)13f else 19f,WHITE,true)
                 val metadata=if(release!=null) listOfNotNull(release.latestEpisode?.let{"Эпизод ${number(it.ordinal)}"},release.metadata,release.genres.joinToString(" · ")).filter(String::isNotBlank).joinToString("\n") else row.subtitle
                 subtitle.label(metadata,if(spotlight)15f else 13f,MUTED)
                 subtitle.visibility=if(poster)View.GONE else View.VISIBLE
@@ -188,10 +198,22 @@ class PageAdapter(
                     content.layoutParams=FrameLayout.LayoutParams((view.resources.displayMetrics.widthPixels*.65f).toInt(),-2,Gravity.BOTTOM or Gravity.START)
                     subtitle.text=metadata+release?.description?.let{ description->android.text.Html.fromHtml(description,android.text.Html.FROM_HTML_MODE_LEGACY).toString().take(140).takeIf{it.isNotBlank()}?.let{"\n$it"}}.orEmpty()+"\n\n▶  Смотреть"
                     subtitle.maxLines=6
-                } else content.layoutParams=FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM)
-                box.setOnFocusChangeListener { _, focused -> if(poster){subtitle.visibility=if(focused)View.VISIBLE else View.GONE} }
+                } else {
+                    content.layoutParams=FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM)
+                    content.setPadding(view.dp(8),view.dp(6),view.dp(8),view.dp(6))
+                }
+                box.setOnFocusChangeListener { _, focused -> if(poster){
+                    subtitle.visibility=if(focused)View.VISIBLE else View.GONE
+                    box.getChildAt(1).visibility=if(focused)View.VISIBLE else View.GONE
+                    content.setBackgroundColor(if(focused)0xEE121212.toInt()else Color.TRANSPARENT)
+                    title.textSize=13f
+                    title.maxLines=if(focused)3 else 2
+                } }
+                content.setBackgroundColor(Color.TRANSPARENT)
                 box.contentDescription=release?.title?:row.title
                 box.setOnClickListener{if(row.click!=null)row.click.invoke() else if(release!=null)details(release)}
+                box.setOnLongClickListener(if(release!=null)View.OnLongClickListener{quickActions(release);true}else null)
+                box.isLongClickable=release!=null
             }
             Kind.EPISODE -> {
                 val box=view as FrameLayout;val e=row.episode!!
@@ -203,8 +225,8 @@ class PageAdapter(
             }
             Kind.HEADING -> {
                 val box=view as LinearLayout
-                (box.getChildAt(0)as TextView).label(row.title,22f,WHITE,true)
-                (box.getChildAt(1)as TextView).apply{label(row.subtitle,15f,MUTED);visibility=if(row.subtitle.isBlank())View.GONE else View.VISIBLE}
+                (box.getChildAt(0)as TextView).label(row.title,18f,WHITE,true)
+                (box.getChildAt(1)as TextView).apply{label(row.subtitle,12f,MUTED);visibility=if(row.subtitle.isBlank())View.GONE else View.VISIBLE}
                 box.isFocusable=false;box.isClickable=false
             }
             Kind.TEXT,Kind.ACTION -> {
@@ -223,6 +245,6 @@ class PageAdapter(
         val view=holder.itemView
         if(view is FrameLayout)(view.getChildAt(0)as?ImageView)?.load(null)
         if(view is LinearLayout && view.childCount>0)(view.getChildAt(0)as?ImageView)?.load(null)
-        view.setOnClickListener(null);view.setOnKeyListener(null)
+        view.setOnClickListener(null);view.setOnKeyListener(null);view.setOnLongClickListener(null);view.onFocusChangeListener=null
     }
 }

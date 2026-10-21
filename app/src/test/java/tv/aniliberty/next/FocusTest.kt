@@ -48,6 +48,16 @@ class FocusTest {
         assertTrue(metadata.text.contains("Эпизод 3"))
         assertEquals(height,box.layoutParams.height)
     }
+    @Test fun longOkOpensActionsForTheExactRelease() {
+        var selected:Int?=null
+        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},quickActions={selected=it.id})
+        val release=parseRelease(org.json.JSONObject().put("id",22))
+        adapter.submit(listOf(Row("release:22",Kind.POSTER,release=release)))
+        val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.POSTER.ordinal)
+        adapter.onBindViewHolder(holder,0)
+        assertTrue(holder.itemView.performLongClick())
+        assertEquals(22,selected)
+    }
     @Test fun headingsDoNotConsumeRemoteFocus() {
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
         adapter.submit(listOf(Row("heading",Kind.HEADING,"Новые эпизоды")))
