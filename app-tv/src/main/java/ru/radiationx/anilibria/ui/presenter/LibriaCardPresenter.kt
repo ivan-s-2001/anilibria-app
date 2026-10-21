@@ -43,6 +43,7 @@ class LibriaCardViewHolder(
     }
 
     fun bind(item: LibriaCard) {
+        (containerView as? LauncherCardView)?.previewCard = item
         when (item.type) {
             is LibriaCard.Type.Release -> containerView.setMainImageDimensions(
                 cardReleaseWidth,
@@ -62,6 +63,7 @@ class LibriaCardViewHolder(
     }
 
     fun unbind() {
+        (containerView as? LauncherCardView)?.previewCard = null
         containerView.mainImage = null
         containerView.titleText = null
         containerView.contentText = null

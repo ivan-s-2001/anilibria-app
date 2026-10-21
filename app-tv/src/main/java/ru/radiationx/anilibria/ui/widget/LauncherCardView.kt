@@ -9,6 +9,7 @@ import androidx.leanback.widget.ImageCardView
 
 /** Leanback owns focus and zoom; PosterFocusOverlay draws the shared moving highlight. */
 class LauncherCardView(context: Context) : ImageCardView(context) {
+    var previewCard: ru.radiationx.anilibria.common.LibriaCard? = null
     private val radius = 12f * resources.displayMetrics.density
 
     init {

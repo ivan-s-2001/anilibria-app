@@ -1,6 +1,7 @@
 package ru.radiationx.anilibria.common
 
 import android.content.Context
+import androidx.core.text.parseAsHtml
 import ru.radiationx.data.entity.domain.feed.FeedItem
 import ru.radiationx.data.entity.domain.release.Release
 import ru.radiationx.data.entity.domain.youtube.YoutubeItem
@@ -26,7 +27,19 @@ class CardsDataConverter(
             title.orEmpty(),
             descItems.joinToString(" • "),
             poster.orEmpty(),
-            LibriaCard.Type.Release(releaseItem.id)
+            LibriaCard.Type.Release(releaseItem.id),
+            LibriaCard.Preview(
+                alternateTitle = titleEng.orEmpty().takeUnless { it == title }.orEmpty(),
+                metadata = listOfNotNull(
+                    year?.takeIf { it.isNotBlank() },
+                    season?.takeIf { it.isNotBlank() },
+                    types.firstOrNull(),
+                    series?.takeIf { it.isNotBlank() }?.let { "Серии: $it" },
+                ).joinToString(" • "),
+                genres = genres.joinToString(" • "),
+                synopsis = description.orEmpty().parseAsHtml().toString().trim(),
+                status = status.orEmpty(),
+            )
         )
     }
 

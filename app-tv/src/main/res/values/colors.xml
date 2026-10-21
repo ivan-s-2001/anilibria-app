@@ -25,8 +25,8 @@
 
     <color name="dark_divider_line">#33FFFFFF</color>
     <color name="dark_btn_border">#1Effffff</color>
-    <color name="dark_windowBackground">#000000</color>
-    <color name="dark_cardBackground">#1C1C1E</color>
+    <color name="dark_windowBackground">#121212</color>
+    <color name="dark_cardBackground">#212121</color>
     <color name="dark_cardBackground_alpha">#001C1C1E</color>
     <color name="dark_imageBackground">#1000</color>
 

@@ -21,7 +21,7 @@ class MainPagesFragment : BrowseSupportFragment() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        lastSelectedPosition = savedInstanceState?.getInt(PAGE_KEY) ?: 0
+        lastSelectedPosition = (savedInstanceState?.getInt(PAGE_KEY) ?: 0).coerceIn(0, 2)
         // PageRow dispatch requires headers support; only hide the legacy rail.
         headersState = HEADERS_HIDDEN
         isHeadersTransitionOnBackEnabled = false
@@ -56,12 +56,13 @@ class MainPagesFragment : BrowseSupportFragment() {
                 listOf(
                     "Главная" to { openPage(0) },
                     "Каталог" to { viewModel.onCatalogClick() },
+                    "Расписание" to { viewModel.onScheduleClick() },
                     "Поиск" to { viewModel.onSearchClick() },
                     "Моё" to { openPage(1) },
                     "Профиль" to { openPage(2) }
                 )
             )
-            selectHomePage(lastSelectedPosition)
+            selectHomeNavigation(navigationIndex(lastSelectedPosition))
             setOnAlertClickedListener { viewModel.onAppUpdateClick() }
         }
         subscribeTo(viewModel.hasUpdatesData) { available ->
@@ -77,10 +78,18 @@ class MainPagesFragment : BrowseSupportFragment() {
         }
     }
 
+    // Catalog, schedule and search open their own screens; only these three
+    // destinations are hosted PageRows. Keep their navigation mapping explicit.
+    private fun navigationIndex(page: Int): Int = when (page) {
+        1 -> 4
+        2 -> 5
+        else -> 0
+    }
+
     private fun openPage(position: Int) {
         lastSelectedPosition = position
         setSelectedPosition(position, false)
-        (titleView as? BrowseTitleView)?.selectHomePage(position)
+        (titleView as? BrowseTitleView)?.selectHomeNavigation(navigationIndex(position))
     }
 
     override fun onStart() {

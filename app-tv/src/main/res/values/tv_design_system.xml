@@ -6,8 +6,11 @@
     <dimen name="tv_choice_height">84dp</dimen>
     <dimen name="tv_type_display">36sp</dimen>
     <dimen name="tv_type_title">26sp</dimen>
-    <dimen name="tv_type_body">16sp</dimen>
-    <dimen name="tv_type_caption">13sp</dimen>
+    <dimen name="tv_type_body">18sp</dimen>
+    <dimen name="tv_type_caption">14sp</dimen>
+
+    <dimen name="tv_navigation_height">44dp</dimen>
+    <dimen name="tv_navigation_text">16sp</dimen>
 
     <style name="TvChoice">
         <item name="android:layout_width">match_parent</item>

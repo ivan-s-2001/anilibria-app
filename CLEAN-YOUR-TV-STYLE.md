@@ -121,3 +121,12 @@ Reference code inspected (composition only, no source copied):
 
 Validate the first detail viewport with one/two-line Russian titles, missing description,
 long metadata and unavailable playback; verify the recommendation row after scrolling.
+
+
+## Web-style poster preview
+
+Focused release posters show a delayed information overlay after 420ms: title, alternate title, available metadata, genres, status and a bounded synopsis. Data comes from the existing Release response. The overlay reuses the loaded poster, uses the official web palette (#121212 / #212121 / #FE3635), does not take focus, and does not resize rows. OK still opens the release. Long text is truncated; full content remains in details. YouTube and utility cards keep their existing behavior.
+
+Navigation now has a direct Schedule destination. The selected page uses the red web accent, while focus has its own high-contrast state. Welcome text sizes share theme resources.
+
+Windows update: after pulling, run `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Update-TV.ps1`. The script stops on update/build/install failure and never uninstalls the existing app. Hardware validation of the preview placement, readability and DPAD navigation is still required.

@@ -102,7 +102,7 @@ open class BrowseTitleView @JvmOverloads constructor(
             val button = AppCompatTextView(context).apply {
                 id = View.generateViewId()
                 text = label
-                textSize = 14f
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, resources.getDimension(R.dimen.tv_navigation_text))
                 gravity = Gravity.CENTER
                 isFocusable = true
                 isClickable = true
@@ -112,7 +112,7 @@ open class BrowseTitleView @JvmOverloads constructor(
                 setOnClickListener { action() }
             }
             row.addView(button, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, (38 * density).toInt()
+                ViewGroup.LayoutParams.WRAP_CONTENT, resources.getDimensionPixelSize(R.dimen.tv_navigation_height)
             ).apply { marginEnd = (8 * density).toInt() })
             homeButtons.add(button)
         }
@@ -129,12 +129,8 @@ open class BrowseTitleView @JvmOverloads constructor(
         updateComponentsVisibility(flags)
     }
 
-    fun selectHomePage(position: Int) {
-        homePageIndex = when (position) {
-            1 -> 3
-            2 -> 4
-            else -> 0
-        }
+    fun selectHomeNavigation(index: Int) {
+        homePageIndex = index.coerceIn(0, (homeButtons.size - 1).coerceAtLeast(0))
         homeButtons.forEachIndexed { index, button ->
             button.isSelected = index == homePageIndex
         }

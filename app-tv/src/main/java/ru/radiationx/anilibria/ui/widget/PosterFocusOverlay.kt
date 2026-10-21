@@ -7,6 +7,13 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
+import android.graphics.Color
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextPaint
+import android.text.TextUtils
+import android.graphics.Typeface
+import ru.radiationx.anilibria.common.LibriaCard
 import android.provider.Settings
 import android.util.AttributeSet
 import android.view.View
@@ -31,6 +38,16 @@ class PosterFocusOverlay @JvmOverloads constructor(
     private var shown = false
     private var lastFocused: View? = null
     private var animationsEnabled = true
+    private var previewCard: LibriaCard? = null
+    private var previewVisible = false
+    private val previewBox = RectF()
+    private val panelPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val previewText = TextPaint(Paint.ANTI_ALIAS_FLAG)
+    private val previewLayouts = mutableListOf<Pair<StaticLayout, Float>>()
+    private val showPreview = Runnable {
+        previewVisible = true
+        invalidate()
+    }
     private val sheen = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rim = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -52,6 +69,9 @@ class PosterFocusOverlay @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         if (viewTreeObserver.isAlive) viewTreeObserver.removeOnPreDrawListener(this)
+        removeCallbacks(showPreview)
+        previewCard = null
+        previewLayouts.clear()
         shown = false
         lastFocused = null
         previousTime = 0L
@@ -67,6 +87,9 @@ class PosterFocusOverlay @JvmOverloads constructor(
         if (image == null || !image.getGlobalVisibleRect(visibleBounds) || !image.isShown) {
             if (shown) invalidate()
             shown = false
+            previewVisible = false
+            previewCard = null
+            removeCallbacks(showPreview)
             previousTime = 0L
             return true
         }
@@ -74,8 +97,14 @@ class PosterFocusOverlay @JvmOverloads constructor(
         target.set(visibleBounds)
         target.offset(-origin[0].toFloat(), -origin[1].toFloat())
         val now = System.nanoTime()
-        if (focused !== lastFocused) {
+        val card = (focused as? LauncherCardView)?.previewCard
+        if (focused !== lastFocused || card !== previewCard) {
             lastFocused = focused
+            previewCard = card
+            previewVisible = false
+            previewLayouts.clear()
+            removeCallbacks(showPreview)
+            if (card?.preview != null) postDelayed(showPreview, 420L)
             animationsEnabled = Settings.Global.getFloat(
                 context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f
             ) > 0f
@@ -100,6 +129,88 @@ class PosterFocusOverlay @JvmOverloads constructor(
         return true
     }
 
+    /** A non-focusable web-style information surface. The original card keeps DPAD/OK. */
+    private fun drawPreview(canvas: Canvas) {
+        val card = previewCard ?: return
+        val info = card.preview ?: return
+        val margin = 16f * density
+        val panelWidth = min(310f * density, width - 2f * margin)
+        val panelHeight = min(322f * density, height - 2f * margin)
+        val left = frame.left.coerceIn(margin, (width - panelWidth - margin).coerceAtLeast(margin))
+        val top = frame.top.coerceIn(margin, (height - panelHeight - margin).coerceAtLeast(margin))
+        previewBox.set(left, top, left + panelWidth, top + panelHeight)
+        val save = canvas.save()
+        val path = android.graphics.Path().apply {
+            addRoundRect(previewBox, 12f * density, 12f * density, android.graphics.Path.Direction.CW)
+        }
+        canvas.clipPath(path)
+        panelPaint.color = Color.rgb(33, 33, 33)
+        panelPaint.shader = null
+        canvas.drawRect(previewBox, panelPaint)
+        // Reuse the loaded poster. No image load or server request on focus.
+        val artwork = (lastFocused as? LauncherCardView)?.mainImageView?.drawable
+        if (artwork != null && artwork.intrinsicWidth > 0 && artwork.intrinsicHeight > 0) {
+            val oldBounds = Rect(artwork.bounds)
+            val artSave = canvas.save()
+            val scale = maxOf(panelWidth / artwork.intrinsicWidth, panelHeight / artwork.intrinsicHeight)
+            canvas.translate(left + (panelWidth - artwork.intrinsicWidth * scale) / 2f,
+                top + (panelHeight - artwork.intrinsicHeight * scale) / 2f)
+            canvas.scale(scale, scale)
+            artwork.setBounds(0, 0, artwork.intrinsicWidth, artwork.intrinsicHeight)
+            artwork.draw(canvas)
+            artwork.bounds = oldBounds
+            canvas.restoreToCount(artSave)
+        }
+        // The web card uses a very dark artwork overlay; keep white text readable.
+        panelPaint.color = 0xF0121212.toInt()
+        canvas.drawRect(previewBox, panelPaint)
+        val padding = 18f * density
+        val textWidth = (panelWidth - 2 * padding).toInt()
+        if (previewLayouts.isEmpty()) {
+            var y = padding
+            fun add(text: String, size: Float, lines: Int, color: Int, bold: Boolean = false) {
+                if (text.isBlank()) return
+                val paint = TextPaint(previewText).apply {
+                    textSize = size * resources.displayMetrics.scaledDensity
+                    this.color = color
+                    typeface = if (bold) Typeface.create("sans-serif-medium", Typeface.NORMAL) else Typeface.create("sans-serif", Typeface.NORMAL)
+                }
+                val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, textWidth)
+                    .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                    .setIncludePad(false).setMaxLines(lines)
+                    .setEllipsize(TextUtils.TruncateAt.END).build()
+                previewLayouts.add(layout to y)
+                y += layout.height + 8f * density
+            }
+            add(card.title, 20f, 2, Color.WHITE, true)
+            add(info.alternateTitle, 14f, 1, 0xFFBDBDBD.toInt())
+            add(info.metadata, 14f, 2, 0xFFEEEEEE.toInt())
+            add(info.genres, 14f, 2, 0xFFBDBDBD.toInt())
+            add(info.status, 14f, 1, Color.WHITE)
+            val room = panelHeight - y - 48f * density
+            val synopsisLines = (room / (17f * resources.displayMetrics.scaledDensity)).toInt().coerceIn(0, 5)
+            if (synopsisLines > 0) add(info.synopsis, 15f, synopsisLines, 0xFFEEEEEE.toInt())
+        }
+        val bodySave = canvas.save()
+        canvas.clipRect(left, top, previewBox.right, previewBox.bottom - 42f * density)
+        previewLayouts.forEach { (layout, y) ->
+            val lineSave = canvas.save()
+            canvas.translate(left + padding, top + y)
+            layout.draw(canvas)
+            canvas.restoreToCount(lineSave)
+        }
+        canvas.restoreToCount(bodySave)
+        panelPaint.color = Color.rgb(254, 54, 53)
+        canvas.drawRoundRect(left + padding, previewBox.bottom - 36f * density,
+            previewBox.right - padding, previewBox.bottom - 10f * density, 8f * density, 8f * density, panelPaint)
+        previewText.color = Color.WHITE
+        previewText.textSize = 14f * resources.displayMetrics.scaledDensity
+        previewText.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        canvas.drawText("OK · Открыть тайтл", left + padding + 12f * density, previewBox.bottom - 18f * density, previewText)
+        canvas.restoreToCount(save)
+        canvas.drawRoundRect(previewBox, 12f * density, 12f * density, rim)
+    }
+
     private fun advance(value: Float, goal: Float, amount: Float): Float {
         return if (abs(goal - value) < 0.5f) goal else value + (goal - value) * amount
     }
@@ -117,6 +228,7 @@ class PosterFocusOverlay @JvmOverloads constructor(
             0x24FFFFFF, 0x04FFFFFF, Shader.TileMode.CLAMP)
         canvas.drawRoundRect(frame, radius, radius, sheen)
         canvas.drawRoundRect(frame, radius, radius, rim)
+        if (previewVisible && previewCard?.preview != null) drawPreview(canvas)
         if (moving) postInvalidateOnAnimation()
     }
 }
