@@ -17,6 +17,7 @@ import androidx.core.view.doOnNextLayout
 import androidx.core.view.isVisible
 import androidx.fragment.app.DialogFragment
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.GridLayoutManager
 import ru.radiationx.anilibria.R
 import ru.radiationx.anilibria.databinding.FragmentTvEpisodesBinding
 import ru.radiationx.anilibria.screen.player.PlayerExtra
@@ -44,6 +45,7 @@ class EpisodesDialogFragment : DialogFragment() {
     private val viewModel by viewModel<PlayerEpisodesViewModel> {
         PlayerExtra(getExtraNotNull(RELEASE), getExtra(EPISODE), fromPlayer)
     }
+    private var previewMode = true
     private var descending = false
     private var hideWatched = false
     private var focusedEpisode: EpisodeId? = null
@@ -54,6 +56,7 @@ class EpisodesDialogFragment : DialogFragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setStyle(STYLE_NO_TITLE, R.style.AppTheme_TvEpisodes)
+        previewMode = savedInstanceState?.getBoolean("preview_mode") ?: true
         descending = savedInstanceState?.getBoolean("descending") ?: false
         hideWatched = savedInstanceState?.getBoolean("hide_watched") ?: false
         query = savedInstanceState?.getString("query").orEmpty()
@@ -76,6 +79,7 @@ class EpisodesDialogFragment : DialogFragment() {
             binding.episodesSummary.textSize = 14f
             binding.episodesFilter.isVisible = false
         }
+        binding.episodesMode.isVisible = !fromPlayer
         initialFocusApplied = false
         viewLifecycleOwner.lifecycle.addObserver(viewModel)
         val episodeAdapter = EpisodeListAdapter(
@@ -83,7 +87,13 @@ class EpisodesDialogFragment : DialogFragment() {
             focused = { focusedEpisode = it },
             compact = fromPlayer,
         )
-        binding.episodesList.layoutManager = LinearLayoutManager(requireContext())
+        val grid = GridLayoutManager(requireContext(), if (previewMode && !fromPlayer) 3 else 1)
+        grid.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+            override fun getSpanSize(position: Int): Int =
+                if (episodeAdapter.rows.getOrNull(position)?.episode == null) grid.spanCount else 1
+        }
+        binding.episodesList.layoutManager = grid
+        binding.episodesList.itemAnimator = null
         binding.episodesList.adapter = episodeAdapter
 
         fun restoreEpisodeFocus() {
@@ -103,6 +113,9 @@ class EpisodesDialogFragment : DialogFragment() {
         fun render() {
             val groups = viewModel.episodesData.value
             val listHadFocus = binding.episodesList.hasFocus()
+            episodeAdapter.previewMode = previewMode && !fromPlayer
+            grid.spanCount = if (episodeAdapter.previewMode) 3 else 1
+            binding.episodesMode.text = if (previewMode) "Вид: превью" else "Вид: список"
             episodeAdapter.submit(episodeRows(groups, descending, hideWatched, query))
             val total = groups.sumOf { it.actions.size }
             val visible = episodeAdapter.rows.count { it.episode != null }
@@ -123,6 +136,7 @@ class EpisodesDialogFragment : DialogFragment() {
                 (listHadFocus || !initialFocusApplied)) restoreEpisodeFocus()
         }
 
+        binding.episodesMode.setOnClickListener { previewMode = !previewMode; render() }
         binding.episodesClose.setOnClickListener { dismiss() }
         binding.episodesSort.setOnClickListener { descending = !descending; render() }
         binding.episodesFilter.setOnClickListener { hideWatched = !hideWatched; render() }
@@ -170,6 +184,7 @@ class EpisodesDialogFragment : DialogFragment() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("preview_mode", previewMode)
         outState.putBoolean("descending", descending)
         outState.putBoolean("hide_watched", hideWatched)
         outState.putString("query", query)

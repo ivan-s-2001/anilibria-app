@@ -24,6 +24,9 @@
         <Button android:id="@+id/episodes_filter" style="?attr/detailsActionButtonStyle"
             android:layout_width="wrap_content" android:layout_height="48dp"
             android:layout_marginStart="12dp" android:text="Все серии" />
+        <Button android:id="@+id/episodes_mode" style="?attr/detailsActionButtonStyle"
+            android:layout_width="wrap_content" android:layout_height="48dp"
+            android:layout_marginStart="12dp" android:text="Вид: превью" />
         <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
         <Button android:id="@+id/episodes_close" style="?attr/detailsActionButtonStyle"
             android:layout_width="wrap_content" android:layout_height="48dp" android:text="Закрыть" />

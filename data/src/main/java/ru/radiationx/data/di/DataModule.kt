@@ -221,6 +221,7 @@ class DataModule(context: Context) : QuillModule() {
         single<ConfigurationApi>()
         single<FavoriteApi>()
         single<ReleaseApi>()
+        single<ru.radiationx.data.datasource.remote.api.ReleaseEpisodeMetadataApi>()
         single<SearchApi>()
         single<PageApi>()
         single<YoutubeApi>()

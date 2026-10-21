@@ -39,6 +39,22 @@ class EpisodeListAdapterTest {
         assertEquals(episode.episodeId, clicked)
     }
 
+    @Test fun previewCardKeepsOneFocusTargetAndExactEpisode() {
+        val item = episode("3").copy(durationSeconds = 1580, progress = .5f)
+        var clicked: EpisodeId? = null
+        val adapter = EpisodeListAdapter({ clicked = it.episodeId }, {})
+        adapter.previewMode = true
+        adapter.submit(listOf(EpisodeListRow(episode = item)))
+        val parent = FrameLayout(ContextThemeWrapper(RuntimeEnvironment.getApplication(), R.style.AppTheme_TvEpisodes))
+        val holder = adapter.onCreateViewHolder(parent, adapter.getItemViewType(0))
+        adapter.onBindViewHolder(holder, 0)
+        assertTrue(holder.itemView.isFocusable)
+        assertEquals("26:20", holder.itemView.findViewById<TextView>(R.id.episode_duration).text.toString())
+        assertEquals(500, holder.itemView.findViewById<android.widget.ProgressBar>(R.id.episode_progress).progress)
+        holder.itemView.performClick()
+        assertEquals(item.episodeId, clicked)
+    }
+
     @Test fun unnamedEpisodesHaveReadableTitlesWithoutChangingTheirNumbers() {
         assertEquals("Серия 1", episodeDisplayTitle(null, "1"))
         assertEquals("Серия 12.5", episodeDisplayTitle("  ", "12.5"))
