@@ -87,10 +87,12 @@ class PlayerEpisodesViewModel @Inject constructor(
         episodesData.value = groups
         loading.value = false
         val available = groups.flatMap { it.actions }
+        val targetRelease = available.filter { it.episodeId.releaseId == argExtra.releaseId }
         selectedAction.value = available.find { it.episodeId == argExtra.episodeId }
-            ?: available.filter { accesses[it.episodeId]?.lastValidAccess != null }
+            ?: targetRelease.filter { accesses[it.episodeId]?.lastValidAccess != null }
                 .maxByOrNull { accesses[it.episodeId]?.lastAccessRaw ?: 0L }
-            ?: available.firstOrNull { !it.watched }
+            ?: targetRelease.firstOrNull { !it.watched }
+            ?: targetRelease.firstOrNull()
             ?: available.firstOrNull()
     }
 
