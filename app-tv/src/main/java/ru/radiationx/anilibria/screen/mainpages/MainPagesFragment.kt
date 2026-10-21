@@ -2,6 +2,7 @@ package ru.radiationx.anilibria.screen.mainpages
 
 import android.os.Bundle
 import android.view.View
+import android.view.ViewGroup
 import androidx.leanback.app.BrowseSupportFragment
 import androidx.leanback.widget.ArrayObjectAdapter
 import androidx.leanback.widget.HeaderItem
@@ -19,7 +20,8 @@ class MainPagesFragment : BrowseSupportFragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         lastSelectedPosition = savedInstanceState?.getInt(PAGE_KEY) ?: 0
-        headersState = HEADERS_DISABLED
+        // PageRow dispatch requires headers support; only hide the legacy rail.
+        headersState = HEADERS_HIDDEN
         isHeadersTransitionOnBackEnabled = false
         mainFragmentRegistry.registerFragment(PageRow::class.java, fragmentFactory)
         adapter = ArrayObjectAdapter(ListRowPresenter()).apply {
@@ -31,6 +33,10 @@ class MainPagesFragment : BrowseSupportFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        headersSupportFragment.view?.apply {
+            visibility = View.GONE
+            (this as? ViewGroup)?.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        }
         viewLifecycleOwner.lifecycle.addObserver(viewModel)
         (titleView as? BrowseTitleView)?.apply {
             setHomeNavigation(

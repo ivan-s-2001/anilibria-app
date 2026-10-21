@@ -120,6 +120,7 @@ open class BrowseTitleView @JvmOverloads constructor(
             button.nextFocusLeftId = homeButtons.getOrNull(index - 1)?.id ?: button.id
             button.nextFocusRightId = homeButtons.getOrNull(index + 1)?.id ?: button.id
             button.nextFocusUpId = button.id
+            button.nextFocusDownId = androidx.leanback.R.id.browse_container_dock
         }
         binding.titleControls.removeAllViews()
         binding.titleControls.addView(row)
