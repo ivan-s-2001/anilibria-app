@@ -8,7 +8,7 @@ import androidx.leanback.widget.ListRowView
 import androidx.leanback.widget.RowPresenter
 
 open class CustomListRowPresenter @JvmOverloads constructor(
-    focusZoomFactor: Int = FocusHighlight.ZOOM_FACTOR_MEDIUM,
+    focusZoomFactor: Int = FocusHighlight.ZOOM_FACTOR_NONE,
     useFocusDimmer: Boolean = false,
 ) : ListRowPresenter(focusZoomFactor, useFocusDimmer) {
 

@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.leanback.widget.FocusHighlight
 import androidx.leanback.widget.ArrayObjectAdapter
 import androidx.leanback.widget.VerticalGridPresenter
 import ru.radiationx.anilibria.R
@@ -38,8 +39,8 @@ class SearchFragment : BaseVerticalGridFragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = "Каталог"
-        setGridPresenter(VerticalGridPresenter().apply {
-            numberOfColumns = 5
+        setGridPresenter(VerticalGridPresenter(FocusHighlight.ZOOM_FACTOR_NONE, false).apply {
+            numberOfColumns = 6
         })
     }
 

@@ -13,6 +13,7 @@ import android.view.View
 import android.view.ViewTreeObserver
 import kotlin.math.abs
 import kotlin.math.min
+import kotlin.math.exp
 
 /** One decorative highlight for the visible poster surface; never participates in focus. */
 class PosterFocusOverlay @JvmOverloads constructor(
@@ -25,7 +26,7 @@ class PosterFocusOverlay @JvmOverloads constructor(
     private val renderedFrame = RectF()
     private val visibleBounds = Rect()
     private val origin = IntArray(2)
-    private val velocity = FloatArray(4)
+    private var moving = false
     private var previousTime = 0L
     private var shown = false
     private var lastFocused: View? = null
@@ -81,19 +82,17 @@ class PosterFocusOverlay @JvmOverloads constructor(
         }
         if (!shown || !animationsEnabled) {
             frame.set(target)
-            velocity.fill(0f)
+            moving = false
         } else {
-            // Bound the timestep after a paused window; substeps keep the spring stable at low fps.
-            val elapsed = min((now - previousTime) / 1_000_000_000f, 0.032f)
-            repeat(4) {
-                val dt = elapsed / 4f
-                frame.left = advance(frame.left, target.left, 0, dt)
-                frame.top = advance(frame.top, target.top, 1, dt)
-                frame.right = advance(frame.right, target.right, 2, dt)
-                frame.bottom = advance(frame.bottom, target.bottom, 3, dt)
-            }
+            val elapsed = min((now - previousTime) / 1_000_000_000f, 0.05f)
+            val amount = 1f - exp(-elapsed * 28f)
+            frame.left = advance(frame.left, target.left, amount)
+            frame.top = advance(frame.top, target.top, amount)
+            frame.right = advance(frame.right, target.right, amount)
+            frame.bottom = advance(frame.bottom, target.bottom, amount)
+            moving = frame != target
         }
-        val needsFrame = !shown || frame != renderedFrame || velocity.any { abs(it) > 1f }
+        val needsFrame = !shown || frame != renderedFrame || moving
         shown = true
         previousTime = now
         // Refit during Leanback zoom and scrolling, without an idle rendering loop.
@@ -101,20 +100,15 @@ class PosterFocusOverlay @JvmOverloads constructor(
         return true
     }
 
-    private fun advance(value: Float, goal: Float, index: Int, dt: Float): Float {
-        velocity[index] += ((goal - value) * 320f - velocity[index] * 32f) * dt
-        if (abs(goal - value) < 0.25f && abs(velocity[index]) < 1f) {
-            velocity[index] = 0f
-            return goal
-        }
-        return value + velocity[index] * dt
+    private fun advance(value: Float, goal: Float, amount: Float): Float {
+        return if (abs(goal - value) < 0.5f) goal else value + (goal - value) * amount
     }
 
     override fun onDraw(canvas: Canvas) {
         if (!shown) return
         renderedFrame.set(frame)
-        val radius = 16f * density
-        for (i in 1..4) {
+        val radius = 12f * density
+        for (i in 1..2) {
             glow.strokeWidth = i * 2f * density
             glow.color = ((24 / i) shl 24) or 0xFFFFFF
             canvas.drawRoundRect(frame, radius, radius, glow)
@@ -123,6 +117,6 @@ class PosterFocusOverlay @JvmOverloads constructor(
             0x24FFFFFF, 0x04FFFFFF, Shader.TileMode.CLAMP)
         canvas.drawRoundRect(frame, radius, radius, sheen)
         canvas.drawRoundRect(frame, radius, radius, rim)
-        if (velocity.any { abs(it) > 1f }) postInvalidateOnAnimation()
+        if (moving) postInvalidateOnAnimation()
     }
 }

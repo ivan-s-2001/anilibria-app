@@ -124,8 +124,8 @@
     </style>
 
     <style name="AppTheme.Widget.Leanback.GridItems.VerticalGridView" parent="Widget.Leanback.GridItems.VerticalGridView">
-        <item name="android:paddingBottom">120dp</item>
-        <item name="android:paddingTop">176dp</item>
+        <item name="android:paddingBottom">64dp</item>
+        <item name="android:paddingTop">152dp</item>
     </style>
 
     <style name="AppTheme.ImageCardViewStyle" parent="Widget.Leanback.BaseCardViewStyle">
@@ -164,7 +164,7 @@
     <style name="AppTheme.Widget.Description.Row">
         <item name="android:paddingStart">?attr/browsePaddingStart</item>
         <item name="android:paddingEnd">?attr/browsePaddingEnd</item>
-        <item name="android:paddingBottom">32dp</item>
+        <item name="android:paddingBottom">16dp</item>
     </style>
 
     <style name="AppTheme.Widget.Description.Grid">
@@ -179,7 +179,7 @@
 
     <style name="AppTheme.RoundedImageView">
         <item name="cornerFamily">rounded</item>
-        <item name="cornerSize">16dp</item>
+        <item name="cornerSize">12dp</item>
     </style>
 
     <style name="AppTheme.CircleImageView">

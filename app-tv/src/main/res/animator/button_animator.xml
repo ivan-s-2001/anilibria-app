@@ -10,20 +10,20 @@
             <objectAnimator
                 android:duration="100"
                 android:propertyName="translationZ"
-                android:valueTo="4dp"
+                android:valueTo="0dp"
                 android:valueType="floatType" />
 
             <objectAnimator
                 android:duration="100"
                 android:propertyName="scaleX"
-                android:valueTo="1.05"
+                android:valueTo="0.99"
                 android:valueType="floatType" />
 
 
             <objectAnimator
                 android:duration="100"
                 android:propertyName="scaleY"
-                android:valueTo="1.05"
+                android:valueTo="0.99"
                 android:valueType="floatType" />
 
         </set>
@@ -35,22 +35,22 @@
         <set>
 
             <objectAnimator
-                android:duration="150"
+                android:duration="110"
                 android:propertyName="translationZ"
-                android:valueTo="4dp"
+                android:valueTo="0dp"
                 android:valueType="floatType" />
 
             <objectAnimator
-                android:duration="150"
+                android:duration="110"
                 android:propertyName="scaleX"
-                android:valueTo="1.1"
+                android:valueTo="1.02"
                 android:valueType="floatType" />
 
 
             <objectAnimator
-                android:duration="150"
+                android:duration="110"
                 android:propertyName="scaleY"
-                android:valueTo="1.1"
+                android:valueTo="1.02"
                 android:valueType="floatType" />
 
         </set>
@@ -62,20 +62,20 @@
         <set>
 
             <objectAnimator
-                android:duration="150"
+                android:duration="110"
                 android:propertyName="translationZ"
                 android:valueTo="0dp"
                 android:valueType="floatType" />
 
             <objectAnimator
-                android:duration="150"
+                android:duration="110"
                 android:propertyName="scaleX"
                 android:valueTo="1"
                 android:valueType="floatType" />
 
 
             <objectAnimator
-                android:duration="150"
+                android:duration="110"
                 android:propertyName="scaleY"
                 android:valueTo="1"
                 android:valueType="floatType" />

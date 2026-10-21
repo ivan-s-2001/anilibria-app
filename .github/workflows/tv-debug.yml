@@ -29,6 +29,8 @@ jobs:
           java-version: '17'
           cache: gradle
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - name: Assemble TV debug
         run: bash ./gradlew :app-tv:assembleAppDebug --no-daemon --console=plain
       - uses: actions/upload-artifact@v4

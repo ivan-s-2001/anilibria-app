@@ -170,7 +170,7 @@ class GradientBackgroundManager @Inject constructor(
         primaryColorAnimator = ValueAnimator
             .ofObject(colorEvaluator, backgroundDrawable.color, color)
             .apply {
-                duration = 500
+                duration = 240
                 addUpdateListener {
                     backgroundDrawable.color = it.animatedValue as Int
                 }
@@ -185,7 +185,7 @@ class GradientBackgroundManager @Inject constructor(
         foregroundColorAnimator = ValueAnimator
             .ofInt(start, end)
             .apply {
-                duration = 500
+                duration = 240
                 addUpdateListener {
                     foregroundDrawable.alpha = it.animatedValue as Int
                 }

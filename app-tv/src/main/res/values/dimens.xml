@@ -7,7 +7,7 @@
     -->
     <item name="ratio_card_release" format="float" type="dimen">1.423</item>
     <item name="ratio_card_youtube" format="float" type="dimen">0.561</item>
-    <dimen name="card_height">185dp</dimen>
-    <dimen name="card_release_width">130dp</dimen>
-    <dimen name="card_youtube_width">330dp</dimen>
+    <dimen name="card_height">160dp</dimen>
+    <dimen name="card_release_width">112dp</dimen>
+    <dimen name="card_youtube_width">284dp</dimen>
 </resources>

@@ -55,6 +55,7 @@ class LibriaCardViewHolder(
             )
         }
         containerView.titleText = item.title
+        containerView.contentText = item.description
         containerView.contentDescription = listOf(item.title, item.description)
             .filter { it.isNotBlank() }.joinToString(". ")
         containerView.mainImageView?.showImageUrl(item.image)
@@ -63,6 +64,7 @@ class LibriaCardViewHolder(
     fun unbind() {
         containerView.mainImage = null
         containerView.titleText = null
+        containerView.contentText = null
         containerView.contentDescription = null
     }
 }

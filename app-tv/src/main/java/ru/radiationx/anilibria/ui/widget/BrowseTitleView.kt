@@ -102,17 +102,17 @@ open class BrowseTitleView @JvmOverloads constructor(
             val button = AppCompatTextView(context).apply {
                 id = View.generateViewId()
                 text = label
-                textSize = 15f
+                textSize = 14f
                 gravity = Gravity.CENTER
                 isFocusable = true
                 isClickable = true
-                setPadding((16 * density).toInt(), 0, (16 * density).toInt(), 0)
+                setPadding((14 * density).toInt(), 0, (14 * density).toInt(), 0)
                 setTextColor(ContextCompat.getColorStateList(context, R.color.launcher_pill_text))
                 setBackgroundResource(R.drawable.home_tab_bg)
                 setOnClickListener { action() }
             }
             row.addView(button, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, (42 * density).toInt()
+                ViewGroup.LayoutParams.WRAP_CONTENT, (38 * density).toInt()
             ).apply { marginEnd = (8 * density).toInt() })
             homeButtons.add(button)
         }

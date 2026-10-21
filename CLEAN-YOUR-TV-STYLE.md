@@ -90,3 +90,13 @@ until a Cyrillic-complete companion font is chosen.
 5. Catalog filters/reset, fast changes on slow network and failure/retry; five-column grid.
 6. Back from playback and dialogs; retained history; single-episode and unavailable releases.
 7. Compare PSS and frame time on realme Android 11 and Xiaomi Android 14.
+
+## Compact layout and restrained motion
+Posters are now 112 x 160 dp with six catalog columns. Detail art is 128 x 182 dp,
+with a 26 sp title and a two-line description. Top tabs are 38 dp tall.
+Rows no longer insert a description block only on selection; metadata belongs to each
+card's persistent info area. Leanback poster zoom is disabled for rows and catalog.
+The shared frame uses a short non-oscillating approach instead of a spring; button
+focus scale is reduced from 1.10 to 1.02. Background fades take 240 ms.
+CI setup explicitly requests platform-tools instead of the unavailable legacy tools package.
+Visual density and frame timing still require real-TV validation.
