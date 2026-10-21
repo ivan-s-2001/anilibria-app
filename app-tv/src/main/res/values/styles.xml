@@ -130,7 +130,7 @@
 
     <style name="AppTheme.ImageCardViewStyle" parent="Widget.Leanback.BaseCardViewStyle">
         <item name="cardType">infoUnder</item>
-        <item name="cardInfoVisibility">always</item>
+        <item name="infoVisibility">always</item>
         <item name="cardBackground">?android:colorPrimary</item>
     </style>
 
