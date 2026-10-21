@@ -47,8 +47,8 @@ fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int
     setOnClickListener { click() }
 }
 
-enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS }
-data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null)
+enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF }
+data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList())
 
 class PageAdapter(
     private val navigate: (Int) -> Unit,
@@ -61,11 +61,38 @@ class PageAdapter(
     private val returnToTabs: () -> Unit,
     private val day: (Int) -> Unit = {},
     private val quickActions: (Release) -> Unit = {},
+    private val shelfMode: Boolean = false,
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+    private data class ShelfPosition(val focusedKey:String?,val anchorKey:String?,val offset:Int)
+    private val shelfPositions=mutableMapOf<String,ShelfPosition>()
+    private fun saveShelf(shelf:RecyclerView) {
+        val key=shelf.getTag(R.id.shelf_key) as?String?:return
+        val child=shelf.adapter as?PageAdapter?:return
+        val manager=shelf.layoutManager as?androidx.recyclerview.widget.LinearLayoutManager?:return
+        val first=manager.findFirstVisibleItemPosition()
+        val focus=shelf.findFocus()?.let{shelf.findContainingItemView(it)?.tag as?String}
+        shelfPositions[key]=ShelfPosition(focus?:shelfPositions[key]?.focusedKey,child.rows.getOrNull(first)?.key,manager.findViewByPosition(first)?.left?:0)
+    }
+    fun restoreShelf(shelf:RecyclerView, requestFocus:Boolean=true) {
+        val key=shelf.getTag(R.id.shelf_key) as?String?:return
+        val child=shelf.adapter as?PageAdapter?:return
+        val memory=shelfPositions[key]
+        val index=child.rows.indexOfFirst{it.key==memory?.focusedKey}.takeIf{it>=0}?:0
+        val manager=shelf.layoutManager as androidx.recyclerview.widget.LinearLayoutManager
+        val anchor=child.rows.indexOfFirst{it.key==memory?.anchorKey}.takeIf{it>=0}?:index
+        manager.scrollToPositionWithOffset(anchor,memory?.offset?:0)
+        if(requestFocus)shelf.post {
+            val target=shelf.findViewHolderForAdapterPosition(index)?.itemView
+            if(target!=null)target.requestFocus()else {manager.scrollToPosition(index);shelf.post{shelf.findViewHolderForAdapterPosition(index)?.itemView?.requestFocus()}}
+        }
+    }
     var rows: List<Row> = emptyList(); private set
+    private val attachedShelves=mutableSetOf<RecyclerView>()
     var tabStart: Int = -1; private set
     var contentStart: Int = -1; private set
     fun submit(value: List<Row>) {
+        // Snapshot nested lists before the outer adapter is rebound.
+        attachedShelves.forEach(::saveShelf)
         rows = value; tabStart = rows.indexOfFirst { it.kind == Kind.TABS }; contentStart = if (tabStart >= 0) tabStart + 1 else -1
         notifyDataSetChanged()
     }
@@ -77,6 +104,10 @@ class PageAdapter(
             Kind.NAV, Kind.TABS, Kind.DAYS -> HorizontalScrollView(context).apply {
                 isHorizontalScrollBarEnabled = false
                 addView(LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL })
+            }
+            Kind.SHELF -> RecyclerView(context).apply {
+                layoutManager=androidx.recyclerview.widget.LinearLayoutManager(context,RecyclerView.HORIZONTAL,false)
+                clipToPadding=false;itemAnimator=null;setPadding(dp(4),dp(4),dp(4),dp(4))
             }
             Kind.HERO -> LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
             Kind.HEADING -> LinearLayout(context).apply {
@@ -102,7 +133,7 @@ class PageAdapter(
             }
             else -> TextView(context)
         }
-        view.layoutParams = RecyclerView.LayoutParams(-1, when(Kind.entries[type]){Kind.EPISODE->view.dp(160);Kind.POSTER->view.dp(200);Kind.SPOTLIGHT->view.dp(220);Kind.FEATURE->view.dp(126);else->-2}).apply {
+        view.layoutParams = RecyclerView.LayoutParams(if(shelfMode)view.dp(144)else -1, when(Kind.entries[type]){Kind.EPISODE->view.dp(160);Kind.POSTER->view.dp(236);Kind.SHELF->view.dp(252);Kind.SPOTLIGHT->view.dp(220);Kind.FEATURE->view.dp(126);else->-2}).apply {
             val card = Kind.entries[type] in listOf(Kind.POSTER,Kind.EPISODE,Kind.FEATURE)
             setMargins(view.dp(4), view.dp(4),view.dp(4),view.dp(4))
         }
@@ -112,13 +143,21 @@ class PageAdapter(
         val row = rows[position]; val view = holder.itemView
         view.tag = row.key
         val firstContent = if(contentStart>=0) (contentStart until rows.size).firstOrNull{rows[it].kind!=Kind.HEADING} else null
-        val firstRowCount = when(firstContent?.let{rows[it].kind}){Kind.POSTER->8;Kind.EPISODE->3;else->1}
+        val firstRowCount = when(firstContent?.let{rows[it].kind}){Kind.POSTER->5;Kind.EPISODE->3;else->1}
         view.setOnKeyListener { _, key, event ->
             if (firstContent != null && position in firstContent until (firstContent+firstRowCount) && key == KeyEvent.KEYCODE_DPAD_UP) {
                 if (event.action == KeyEvent.ACTION_UP) returnToTabs(); true
             } else false
         }
         when (row.kind) {
+            Kind.SHELF -> {
+                val shelf=view as RecyclerView
+                val oldKey=shelf.getTag(R.id.shelf_key) as? String
+                if(oldKey!=row.key){shelf.adapter=PageAdapter(navigate,tab,play,favorite,details,progress,lastEpisode,returnToTabs,day,quickActions,true);shelf.scrollToPosition(0)}
+                shelf.setTag(R.id.shelf_key,row.key)
+                (shelf.adapter as PageAdapter).submit(row.items.map{Row("${row.key}:release:${it.id}",Kind.POSTER,release=it)})
+                restoreShelf(shelf,false)
+            }
             Kind.DAYS -> {
                 val line=(view as HorizontalScrollView).getChildAt(0) as LinearLayout;line.removeAllViews()
                 listOf("Вчера","Сегодня","Завтра").forEachIndexed { index, title ->
@@ -139,8 +178,8 @@ class PageAdapter(
             }
             Kind.TABS -> {
                 val line = (view as HorizontalScrollView).getChildAt(0) as LinearLayout; line.removeAllViews()
-                val labels = listOf("Эпизоды", "Связанное", "Комментарии", "Команда", "Торренты")
-                val icons = listOf(R.drawable.ic_episodes, R.drawable.ic_related, R.drawable.ic_comments, R.drawable.ic_team, R.drawable.ic_download)
+                val labels = listOf("Эпизоды", "Связанное", "Рекомендуем", "Работа над релизом")
+                val icons = listOf(R.drawable.ic_episodes, R.drawable.ic_related, R.drawable.ic_favorite, R.drawable.ic_team)
                 labels.forEachIndexed { i, text ->
                     val item = action(line,text,icon=icons[i],click={tab(i)})
                     item.textSize=15f; item.setTextColor(if(i==row.selected)RED else MUTED)
@@ -161,14 +200,14 @@ class PageAdapter(
             }
             Kind.HERO -> {
                 val r=row.release!!; val box=view as LinearLayout;box.removeAllViews();box.setPadding(0,view.dp(12),0,view.dp(16))
-                box.addView(ImageView(view.context).apply { scaleType=ImageView.ScaleType.CENTER_CROP;load(r.poster) },LinearLayout.LayoutParams(view.dp(174),view.dp(250)))
+                box.addView(ImageView(view.context).apply { scaleType=ImageView.ScaleType.CENTER_CROP;load(r.poster) },LinearLayout.LayoutParams(view.dp(128),view.dp(184)))
                 val info=LinearLayout(view.context).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(28),0,0,0)}
                 box.addView(info,LinearLayout.LayoutParams(0,-2,1f))
                 fun text(value:String,size:Float,color:Int=WHITE,bold:Boolean=false,lines:Int=3) {
                     if(value.isBlank())return
                     info.addView(TextView(view.context).apply { label(value,size,color,bold); maxLines=lines;ellipsize=android.text.TextUtils.TruncateAt.END },LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=view.dp(8)})
                 }
-                text(r.title,29f,WHITE,true,2);text(r.english,15f,MUTED,false,1);text(r.metadata,16f);text(r.genres.joinToString(" · "),15f,MUTED,false,2);text(r.ratings.joinToString(" · "){"${it.source} ${"%.1f".format(it.value)}"},14f,MUTED,false,1)
+                text(r.title,24f,WHITE,true,2);text(r.english,15f,MUTED,false,1);text(r.metadata,16f);text(r.genres.joinToString(" · "),15f,MUTED,false,2);text(r.ratings.joinToString(" · "){"${it.source} ${"%.1f".format(it.value)}"},14f,MUTED,false,1)
                 val controls=LinearLayout(view.context)
                 info.addView(controls,LinearLayout.LayoutParams(-1,view.dp(48)).apply{topMargin=view.dp(10)})
                 val episode = r.episodes.firstOrNull { it.id == lastEpisode(r.id) } ?: r.episodes.firstOrNull()
@@ -185,11 +224,11 @@ class PageAdapter(
                 val poster=row.kind==Kind.POSTER
                 val spotlight=row.kind==Kind.SPOTLIGHT
                 (box.getChildAt(0)as ImageView).apply {
-                    layoutParams=FrameLayout.LayoutParams(-1,if(poster)view.dp(152)else -1,Gravity.TOP)
+                    layoutParams=FrameLayout.LayoutParams(-1,if(poster)view.dp(184)else -1,Gravity.TOP)
                     load(if(poster)release?.poster else row.image)
                 }
                 box.getChildAt(1).visibility=if(poster && !box.hasFocus())View.GONE else View.VISIBLE
-                title.label(release?.title?:row.title,if(spotlight)30f else if(poster)13f else 19f,WHITE,true)
+                title.label(release?.title?:row.title,if(spotlight)30f else if(poster)14f else 19f,WHITE,true)
                 val metadata=if(release!=null) listOfNotNull(release.latestEpisode?.let{"Эпизод ${number(it.ordinal)}"},release.metadata,release.genres.joinToString(" · ")).filter(String::isNotBlank).joinToString("\n") else row.subtitle
                 subtitle.label(metadata,if(spotlight)15f else 13f,MUTED)
                 subtitle.visibility=if(poster && !box.hasFocus())View.GONE else View.VISIBLE
@@ -206,7 +245,7 @@ class PageAdapter(
                     subtitle.visibility=if(focused)View.VISIBLE else View.GONE
                     box.getChildAt(1).visibility=if(focused)View.VISIBLE else View.GONE
                     content.setBackgroundColor(if(focused)0xEE121212.toInt()else Color.TRANSPARENT)
-                    title.textSize=13f
+                    title.textSize=14f
                     title.maxLines=if(focused)3 else 2
                 } }
                 content.setBackgroundColor(if(poster && box.hasFocus())0xEE121212.toInt()else Color.TRANSPARENT)
@@ -242,7 +281,14 @@ class PageAdapter(
             }
         }
     }
+    override fun onViewAttachedToWindow(holder:RecyclerView.ViewHolder){
+        if(holder.itemView is RecyclerView)attachedShelves.add(holder.itemView as RecyclerView)
+    }
+    override fun onViewDetachedFromWindow(holder:RecyclerView.ViewHolder){
+        (holder.itemView as?RecyclerView)?.let{saveShelf(it);attachedShelves.remove(it)}
+    }
     override fun onViewRecycled(holder:RecyclerView.ViewHolder){
+        (holder.itemView as?RecyclerView)?.let{saveShelf(it);attachedShelves.remove(it)}
         val view=holder.itemView
         if(view is FrameLayout)(view.getChildAt(0)as?ImageView)?.load(null)
         if(view is LinearLayout && view.childCount>0)(view.getChildAt(0)as?ImageView)?.load(null)

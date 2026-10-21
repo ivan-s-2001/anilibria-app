@@ -24,7 +24,7 @@ class TvModel : ViewModel() {
     private var homeLoadedAt = 0L
     private var selectedHomeDay = 1
     fun open(screen: Screen, remember: Boolean = true) {
-        if (remember && screen != state.value.screen) stack.add(state.value.screen)
+        if (remember && state.value.screen != Screen.Welcome && screen != state.value.screen) stack.add(state.value.screen)
         job?.cancel()
         if (screen == Screen.Home && homeCache != null && android.os.SystemClock.elapsedRealtime() - homeLoadedAt < 300000) {
             state.value = UiState(screen, home = homeCache, homeDay = selectedHomeDay)

@@ -32,26 +32,83 @@ class MainActivity : ComponentActivity() {
     private lateinit var grid: GridLayoutManager
     private val prefs by lazy { getSharedPreferences("viewing", MODE_PRIVATE) }
     private val focusMemory = mutableMapOf<Screen, String>()
+    private val scrollMemory=mutableMapOf<Screen,Pair<Int,Int>>()
+    private fun screenKey(screen:Screen)=if(screen is Screen.Detail)screen.copy(tab=0)else screen
+    private fun focusItem(item:View?) {
+        when(item){
+            is RecyclerView->adapter.restoreShelf(item)
+            null->Unit
+            else->if(item.isFocusable)item.requestFocus()else if(item is ViewGroup)item.getFocusables(View.FOCUS_FORWARD).firstOrNull()?.requestFocus()
+        }
+    }
     private var current: Screen = Screen.Welcome
     private var enterContent = false
     private var enterDay = false
+    private lateinit var shell: LinearLayout
+    private lateinit var menu: LinearLayout
+    private var menuOpen=false
+    private var contentFocus: View?=null
+    private var selectedSection=0
+
+    private fun buildMenu() {
+        menu.removeAllViews()
+        menu.layoutParams=LinearLayout.LayoutParams(dp(if(menuOpen)196 else 60),-1)
+        menu.addView(android.widget.TextView(this).apply{label(if(menuOpen)"AniLiberty"else"A",20f,RED,true);gravity=android.view.Gravity.CENTER},LinearLayout.LayoutParams(-1,dp(56)))
+        val titles=listOf("Поиск","Главная","Релизы","Моё")
+        val icons=listOf(android.R.drawable.ic_menu_search,android.R.drawable.ic_menu_view,android.R.drawable.ic_menu_sort_by_size,R.drawable.ic_favorite)
+        titles.forEachIndexed { index,title ->
+            val route=listOf(2,0,1,3)[index]
+            menu.addView(action(menu,if(menuOpen)title else "",icon=icons[index]){
+                selectedSection=route;closeMenu(false);navigate(route)
+            }.apply {
+                contentDescription=title
+                if(route==selectedSection)setTextColor(RED)
+                setOnKeyListener{_,key,event->if(key==KeyEvent.KEYCODE_DPAD_RIGHT){if(event.action==KeyEvent.ACTION_UP)closeMenu();true}else false}
+            },LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(6)})
+        }
+    }
+    private fun openMenu(){
+        if(current==Screen.Welcome)return
+        contentFocus=list.findFocus();rememberFocus();menuOpen=true;buildMenu()
+        menu.getChildAt(listOf(2,0,1,3).indexOf(selectedSection).coerceAtLeast(0)+1)?.requestFocus()
+    }
+    private fun closeMenu(restore:Boolean=true){menuOpen=false;buildMenu();if(restore){if(contentFocus?.isAttachedToWindow==true)contentFocus?.requestFocus()else list.requestFocus()}}
+    override fun dispatchKeyEvent(event:KeyEvent):Boolean {
+        if(!menuOpen && current!=Screen.Welcome && event.keyCode==KeyEvent.KEYCODE_DPAD_LEFT){
+            val focus=currentFocus
+            val next=focus?.focusSearch(View.FOCUS_LEFT)
+            if(focus!=null && (next==null || isInMenu(next))){if(event.action==KeyEvent.ACTION_DOWN)openMenu();return true}
+        }
+        return super.dispatchKeyEvent(event)
+    }
+    private fun isInMenu(view:View):Boolean {var node:android.view.ViewParent?=view.parent;while(node!=null){if(node===menu)return true;node=node.parent};return false}
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         list = RecyclerView(this).apply {
             setBackgroundColor(0xFF121212.toInt()); setPadding(dp(32),dp(8),dp(32),dp(24));clipToPadding=false;itemAnimator=null
         }
-        grid=GridLayoutManager(this,24);list.layoutManager=grid
+        grid=GridLayoutManager(this,15);list.layoutManager=grid
         adapter=PageAdapter(::navigate,::selectTab,::play,::favorite,{rememberFocus();model.open(Screen.Detail(it.id))},
             { id -> prefs.getLong("position:$id",0) to prefs.getLong("duration:$id",0) },
             { id -> prefs.getString("last:$id",null) },::returnToTabs, { index -> enterDay=true;val previous=model.state.value;model.homeDay(index);if(previous==model.state.value)render(model.state.value) },::quickActions)
-        grid.spanSizeLookup=object:GridLayoutManager.SpanSizeLookup(){override fun getSpanSize(position:Int)=when(adapter.rows[position].kind){Kind.POSTER->3;Kind.EPISODE,Kind.FEATURE->8;else->24}}
-        list.adapter=adapter;setContentView(list)
-        onBackPressedDispatcher.addCallback(this,object:OnBackPressedCallback(true){override fun handleOnBackPressed(){rememberFocus();if(!model.back())finish()}})
+        grid.spanSizeLookup=object:GridLayoutManager.SpanSizeLookup(){override fun getSpanSize(position:Int)=when(adapter.rows[position].kind){Kind.POSTER->3;Kind.EPISODE,Kind.FEATURE->5;else->15}}
+        list.adapter=adapter
+        shell=LinearLayout(this).apply{setBackgroundColor(0xFF121212.toInt())}
+        menu=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(12),dp(4),0);setBackgroundColor(0xFF212121.toInt())}
+        shell.addView(menu,LinearLayout.LayoutParams(dp(60),-1));shell.addView(list,LinearLayout.LayoutParams(0,-1,1f));buildMenu();setContentView(shell)
+        onBackPressedDispatcher.addCallback(this,object:OnBackPressedCallback(true){override fun handleOnBackPressed(){if(menuOpen){if(current==Screen.Home){finish()}else closeMenu();return}
+            rememberFocus()
+            if(current==Screen.Home){if(list.computeVerticalScrollOffset()>0){list.smoothScrollToPosition(0)}else openMenu()}
+            else if(!model.back())finish()}})
         lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED){model.state.collect{render(it)}} }
         if(savedInstanceState==null && prefs.getBoolean("welcomed",false))model.open(Screen.Home,false)
     }
-    private fun rememberFocus(){list.findFocus()?.let{v->list.findContainingItemView(v)?.tag as?String}?.let{focusMemory[current]=it}}
+    private fun rememberFocus(){
+        list.findFocus()?.let{v->list.findContainingItemView(v)?.tag as?String}?.let{focusMemory[screenKey(current)]=it}
+        val first=grid.findFirstVisibleItemPosition()
+        scrollMemory[screenKey(current)]=first to (grid.findViewByPosition(first)?.top?:list.paddingTop)
+    }
     private fun navigate(index:Int){
         rememberFocus()
         when(index){0->model.open(Screen.Home);1->model.open(Screen.Catalog());2->search();3->library()}
@@ -120,13 +177,14 @@ class MainActivity : ComponentActivity() {
     private fun render(state:UiState){
         val retainedFocus = if(current==state.screen) list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String } else null
         current=state.screen
+        menu.visibility=if(current==Screen.Welcome)View.GONE else View.VISIBLE
         val rows=mutableListOf<Row>()
         if(state.screen==Screen.Welcome){
             rows+=Row("welcome",Kind.HEADING,"AniLiberty","Так звучит аниме")
             rows+=Row("intro",Kind.TEXT,"Аниме на большом экране","Управление пультом. Просмотр без обязательного входа.")
             rows+=Row("start",Kind.ACTION,"Начать просмотр",click={prefs.edit().putBoolean("welcomed",true).apply();model.open(Screen.Home,false)})
         }else{
-            rows+=Row("nav",Kind.NAV)
+            
             if(state.loading)rows+=Row("loading",Kind.TEXT,"Загрузка…")
             else if(state.error!=null)rows+=Row("retry",Kind.ACTION,"Не удалось загрузить",state.error,click=model::retry)
             else when(val screen=state.screen){
@@ -136,14 +194,14 @@ class MainActivity : ComponentActivity() {
                         rows+=Row("promotion:${promotion.id}",Kind.SPOTLIGHT,release=promotion.release,image=promotion.image)
                     }
                     rows+=Row("heading",Kind.HEADING,"Новые эпизоды","Самые новые и свежие эпизоды в любимой озвучке")
-                    rows+=home.latest.take(12).map{Row("release:${it.id}",Kind.POSTER,release=it)}
+                    rows+=Row("latest-shelf",Kind.SHELF,items=home.latest)
                     rows+=Row("support",Kind.ACTION,"Поддержите AniLiberty!","Поддержите команду проекта",click={openLink("https://www.aniliberty.top/support")})
                     rows+=Row("schedule-heading",Kind.HEADING,"Расписание релизов","Список релизов, над которыми команда трудится прямо сейчас")
                     rows+=Row("schedule-days",Kind.DAYS,selected=state.homeDay)
                     val schedule=home.schedule?.getOrNull(state.homeDay)
                     if(schedule==null)rows+=Row("schedule-retry",Kind.ACTION,"Не удалось загрузить расписание · Повторить",click=model::retry)
                     else if(schedule.isEmpty())rows+=Row("schedule-empty",Kind.TEXT,"На этот день релизы не запланированы")
-                    else rows+=schedule.take(12).map{Row("schedule:${it.id}",Kind.POSTER,release=it)}
+                    else rows+=Row("schedule-shelf",Kind.SHELF,items=schedule)
                     if(!home.videos.isNullOrEmpty()){
                         rows+=Row("videos-heading",Kind.HEADING,"Видео","Ролики команды AniLiberty")
                         rows+=home.videos.map{video->Row("video:${video.id}",Kind.FEATURE,video.title,video.subtitle,click={openLink(video.url.takeIf{it.startsWith("https://")})},image=video.image)}
@@ -175,6 +233,12 @@ class MainActivity : ComponentActivity() {
                     rows+=Row("hero",Kind.HERO,release=r)
                     val description=android.text.Html.fromHtml(r.description,android.text.Html.FROM_HTML_MODE_LEGACY).toString().trim()
                     if(description.isNotBlank())rows+=Row("synopsis",Kind.ACTION,description.take(220).let{if(it.length<description.length)"$it…"else it},"Описание",click={AlertDialog.Builder(this).setTitle(r.title).setMessage(description).setPositiveButton("Закрыть",null).show()})
+                    rows+=Row("more",Kind.ACTION,"Ещё", "Торренты · Открыть на сайте",click={
+                        AlertDialog.Builder(this).setTitle(r.title).setItems(arrayOf("Торренты","Открыть на сайте")){_,choice->
+                            if(choice==1)openLink("https://www.aniliberty.top/anime/releases/release/${r.alias}/episodes")
+                            else AlertDialog.Builder(this).setTitle("Торренты").setItems(r.torrents.map{it.label}.toTypedArray()){_,i->openLink(r.torrents[i].magnet)}.setNegativeButton("Закрыть",null).show()
+                        }.show()
+                    })
                     rows+=Row("tabs",Kind.TABS,selected=screen.tab)
                     when(screen.tab){
                         0->{rows+=r.episodes.map{Row("episode:${it.id}",Kind.EPISODE,episode=it)};if(r.episodes.isEmpty())rows+=Row("empty",Kind.TEXT,"Эпизоды пока недоступны")}
@@ -190,18 +254,19 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        2->rows+=Row("comments",Kind.ACTION,"Обсуждение на сайте",click={openLink("https://aniliberty.top/anime/releases/${r.alias}")})
+                        2->{
+                            val similar=state.discovery?.recommendations
+                            when {
+                                state.discoveryLoading->rows+=Row("similar-loading",Kind.TEXT,"Подбираем аниме…")
+                                similar==null->rows+=Row("similar-retry",Kind.ACTION,"Повторить загрузку рекомендаций",click=model::retryDiscovery)
+                                similar.isEmpty()->rows+=Row("similar-empty",Kind.TEXT,"Рекомендации пока отсутствуют")
+                                else->rows+=similar.map{Row("similar:${it.id}",Kind.POSTER,release=it)}
+                            }
+                        }
                         3->{rows+=r.credits.groupBy{it.role}.map{(role,people)->Row("role:$role",Kind.TEXT,role,people.joinToString(" · "){it.name})};if(r.credits.isEmpty())rows+=Row("empty",Kind.TEXT,"Участники пока не указаны")}
                         4->{rows+=r.torrents.mapIndexed{i,t->Row("torrent:$i",Kind.ACTION,t.label,t.description,click={openLink(t.magnet)})};if(r.torrents.isEmpty())rows+=Row("empty",Kind.TEXT,"Раздачи пока недоступны")}
                     }
-                    rows+=Row("similar-heading",Kind.HEADING,"Похожие аниме","Рекомендации AniLiberty для этого тайтла")
-                    val similar=state.discovery?.recommendations
-                    when {
-                        state.discoveryLoading -> rows+=Row("similar-loading",Kind.TEXT,"Подбираем аниме…")
-                        similar==null -> rows+=Row("similar-retry",Kind.ACTION,"Не удалось загрузить рекомендации · Повторить",click=model::retryDiscovery)
-                        similar.isEmpty() -> rows+=Row("similar-empty",Kind.TEXT,"Рекомендации пока отсутствуют")
-                        else -> rows+=similar.map { item -> Row("similar:${item.id}",Kind.POSTER,release=item) }
-                    }
+
                 }
                 else->Unit
             }
@@ -217,14 +282,15 @@ class MainActivity : ComponentActivity() {
             list.doOnNextLayout{list.findViewHolderForAdapterPosition(index)?.itemView?.requestFocus()}
             grid.scrollToPositionWithOffset(index,list.dp(64))
         }else{
-            val key=retainedFocus?:focusMemory[state.screen]
+            val key=retainedFocus?:focusMemory[screenKey(state.screen)]
             val index=rows.indexOfFirst{it.key==key}.takeIf{it>=0}
                 ?: if(key!=null && adapter.contentStart>=0) (adapter.contentStart until rows.size).firstOrNull{rows[it].kind!=Kind.HEADING}?:adapter.contentStart
-                else rows.indexOfFirst{it.kind in listOf(Kind.ACTION,Kind.POSTER,Kind.HERO,Kind.SPOTLIGHT)}
+                else rows.indexOfFirst{it.kind in listOf(Kind.ACTION,Kind.POSTER,Kind.HERO,Kind.SPOTLIGHT,Kind.SHELF)}
             if(index>=0&&!state.loading){list.doOnNextLayout{
                 val item=list.findViewHolderForAdapterPosition(index)?.itemView
-                if(item?.isFocusable==true)item.requestFocus()else if(item is ViewGroup)item.getFocusables(View.FOCUS_FORWARD).firstOrNull()?.requestFocus()
-            };grid.scrollToPositionWithOffset(if(key==null)0 else index,if(key==null)0 else list.dp(12))}
+                focusItem(item)
+            };val scroll=scrollMemory[screenKey(state.screen)]
+                grid.scrollToPositionWithOffset(scroll?.first?:if(key==null)0 else index,scroll?.second?:if(key==null)0 else list.dp(12))}
         }
     }
 }

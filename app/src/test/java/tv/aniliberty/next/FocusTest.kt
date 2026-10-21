@@ -58,6 +58,22 @@ class FocusTest {
         assertTrue(holder.itemView.performLongClick())
         assertEquals(22,selected)
     }
+    @Test fun shelfUsesExactReleaseAndKeepsHorizontalLayout() {
+        var opened:Int?=null
+        val adapter=PageAdapter({},{},{},{},{opened=it.id},{0L to 0L},{null},{})
+        val release=parseRelease(org.json.JSONObject().put("id",87))
+        adapter.submit(listOf(Row("latest",Kind.SHELF,items=listOf(release))))
+        val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.SHELF.ordinal)
+        adapter.onBindViewHolder(holder,0)
+        val shelf=holder.itemView as androidx.recyclerview.widget.RecyclerView
+        assertEquals(androidx.recyclerview.widget.RecyclerView.HORIZONTAL,(shelf.layoutManager as androidx.recyclerview.widget.LinearLayoutManager).orientation)
+        val cards=shelf.adapter as PageAdapter
+        val card=cards.onCreateViewHolder(shelf,Kind.POSTER.ordinal)
+        cards.onBindViewHolder(card,0)
+        card.itemView.performClick()
+        assertEquals(87,opened)
+        assertTrue(card.itemView.layoutParams.width>0)
+    }
     @Test fun headingsDoNotConsumeRemoteFocus() {
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
         adapter.submit(listOf(Row("heading",Kind.HEADING,"Новые эпизоды")))
