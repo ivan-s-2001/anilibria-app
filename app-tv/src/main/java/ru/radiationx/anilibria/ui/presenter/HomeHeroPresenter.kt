@@ -17,8 +17,8 @@ class HomeHeroPresenter : Presenter() {
         LayoutInflater.from(parent.context).inflate(R.layout.card_home_hero, parent, false)
     )
 
-    override fun onBindViewHolder(viewHolder: ViewHolder, item: Any) {
-        val card = (item as HomeHeroCard).release
+    override fun onBindViewHolder(viewHolder: ViewHolder, item: Any?) {
+        val card = (item as? HomeHeroCard)?.release ?: return
         viewHolder.view.findViewById<TextView>(R.id.hero_title).text = card.title
         viewHolder.view.findViewById<TextView>(R.id.hero_metadata).text = card.preview?.metadata ?: card.description
         viewHolder.view.findViewById<ImageView>(R.id.hero_image).showImageUrl(card.image)
