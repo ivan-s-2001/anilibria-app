@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="wrap_content"
+    android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:clipChildren="false"
     android:clipToPadding="false"
@@ -9,7 +9,8 @@
     <Button
         android:id="@+id/searchTitleYear"
         style="?attr/searchTitleButtonStyle"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
+        android:layout_weight="1"
         android:layout_height="wrap_content"
         android:layout_marginEnd="8dp"
         android:nextFocusRight="@id/searchTitleSeason"
@@ -18,7 +19,8 @@
     <Button
         android:id="@+id/searchTitleSeason"
         style="?attr/searchTitleButtonStyle"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
+        android:layout_weight="1"
         android:layout_height="wrap_content"
         android:layout_marginEnd="8dp"
         android:nextFocusLeft="@id/searchTitleYear"
@@ -28,7 +30,8 @@
     <Button
         android:id="@+id/searchTitleGenre"
         style="?attr/searchTitleButtonStyle"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
+        android:layout_weight="1"
         android:layout_height="wrap_content"
         android:layout_marginEnd="8dp"
         android:nextFocusLeft="@id/searchTitleSeason"
@@ -38,7 +41,8 @@
     <Button
         android:id="@+id/searchTitleSort"
         style="?attr/searchTitleButtonStyle"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
+        android:layout_weight="1"
         android:layout_height="wrap_content"
         android:layout_marginEnd="8dp"
         android:nextFocusLeft="@id/searchTitleGenre"
@@ -48,7 +52,8 @@
     <Button
         android:id="@+id/searchTitleComplete"
         style="?attr/searchTitleButtonStyle"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
+        android:layout_weight="1"
         android:layout_height="wrap_content"
         android:nextFocusLeft="@id/searchTitleSort"
         android:text="Только завершенные" />

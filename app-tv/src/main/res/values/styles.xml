@@ -146,6 +146,16 @@
 
     <style name="AppTheme.Widget.Leanback.SearchTitleButtonStyle" parent="android:Widget.Material.Button.Borderless">
         <item name="android:textAllCaps">false</item>
+        <item name="android:background">@drawable/home_tab_bg</item>
+        <item name="android:textColor">@color/launcher_pill_text</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:minHeight">44dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:paddingStart">12dp</item>
+        <item name="android:paddingEnd">12dp</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:ellipsize">end</item>
     </style>
 
     <style name="AppTheme.Widget.Description.Row">

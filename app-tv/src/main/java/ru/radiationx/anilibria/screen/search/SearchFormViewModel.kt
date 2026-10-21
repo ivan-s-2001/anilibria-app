@@ -77,17 +77,17 @@ class SearchFormViewModel @Inject constructor(
     }
 
     private fun updateDataByForm() {
-        yearData.value = searchForm.years.map { it.title }.generateListTitle("Все годы")
-        seasonData.value = searchForm.seasons.map { it.title }.generateListTitle("Все сезоны")
-        genreData.value = searchForm.genres.map { it.title }.generateListTitle("Все жанры")
+        yearData.value = "Год: " + searchForm.years.map { it.title }.generateListTitle("любой")
+        seasonData.value = "Сезон: " + searchForm.seasons.map { it.title }.generateListTitle("любой")
+        genreData.value = "Жанр: " + searchForm.genres.map { it.title }.generateListTitle("любой")
         sortData.value = when (searchForm.sort) {
             SearchForm.Sort.RATING -> "По популярности"
             SearchForm.Sort.DATE -> "По новизне"
         }
         onlyCompletedData.value = if (searchForm.onlyCompleted) {
-            "Только завершенные"
+            "Завершённые"
         } else {
-            "Все"
+            "Любой статус"
         }
 
         searchController.applyFormEvent.emit(searchForm)

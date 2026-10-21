@@ -78,6 +78,8 @@ class SearchTitleView @JvmOverloads constructor(
 
     private fun TextView.setWonderText(text: String?) {
         this.text = text
+        // Keep the complete filter value available when the compact label is ellipsized.
+        contentDescription = text
         this.isVisible = text != null
     }
 }

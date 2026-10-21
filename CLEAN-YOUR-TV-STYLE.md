@@ -22,6 +22,16 @@ UI/UX Pro Max informed visible focus and state consistency. Ponytail informed re
 of Android/Leanback and existing data providers. No new recommendation engine or
 account requirement. No launcher integration in this change.
 
+## Catalog follow-up
+- Five equal-width filter capsules stay inside the title area's available width.
+  Long year/season/genre selections ellipsize instead of pushing status off screen.
+- Year, season and genre labels identify their purpose even before a selection.
+  Status distinguishes all releases from completed releases.
+- Filter buttons share the home navigation's high-contrast focus treatment,
+  with 44 dp minimum height and single-line labels. Existing D-pad links and dialogs remain.
+- Verify long multi-select values and all five filters with D-pad at 720p/1080p.
+  Compilation was attempted again; Gradle distribution download fails with network unreachable.
+
 ## Validation
 TV XML resources parse, all original detail-view binding IDs are preserved,
 layout attributes are checked against accidental text nodes, and git diff --check passes.
