@@ -34,6 +34,7 @@ class MainActivity : ComponentActivity() {
     private val focusMemory = mutableMapOf<Screen, String>()
     private var current: Screen = Screen.Welcome
     private var enterContent = false
+    private var enterDay = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,8 +44,8 @@ class MainActivity : ComponentActivity() {
         grid=GridLayoutManager(this,6);list.layoutManager=grid
         adapter=PageAdapter(::navigate,::selectTab,::play,::favorite,{rememberFocus();model.open(Screen.Detail(it.id))},
             { id -> prefs.getLong("position:$id",0) to prefs.getLong("duration:$id",0) },
-            { id -> prefs.getString("last:$id",null) },::returnToTabs)
-        grid.spanSizeLookup=object:GridLayoutManager.SpanSizeLookup(){override fun getSpanSize(position:Int)=when(adapter.rows[position].kind){Kind.POSTER->1;Kind.EPISODE->2;else->6}}
+            { id -> prefs.getString("last:$id",null) },::returnToTabs, { index -> enterDay=true;val previous=model.state.value;model.homeDay(index);if(previous==model.state.value)render(model.state.value) })
+        grid.spanSizeLookup=object:GridLayoutManager.SpanSizeLookup(){override fun getSpanSize(position:Int)=when(adapter.rows[position].kind){Kind.POSTER->1;Kind.EPISODE,Kind.FEATURE->2;else->6}}
         list.adapter=adapter;setContentView(list)
         onBackPressedDispatcher.addCallback(this,object:OnBackPressedCallback(true){override fun handleOnBackPressed(){rememberFocus();if(!model.back())finish()}})
         lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED){model.state.collect{render(it)}} }
@@ -108,9 +109,41 @@ class MainActivity : ComponentActivity() {
             if(state.loading)rows+=Row("loading",Kind.TEXT,"Загрузка…")
             else if(state.error!=null)rows+=Row("retry",Kind.ACTION,"Не удалось загрузить",state.error,click=model::retry)
             else when(val screen=state.screen){
-                Screen.Home->{rows+=Row("heading",Kind.HEADING,"Новые эпизоды","Последние обновления AniLiberty");rows+=state.releases.map{Row("release:${it.id}",Kind.POSTER,release=it)}}
+                Screen.Home->{
+                    val home=state.home?:return
+                    home.promotions?.firstOrNull()?.let { promotion ->
+                        rows+=Row("promotion:${promotion.id}",Kind.SPOTLIGHT,release=promotion.release,image=promotion.image)
+                    }
+                    rows+=Row("heading",Kind.HEADING,"Новые эпизоды","Самые новые и свежие эпизоды в любимой озвучке")
+                    rows+=home.latest.take(12).map{Row("release:${it.id}",Kind.POSTER,release=it)}
+                    rows+=Row("support",Kind.ACTION,"Поддержите AniLiberty!","Поддержите команду проекта",click={openLink("https://www.aniliberty.top/support")})
+                    rows+=Row("schedule-heading",Kind.HEADING,"Расписание релизов","Список релизов, над которыми команда трудится прямо сейчас")
+                    rows+=Row("schedule-days",Kind.DAYS,selected=state.homeDay)
+                    val schedule=home.schedule?.getOrNull(state.homeDay)
+                    if(schedule==null)rows+=Row("schedule-retry",Kind.ACTION,"Не удалось загрузить расписание · Повторить",click=model::retry)
+                    else if(schedule.isEmpty())rows+=Row("schedule-empty",Kind.TEXT,"На этот день релизы не запланированы")
+                    else rows+=schedule.take(12).map{Row("schedule:${it.id}",Kind.POSTER,release=it)}
+                    if(!home.videos.isNullOrEmpty()){
+                        rows+=Row("videos-heading",Kind.HEADING,"Видео","Ролики команды AniLiberty")
+                        rows+=home.videos.map{video->Row("video:${video.id}",Kind.FEATURE,video.title,video.subtitle,click={openLink(video.url.takeIf{it.startsWith("https://")})},image=video.image)}
+                    }
+                    rows+=Row("franchises-heading",Kind.HEADING,"Франшизы","Самые интересные и захватывающие франшизы в любимой озвучке")
+                    if(home.franchises==null)rows+=Row("franchises-retry",Kind.ACTION,"Не удалось загрузить франшизы · Повторить",click=model::retry)
+                    else rows+=home.franchises.map{feature->Row("franchise:${feature.id}",Kind.FEATURE,feature.title,feature.subtitle,click={rememberFocus();model.open(Screen.Franchise(feature.id,feature.title))},image=feature.image)}
+                    rows+=Row("genres-heading",Kind.HEADING,"Жанры","Список жанров на любой вкус и цвет")
+                    if(home.genres==null)rows+=Row("genres-retry",Kind.ACTION,"Не удалось загрузить жанры · Повторить",click=model::retry)
+                    else rows+=home.genres.map{feature->Row("genre:${feature.id}",Kind.FEATURE,feature.title,feature.subtitle,click={rememberFocus();model.open(Screen.Catalog(genre=feature.id.toIntOrNull(),title=feature.title))},image=feature.image)}
+                    rows+=Row("torrents-heading",Kind.HEADING,"Торренты","Самые свежие торренты: любимая озвучка + оригинальное качество")
+                    if(home.torrents==null)rows+=Row("torrents-retry",Kind.ACTION,"Не удалось загрузить торренты · Повторить",click=model::retry)
+                    else rows+=home.torrents.mapIndexed{index,torrent->Row("home-torrent:$index",Kind.ACTION,torrent.release?.title?:torrent.title,torrent.subtitle,click={openLink(torrent.magnet.takeIf{it.startsWith("magnet:")})})}
+                }
+                is Screen.Franchise->{
+                    rows+=Row("franchise-heading",Kind.HEADING,screen.title,"Порядок просмотра")
+                    rows+=state.releases.map{Row("release:${it.id}",Kind.POSTER,release=it)}
+                    if(state.releases.isEmpty())rows+=Row("empty",Kind.TEXT,"Релизы пока не указаны")
+                }
                 is Screen.Catalog->{
-                    rows+=Row("heading",Kind.HEADING,if(screen.query.isBlank())"Каталог"else"Результаты: ${screen.query}","Страница ${screen.page}")
+                    rows+=Row("heading",Kind.HEADING,screen.title?:if(screen.query.isBlank())"Каталог"else"Результаты: ${screen.query}","Страница ${screen.page}")
                     rows+=state.releases.map{Row("release:${it.id}",Kind.POSTER,release=it)}
                     if(state.releases.isEmpty())rows+=Row("empty",Kind.TEXT,"Ничего не найдено")
                     if(state.more)rows+=Row("next",Kind.ACTION,"Следующая страница",click={model.open(screen.copy(page=screen.page+1))})
@@ -134,14 +167,18 @@ class MainActivity : ComponentActivity() {
             }
         }
         adapter.submit(rows)
-        if(enterContent && adapter.contentStart in rows.indices){
+        if(enterDay){
+            enterDay=false
+            val index=rows.indexOfFirst{it.key.startsWith("schedule:")}.takeIf{it>=0}?:rows.indexOfFirst{it.key=="schedule-days"}
+            if(index>=0){list.doOnNextLayout{list.findViewHolderForAdapterPosition(index)?.itemView?.let{item->if(item.isFocusable)item.requestFocus()else if(item is ViewGroup)item.getFocusables(View.FOCUS_FORWARD).firstOrNull()?.requestFocus()}};grid.scrollToPositionWithOffset(index,list.dp(64))}
+        }else if(enterContent && adapter.contentStart in rows.indices){
             enterContent=false
             val index=adapter.contentStart
             list.doOnNextLayout{list.findViewHolderForAdapterPosition(index)?.itemView?.requestFocus()}
             grid.scrollToPositionWithOffset(index,list.dp(64))
         }else{
             val key=focusMemory[state.screen]
-            val index=rows.indexOfFirst{it.key==key}.takeIf{it>=0}?:rows.indexOfFirst{it.kind in listOf(Kind.ACTION,Kind.POSTER,Kind.HERO)}
+            val index=rows.indexOfFirst{it.key==key}.takeIf{it>=0}?:rows.indexOfFirst{it.kind in listOf(Kind.ACTION,Kind.POSTER,Kind.HERO,Kind.SPOTLIGHT)}
             if(index>=0&&!state.loading){list.doOnNextLayout{
                 val item=list.findViewHolderForAdapterPosition(index)?.itemView
                 if(item?.isFocusable==true)item.requestFocus()else if(item is ViewGroup)item.getFocusables(View.FOCUS_FORWARD).firstOrNull()?.requestFocus()

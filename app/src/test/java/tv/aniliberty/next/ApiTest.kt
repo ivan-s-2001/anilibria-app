@@ -21,6 +21,12 @@ class ApiTest {
         assertEquals("https://cdn.anilibria.top/images/preview.jpg",release.episodes[1].preview)
         assertEquals("720p",release.episodes[1].streams.single().first)
     }
+    @Test fun latestEpisodeKeepsItsOwnPreviewAndUuid() {
+        val r=parseRelease(JSONObject("""{"id":10,"latest_episode":{"id":"latest-uuid","ordinal":3,"duration":1440,"preview":{"preview":"/episode.webp"}}}"""))
+        assertEquals("latest-uuid",r.latestEpisode?.id)
+        assertEquals(3.0,r.latestEpisode!!.ordinal,0.0)
+        assertTrue(r.episodes.isEmpty())
+    }
     @Test fun nullableMetadataDoesNotBecomeLiteralNull() {
         val release=parseRelease(JSONObject("""{"id":1,"name":{"main":"Название","english":null},"poster":null,"year":2026,"genres":[],"episodes":[]}"""))
         assertEquals("",release.english);assertNull(release.poster);assertEquals("2026",release.metadata)
