@@ -26,6 +26,7 @@ class LauncherCardView(context: Context) : ImageCardView(context) {
 
     init {
         setBackgroundColor(Color.rgb(28, 28, 30))
+        setInfoAreaBackgroundColor(Color.rgb(28, 28, 30))
         outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(view: View, outline: Outline) {
                 outline.setRoundRect(0, 0, view.width, view.height, radius)

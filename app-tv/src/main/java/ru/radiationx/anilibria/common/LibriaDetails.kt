@@ -16,6 +16,7 @@ data class LibriaDetails(
     val isFavorite: Boolean,
     val hasEpisodes: Boolean,
     val hasViewed: Boolean,
+    val continueLabel: String = "Продолжить",
     val hasWebPlayer: Boolean
 )
 

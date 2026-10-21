@@ -35,7 +35,7 @@ class GradientBackgroundManager @Inject constructor(
         BackgroundManager.getInstance(activity)
     }
 
-    private val defaultColor = activity.getCompatColor(R.color.dark_colorAccent)
+    private val defaultColor = activity.getCompatColor(R.color.dark_cardBackground)
     private val foregroundColor = activity.getCompatColor(R.color.dark_windowBackground)
 
     private val backgroundDrawable = ColorDrawable(defaultColor)

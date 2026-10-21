@@ -2,7 +2,7 @@
 <resources>
 
     <style name="AppTheme" parent="@style/Theme.Leanback">
-        <item name="android:fontFamily">@font/outfit_regular</item>
+        <item name="android:fontFamily">sans-serif</item>
         <item name="android:colorPrimary">@color/dark_colorPrimary</item>
         <item name="android:colorPrimaryDark">@color/dark_colorPrimaryDark</item>
         <item name="android:colorAccent">@color/dark_colorAccent</item>
@@ -43,7 +43,7 @@
     </style>
 
     <style name="AppTheme.Material" parent="Theme.MaterialComponents">
-        <item name="android:fontFamily">@font/outfit_regular</item>
+        <item name="android:fontFamily">sans-serif</item>
 
         <item name="colorPrimary">@color/dark_colorAccent</item>
         <item name="colorSecondary">@color/dark_colorAccent</item>
@@ -74,7 +74,7 @@
         <item name="iconTint">@color/launcher_pill_text</item>
         <item name="strokeColor">#38FFFFFF</item>
         <item name="cornerRadius">21dp</item>
-        <item name="android:fontFamily">@font/outfit_medium</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
         <item name="android:textAllCaps">false</item>
     </style>
 
@@ -86,7 +86,7 @@
     </style>
 
     <style name="AppTheme.LeanbackWizard" parent="Theme.Leanback.GuidedStep">
-        <item name="android:fontFamily">@font/outfit_regular</item>
+        <item name="android:fontFamily">sans-serif</item>
         <item name="android:colorPrimary">@color/dark_colorPrimary</item>
         <item name="android:colorPrimaryDark">@color/dark_colorPrimaryDark</item>
         <item name="android:colorAccent">@color/dark_colorAccent</item>
@@ -129,7 +129,8 @@
     </style>
 
     <style name="AppTheme.ImageCardViewStyle" parent="Widget.Leanback.BaseCardViewStyle">
-        <item name="cardType">mainOnly</item>
+        <item name="cardType">infoUnder</item>
+        <item name="cardInfoVisibility">always</item>
         <item name="cardBackground">?android:colorPrimary</item>
     </style>
 
@@ -138,7 +139,7 @@
         <item name="android:stateListAnimator">@animator/button_animator</item>
         <item name="android:textColor">@color/text_button_color</item>
         <item name="android:textAlignment">center</item>
-        <item name="android:fontFamily">@font/outfit_medium</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
         <item name="android:minHeight">42dp</item>
         <item name="android:textAllCaps">false</item>
     </style>

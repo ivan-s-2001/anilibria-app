@@ -15,6 +15,11 @@ package ru.radiationx.anilibria.ui.widget
 
 import android.content.Context
 import android.graphics.Rect
+import android.view.Gravity
+import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.core.content.ContextCompat
+import androidx.appcompat.widget.AppCompatTextView
 import android.graphics.drawable.Drawable
 import android.util.AttributeSet
 import android.view.View
@@ -34,6 +39,9 @@ open class BrowseTitleView @JvmOverloads constructor(
 ) : ConstraintLayout(context, attrs, defStyleAttr), TitleViewAdapter.Provider {
 
     private val binding by viewBinding<ViewTitleviewBinding>(attachToRoot = true)
+    private val homeButtons = mutableListOf<TextView>()
+    private var homePageIndex = 0
+
     private var flags = TitleViewAdapter.FULL_VIEW_VISIBLE
     private var mHasSearchListener = false
     private val mTitleViewAdapter by lazy { Adapter(this) }
@@ -58,7 +66,7 @@ open class BrowseTitleView @JvmOverloads constructor(
         }
 
     val searchAffordanceView: View
-        get() = binding.titleOrb
+        get() = homeButtons.getOrNull(homePageIndex) ?: binding.titleOrb
 
     var searchAffordanceColors: SearchOrbView.Colors?
         get() = binding.titleOrb.orbColors
@@ -80,6 +88,56 @@ open class BrowseTitleView @JvmOverloads constructor(
             binding.titleOther.text = value
             updateOtherVisibility()
         }
+
+    fun setHomeNavigation(items: List<Pair<String, () -> Unit>>) {
+        val density = resources.displayMetrics.density
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            clipChildren = false
+            clipToPadding = false
+            setPadding(0, (8 * density).toInt(), 0, (8 * density).toInt())
+        }
+        homeButtons.clear()
+        items.forEach { (label, action) ->
+            val button = AppCompatTextView(context).apply {
+                id = View.generateViewId()
+                text = label
+                textSize = 15f
+                gravity = Gravity.CENTER
+                isFocusable = true
+                isClickable = true
+                setPadding((16 * density).toInt(), 0, (16 * density).toInt(), 0)
+                setTextColor(ContextCompat.getColorStateList(context, R.color.launcher_pill_text))
+                setBackgroundResource(R.drawable.home_tab_bg)
+                setOnClickListener { action() }
+            }
+            row.addView(button, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, (42 * density).toInt()
+            ).apply { marginEnd = (8 * density).toInt() })
+            homeButtons.add(button)
+        }
+        homeButtons.forEachIndexed { index, button ->
+            button.nextFocusLeftId = homeButtons.getOrNull(index - 1)?.id ?: button.id
+            button.nextFocusRightId = homeButtons.getOrNull(index + 1)?.id ?: button.id
+            button.nextFocusUpId = button.id
+        }
+        binding.titleControls.removeAllViews()
+        binding.titleControls.addView(row)
+        binding.titleControls.isVisible = true
+        binding.titleControls.setPadding(0, 0, 0, 0)
+        updateComponentsVisibility(flags)
+    }
+
+    fun selectHomePage(position: Int) {
+        homePageIndex = when (position) {
+            1 -> 1
+            2 -> 4
+            else -> 0
+        }
+        homeButtons.forEachIndexed { index, button ->
+            button.isSelected = index == homePageIndex
+        }
+    }
 
     fun getControls() = binding.titleControls
 
@@ -103,6 +161,15 @@ open class BrowseTitleView @JvmOverloads constructor(
 
     fun updateComponentsVisibility(flags: Int) {
         this.flags = flags
+        if (homeButtons.isNotEmpty()) {
+            binding.titleBadge.isVisible = false
+            binding.titleText.isVisible = false
+            binding.titleOrb.isVisible = false
+            binding.titleOther.isVisible = false
+            binding.titleControls.isVisible = true
+            updateAlertVisibility()
+            return
+        }
         if (flags and TitleViewAdapter.BRANDING_VIEW_VISIBLE == TitleViewAdapter.BRANDING_VIEW_VISIBLE) {
             updateBadgeVisibility()
         } else {

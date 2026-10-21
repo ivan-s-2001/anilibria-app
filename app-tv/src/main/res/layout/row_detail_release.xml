@@ -32,17 +32,13 @@
 
     <com.google.android.material.imageview.ShapeableImageView
         android:id="@+id/rowReleaseImageCard"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
+        android:layout_width="160dp"
+        android:layout_height="228dp"
         android:layout_marginTop="?browsePaddingBottom"
-        android:layout_marginBottom="16dp"
         android:background="@color/dark_cardBackground"
-        android:elevation="16dp"
         android:scaleType="centerCrop"
         android:theme="@style/AppTheme.Material"
-        app:layout_constraintBottom_toTopOf="@id/rowReleaseActions"
-        app:layout_constraintDimensionRatio="260:370"
-        app:layout_constraintEnd_toEndOf="@id/guideline_right"
+        app:layout_constraintStart_toStartOf="@id/guideline_left"
         app:layout_constraintTop_toTopOf="parent"
         app:shapeAppearanceOverlay="@style/AppTheme.RoundedImageView" />
 
@@ -51,11 +47,14 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="?browsePaddingBottom"
-        android:layout_marginEnd="?browsePaddingEnd"
+        android:layout_marginEnd="0dp"
         android:textColor="@color/dark_textDefault"
-        android:textSize="34sp"
-        app:layout_constraintEnd_toStartOf="@id/rowReleaseImageCard"
-        app:layout_constraintStart_toStartOf="@id/guideline_left"
+        android:textSize="30sp"
+        android:maxLines="2"
+        android:ellipsize="end"
+        app:layout_constraintEnd_toEndOf="@id/guideline_right"
+        app:layout_constraintStart_toEndOf="@id/rowReleaseImageCard"
+        android:layout_marginStart="24dp"
         app:layout_constraintTop_toTopOf="parent"
         tools:text="Фантазия Гранблю 2" />
 
@@ -64,13 +63,14 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:layout_marginEnd="?browsePaddingEnd"
+        android:layout_marginEnd="0dp"
         android:ellipsize="end"
         android:maxLines="1"
         android:textColor="@color/dark_textDefault"
         android:textSize="16sp"
-        app:layout_constraintEnd_toStartOf="@id/rowReleaseImageCard"
-        app:layout_constraintStart_toStartOf="@id/guideline_left"
+        app:layout_constraintEnd_toEndOf="@id/guideline_right"
+        app:layout_constraintStart_toEndOf="@id/rowReleaseImageCard"
+        android:layout_marginStart="24dp"
         app:layout_constraintTop_toBottomOf="@id/rowReleaseTitleRu"
         tools:text="Granblue Fantasy The Animation Season 2" />
 
@@ -87,7 +87,8 @@
         app:layout_constraintEnd_toStartOf="@id/rowReleaseHQMarker"
         app:layout_constraintHorizontal_bias="0"
         app:layout_constraintHorizontal_chainStyle="packed"
-        app:layout_constraintStart_toStartOf="@id/guideline_left"
+        app:layout_constraintStart_toEndOf="@id/rowReleaseImageCard"
+        android:layout_marginStart="24dp"
         app:layout_constraintTop_toBottomOf="@id/rowReleaseTitleEn"
         app:layout_constraintWidth_default="wrap"
         tools:text="2019 год, Экшен, ТВ (12эп.) 12 мин., Выходит по четвергам " />
@@ -110,7 +111,7 @@
         android:id="@+id/rowReleaseFavoriteCount"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="?browsePaddingEnd"
+        android:layout_marginEnd="0dp"
         android:drawablePadding="2dp"
         android:drawableTint="@color/dark_textDefault"
         android:textColor="@color/dark_textDefault"
@@ -120,7 +121,7 @@
         app:drawableEndCompat="@drawable/ic_details_favorite"
         app:drawableTint="@color/dark_textDefault"
         app:layout_constraintBottom_toBottomOf="@id/rowReleaseExtra"
-        app:layout_constraintEnd_toStartOf="@id/rowReleaseImageCard"
+        app:layout_constraintEnd_toEndOf="@id/guideline_right"
         app:layout_constraintStart_toEndOf="@id/rowReleaseHQMarker"
         app:layout_constraintTop_toTopOf="@id/rowReleaseExtra"
         tools:text="13 999"
@@ -131,7 +132,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:layout_marginEnd="?browsePaddingEnd"
+        android:layout_marginEnd="0dp"
         android:background="@drawable/bg_detail_announce"
         android:paddingStart="8dp"
         android:paddingTop="4dp"
@@ -141,9 +142,10 @@
         android:textSize="14sp"
         android:visibility="gone"
         app:layout_constrainedWidth="true"
-        app:layout_constraintEnd_toStartOf="@id/rowReleaseImageCard"
+        app:layout_constraintEnd_toEndOf="@id/guideline_right"
         app:layout_constraintHorizontal_bias="0"
-        app:layout_constraintStart_toStartOf="@id/guideline_left"
+        app:layout_constraintStart_toEndOf="@id/rowReleaseImageCard"
+        android:layout_marginStart="24dp"
         app:layout_constraintTop_toBottomOf="@id/rowReleaseExtra"
         tools:text="Новая серия каждую субботу."
         tools:visibility="visible" />
@@ -154,18 +156,20 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:layout_marginEnd="?browsePaddingEnd"
+        android:layout_marginEnd="0dp"
         android:layout_marginBottom="16dp"
         android:background="@drawable/bg_details_description"
-        android:clickable="false"
-        android:focusable="false"
+        android:clickable="true"
+        android:focusable="true"
         android:focusableInTouchMode="false"
         android:nextFocusDown="@id/rowReleaseActions"
+        android:padding="12dp"
         android:orientation="vertical"
         app:layout_constrainedHeight="true"
         app:layout_constraintBottom_toTopOf="@id/rowReleaseActions"
-        app:layout_constraintEnd_toStartOf="@id/rowReleaseImageCard"
-        app:layout_constraintStart_toStartOf="@id/guideline_left"
+        app:layout_constraintEnd_toEndOf="@id/guideline_right"
+        app:layout_constraintStart_toEndOf="@id/rowReleaseImageCard"
+        android:layout_marginStart="24dp"
         app:layout_constraintTop_toBottomOf="@id/rowReleaseAnnounce">
 
         <TextView
@@ -178,10 +182,18 @@
             android:maxLines="4"
             android:textColor="@color/dark_textDefault"
             android:textSize="14sp"
-            app:layout_constraintEnd_toStartOf="@id/rowReleaseImageCard"
+            app:layout_constraintEnd_toEndOf="@id/guideline_right"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/rowReleaseExtra"
             tools:text="@tools:sample/lorem/random" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Подробнее"
+            android:textColor="@color/dark_textSecond"
+            android:textSize="14sp" />
 
     </androidx.appcompat.widget.LinearLayoutCompat>
 
@@ -207,7 +219,7 @@
             style="?attr/detailsActionButtonStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
+            android:layout_marginEnd="8dp"
             android:text="Продолжить"
             android:visibility="gone" />
 
@@ -216,7 +228,7 @@
             style="?attr/detailsActionButtonStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
+            android:layout_marginEnd="8dp"
             android:text="Смотреть" />
 
         <Button
@@ -224,8 +236,8 @@
             style="?attr/detailsActionButtonStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
-            android:text="Добавить в избранное" />
+            android:layout_marginEnd="8dp"
+            android:text="В избранное" />
 
         <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/rowReleaseActionOther"
@@ -237,7 +249,7 @@
             android:padding="12dp"
             android:paddingStart="0dp"
             android:paddingEnd="0dp"
-            android:text="Смотреть"
+            android:contentDescription="Ещё"
             app:srcCompat="@drawable/ic_more_vert"
             app:tint="@color/text_button_color" />
 

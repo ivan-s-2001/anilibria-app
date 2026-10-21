@@ -9,6 +9,7 @@ import androidx.leanback.widget.OnItemViewSelectedListener
 import androidx.leanback.widget.Presenter
 import androidx.leanback.widget.Row
 import androidx.leanback.widget.RowPresenter
+import ru.radiationx.anilibria.screen.watching.WatchingContinueViewModel
 import ru.radiationx.anilibria.common.BaseCardsViewModel
 import ru.radiationx.anilibria.common.GradientBackgroundManager
 import ru.radiationx.anilibria.common.LibriaCard
@@ -33,12 +34,15 @@ class MainFragment : RowsSupportFragment() {
 
     private val mainViewModel by quillParentViewModel<MainViewModel>()
 
+    private val continueViewModel by quillParentViewModel<WatchingContinueViewModel>()
+
     private val feedViewModel by quillParentViewModel<MainFeedViewModel>()
     private val scheduleViewModel by quillParentViewModel<MainScheduleViewModel>()
     private val favoritesViewModel by quillParentViewModel<MainFavoritesViewModel>()
     private val youtubeViewModel by quillParentViewModel<MainYouTubeViewModel>()
 
     private fun getViewModel(rowId: Long): BaseCardsViewModel? = when (rowId) {
+        MainViewModel.CONTINUE_ROW_ID -> continueViewModel
         MainViewModel.FEED_ROW_ID -> feedViewModel
         MainViewModel.SCHEDULE_ROW_ID -> scheduleViewModel
         MainViewModel.FAVORITE_ROW_ID -> favoritesViewModel
@@ -50,6 +54,7 @@ class MainFragment : RowsSupportFragment() {
         super.onViewCreated(view, savedInstanceState)
 
         viewLifecycleOwner.lifecycle.addObserver(mainViewModel)
+        viewLifecycleOwner.lifecycle.addObserver(continueViewModel)
         viewLifecycleOwner.lifecycle.addObserver(feedViewModel)
         viewLifecycleOwner.lifecycle.addObserver(scheduleViewModel)
         viewLifecycleOwner.lifecycle.addObserver(favoritesViewModel)

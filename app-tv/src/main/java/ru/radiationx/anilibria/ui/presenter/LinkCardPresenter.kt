@@ -30,6 +30,7 @@ class LinkCardPresenter(
     override fun onBindViewHolder(viewHolder: ViewHolder, item: Any?) {
         item ?: return
         item as LinkCard
+        (viewHolder.view as LauncherCardView).titleText = item.title
         viewHolder.view.post {
             bindListener?.invoke()
         }

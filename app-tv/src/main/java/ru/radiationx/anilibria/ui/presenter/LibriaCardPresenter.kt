@@ -54,10 +54,15 @@ class LibriaCardViewHolder(
                 cardHeight
             )
         }
+        containerView.titleText = item.title
+        containerView.contentDescription = listOf(item.title, item.description)
+            .filter { it.isNotBlank() }.joinToString(". ")
         containerView.mainImageView?.showImageUrl(item.image)
     }
 
     fun unbind() {
-
+        containerView.mainImage = null
+        containerView.titleText = null
+        containerView.contentDescription = null
     }
 }

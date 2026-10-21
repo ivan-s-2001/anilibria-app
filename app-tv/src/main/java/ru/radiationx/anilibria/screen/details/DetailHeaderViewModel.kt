@@ -135,10 +135,6 @@ class DetailHeaderViewModel @Inject constructor(
         updateProgress()
     }
 
-    fun onDescriptionClick() {
-
-    }
-
     fun onOtherClick() {
         guidedRouter.open(DetailOtherGuidedScreen(releaseId))
     }

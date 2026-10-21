@@ -36,6 +36,9 @@ class DetailDataConverter @Inject constructor() {
             isFavorite = favoriteInfo.isAdded,
             hasEpisodes = episodes.isNotEmpty(),
             hasViewed = accesses.any { it.isViewed },
+            continueLabel = accesses.maxByOrNull { it.lastAccessRaw }?.let {
+                "Продолжить · серия ${it.id.id}"
+            } ?: "Продолжить",
             hasWebPlayer = moonwalkLink != null
         )
     }

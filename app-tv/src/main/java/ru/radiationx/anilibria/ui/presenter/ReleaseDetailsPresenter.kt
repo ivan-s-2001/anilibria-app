@@ -1,5 +1,6 @@
 package ru.radiationx.anilibria.ui.presenter
 
+import android.app.AlertDialog
 import android.content.res.ColorStateList
 import android.view.LayoutInflater
 import android.view.View
@@ -22,7 +23,6 @@ class ReleaseDetailsPresenter(
     private val continueClickListener: () -> Unit,
     private val playClickListener: () -> Unit,
     private val favoriteClickListener: () -> Unit,
-    private val descriptionClickListener: () -> Unit,
     private val otherClickListener: () -> Unit,
 ) : RowPresenter() {
 
@@ -42,7 +42,6 @@ class ReleaseDetailsPresenter(
             continueClickListener,
             playClickListener,
             favoriteClickListener,
-            descriptionClickListener,
             otherClickListener
         )
     }
@@ -61,7 +60,6 @@ class LibriaReleaseViewHolder(
     private val continueClickListener: () -> Unit,
     private val playClickListener: () -> Unit,
     private val favoriteClickListener: () -> Unit,
-    private val descriptionClickListener: () -> Unit,
     private val otherClickListener: () -> Unit,
 ) : RowPresenter.ViewHolder(itemView) {
 
@@ -77,7 +75,14 @@ class LibriaReleaseViewHolder(
         binding.rowReleaseActionPlay.setOnClickListener { playClickListener.invoke() }
         binding.rowReleaseActionOther.setOnClickListener { otherClickListener.invoke() }
         binding.rowReleaseActionFavorite.setOnClickListener { favoriteClickListener.invoke() }
-        binding.rowReleaseDescriptionCard.setOnClickListener { descriptionClickListener.invoke() }
+        binding.rowReleaseDescriptionCard.setOnClickListener {
+            val details = lastDetails ?: return@setOnClickListener
+            AlertDialog.Builder(view.context)
+                .setTitle(details.titleRu)
+                .setMessage(details.description)
+                .setPositiveButton("Закрыть", null)
+                .show()
+        }
         binding.root.updateLayoutParams {
             height =
                 binding.root.resources.displayMetrics.heightPixels - 1 // Шобы следующая строка подгрузилась при открытии
@@ -112,6 +117,7 @@ class LibriaReleaseViewHolder(
         if (lastDetails == details) {
             return
         }
+        val firstBind = lastDetails == null
         lastDetails = details
 
         binding.rowReleaseTitleRu.text = details.titleRu
@@ -140,19 +146,28 @@ class LibriaReleaseViewHolder(
         )
         binding.rowReleaseHQMarker.isVisible = details.hasFullHd
 
+        binding.rowReleaseActionContinue.text = details.continueLabel
+        binding.rowReleaseActionPlay.text = if (details.hasViewed) "Серии" else "Смотреть"
         binding.rowReleaseActionPlay.isVisible = details.hasEpisodes
         binding.rowReleaseActionContinue.isVisible = details.hasViewed
         binding.rowReleaseActionOther.isVisible = details.hasEpisodes || details.hasViewed
         binding.rowReleaseActionFavorite.text = if (details.isFavorite) {
+            "В избранном"
+        } else {
+            "В избранное"
+        }
+
+        binding.rowReleaseActionFavorite.contentDescription = if (details.isFavorite) {
             "Убрать из избранного"
         } else {
             "Добавить в избранное"
         }
-
-        if (details.hasViewed) {
-            binding.rowReleaseActionContinue.requestFocus()
-        } else {
-            binding.rowReleaseActionPlay.requestFocus()
+        if (firstBind && (!binding.root.hasFocus() || binding.root.isFocused)) {
+            when {
+                details.hasViewed -> binding.rowReleaseActionContinue.requestFocus()
+                details.hasEpisodes -> binding.rowReleaseActionPlay.requestFocus()
+                else -> binding.rowReleaseActionFavorite.requestFocus()
+            }
         }
 
         binding.rowReleaseImageCard.showImageUrl(details.image)
