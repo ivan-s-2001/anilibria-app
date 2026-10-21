@@ -31,6 +31,7 @@ class PlayerActivity : ComponentActivity() {
     private lateinit var title:TextView
     private lateinit var clock:TextView
     private lateinit var seek:SeekBar
+    private lateinit var previousButton:TextView
     private lateinit var pause:TextView
     private lateinit var episodesButton:TextView
     private lateinit var qualityButton:TextView
@@ -103,9 +104,9 @@ class PlayerActivity : ComponentActivity() {
         }
         controls.addView(seek,LinearLayout.LayoutParams(-1,dp(34)))
         val buttons=LinearLayout(this);controls.addView(buttons)
-        buttons.addView(action(buttons,"Предыдущий"){
+        previousButton=action(buttons,"Предыдущий"){
             val items=release?.episodes.orEmpty();val index=items.indexOfFirst{it.id==current?.id};items.getOrNull(index-1)?.let{startEpisode(it)}
-        })
+        };buttons.addView(previousButton)
         pause=action(buttons,"Пауза",true,R.drawable.ic_play){togglePause()};buttons.addView(pause)
         nextButton=action(buttons,"Следующий"){nextEpisode(release?.episodes.orEmpty(),current?.id)?.let{startEpisode(it)}};buttons.addView(nextButton)
         episodesButton=action(buttons,"Эпизоды",icon=R.drawable.ic_episodes){episodes()};buttons.addView(episodesButton)
@@ -120,7 +121,7 @@ class PlayerActivity : ComponentActivity() {
             when{
                 panel!=null->closePanel()
                 pendingSeek!=null->{pendingSeek=null;refreshControls()}
-                nextOffer!=null->cancelNext()
+                nextOffer!=null->{cancelNext();showControls()}
                 controls.visibility==View.VISIBLE->hideControls()
                 else->finish()
             }
@@ -149,6 +150,7 @@ class PlayerActivity : ComponentActivity() {
         save();cancelNext();player?.release();current=episode;quality=selected;desiredPlay=play
         val engine=ExoPlayer.Builder(this).build();player=engine;video.player=engine
         title.text="${release?.title.orEmpty()} · ${episode.label}"
+        previousButton.visibility=if(release?.episodes?.indexOfFirst{it.id==episode.id}?.let{it>0}==true)View.VISIBLE else View.GONE
         nextButton.visibility=if(nextEpisode(release?.episodes.orEmpty(),episode.id)!=null)View.VISIBLE else View.GONE
         engine.addListener(object:Player.Listener{
             override fun onPlayerError(error:PlaybackException){
