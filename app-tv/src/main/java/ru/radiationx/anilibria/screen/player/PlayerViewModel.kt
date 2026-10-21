@@ -123,7 +123,7 @@ class PlayerViewModel @Inject constructor(
         val release = getCurrentRelease() ?: return
         val episode = currentEpisode ?: return
         saveEpisode(position)
-        guidedRouter.open(PlayerEpisodesScreen(release.id, episode.id))
+        guidedRouter.open(PlayerEpisodesScreen(release.id, episode.id, fromPlayer = true))
     }
 
 

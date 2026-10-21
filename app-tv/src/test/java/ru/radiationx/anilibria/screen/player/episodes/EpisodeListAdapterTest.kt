@@ -67,4 +67,36 @@ class EpisodeListAdapterTest {
         assertNull(rows.first().episode)
         assertEquals(4, rows.size)
     }
+
+    @Test fun searchMatchesNumberAndRealNameAndDoesNotChangeEpisodeIds() {
+        val named = episode("12").copy(title = "Дорога домой")
+        val special = episode("12.5")
+        val groups = listOf(PlayerEpisodesViewModel.Group(0, "Сезон", listOf(named, special)))
+        assertEquals(listOf(special.episodeId), episodeRows(groups, false, false, "12.5").map { it.episode!!.episodeId })
+        assertEquals(listOf(named.episodeId), episodeRows(groups, false, false, "ДОМОЙ").map { it.episode!!.episodeId })
+        assertTrue(episodeRows(groups, false, false, "нет такого эпизода").isEmpty())
+        assertEquals(2, episodeRows(groups, false, false, "  ").size)
+    }
+
+    @Test fun playbackPanelLeavesMostOfTheVideoVisibleAtBothTVDensities() {
+        assertEquals(420, episodePickerWidth(960, 1f, true))
+        assertEquals(840, episodePickerWidth(1920, 2f, true))
+        assertTrue(episodePickerWidth(1280, 1f, true) < 1280 / 2)
+        assertEquals(960, episodePickerWidth(960, 1f, false))
+    }
+
+    @Test fun compactRowsKeepCurrentEpisodeMarkedWhileFocusMoves() {
+        val current = episode("12.5").copy(current = true)
+        val adapter = EpisodeListAdapter({}, {}, compact = true)
+        adapter.submit(listOf(EpisodeListRow(episode = current)))
+        val parent = FrameLayout(ContextThemeWrapper(
+            RuntimeEnvironment.getApplication(), R.style.AppTheme_TvEpisodes,
+        ))
+        val holder = adapter.onCreateViewHolder(parent, adapter.getItemViewType(0))
+        adapter.onBindViewHolder(holder, 0)
+        assertTrue(holder.itemView.isActivated)
+        adapter.submit(listOf(EpisodeListRow(episode = current.copy(current = false))))
+        adapter.onBindViewHolder(holder, 0)
+        assertFalse(holder.itemView.isActivated)
+    }
 }

@@ -48,7 +48,10 @@ class PlayerFragment : BasePlayerFragment() {
             override fun onNext() = viewModel.onNextClick(getPosition())
             override fun onQualityClick() = viewModel.onQualityClick(getPosition())
             override fun onSpeedClick() = viewModel.onSpeedClick()
-            override fun onEpisodesClick() = viewModel.onEpisodesClick(getPosition())
+            override fun onEpisodesClick() {
+                hideControlsOverlay(false)
+                viewModel.onEpisodesClick(getPosition())
+            }
         }
         progressBarManager.initialDelay = 0
         progressBarManager.show()

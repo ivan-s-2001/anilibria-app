@@ -182,9 +182,10 @@ class PlayerSpeedGuidedScreen(
 class PlayerEpisodesScreen(
     private val releaseId: ReleaseId,
     private val episodeId: EpisodeId?,
+    private val fromPlayer: Boolean = false,
 ) : DialogAppScreen() {
     override fun createFragment(factory: FragmentFactory) =
-        EpisodesDialogFragment.newInstance(releaseId, episodeId)
+        EpisodesDialogFragment.newInstance(releaseId, episodeId, fromPlayer)
 }
 
 class PlayerEndEpisodeGuidedScreen(

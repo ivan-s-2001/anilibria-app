@@ -112,7 +112,7 @@ class PlayerEpisodesViewModel @Inject constructor(
             }.map { episode ->
                 val access = accesses[episode.id]
                 val description = listOfNotNull(
-                    "Текущая серия".takeIf { episode.id == argExtra.episodeId },
+                    "Текущая серия".takeIf { argExtra.fromPlayer && episode.id == argExtra.episodeId },
                     "Просмотрено".takeIf { access?.isViewed == true },
                     access?.seek?.takeIf { it > 0 }?.let { "Продолжить с ${Date(it).asTimeSecString()}" },
                 ).joinToString(" · ").ifEmpty { "Не просмотрено" }
@@ -123,6 +123,7 @@ class PlayerEpisodesViewModel @Inject constructor(
                     description = description,
                     number = episode.id.id,
                     watched = access?.isViewed == true,
+                    current = argExtra.fromPlayer && episode.id == argExtra.episodeId,
                 )
             }
             Group(
@@ -146,5 +147,6 @@ class PlayerEpisodesViewModel @Inject constructor(
         val description: String?,
         val number: String,
         val watched: Boolean,
+        val current: Boolean = false,
     )
 }
