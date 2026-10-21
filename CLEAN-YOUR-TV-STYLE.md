@@ -100,3 +100,24 @@ The shared frame uses a short non-oscillating approach instead of a spring; butt
 focus scale is reduced from 1.10 to 1.02. Background fades take 240 ms.
 CI setup explicitly requests platform-tools instead of the unavailable legacy tools package.
 Visual density and frame timing still require real-TV validation.
+
+## Screenshot-led cinema composition
+Based on the user's 1920 x 1080 detail screenshot: the earlier 128 dp poster and
+full-width metadata left an unbalanced information slab. The detail poster is now
+216 x 308 dp, with a 32 dp gutter and a 32 sp heading. Metadata, Full HD and the
+favorite count form one group beside it. Description is a bounded text block with
+transparent resting background; actions follow it and Watch has a distinct play icon
+and stronger outline. The redundant down arrow is hidden. Background palette colors
+are blended 65% toward black to avoid a flat colored wash.
+
+Browse posters are 150 x 214 dp and the catalog has five columns. Existing data,
+playback routes and reduced motion behavior are preserved. Recommendations are
+accurately labeled Similar by genre.
+
+Reference code inspected (composition only, no source copied):
+- yumata/lampa-source: src/templates/full/start_new.js and corresponding SCSS.
+- jellyfin/jellyfin-androidtv: app/src/main/res/layout/view_row_details.xml.
+- xbmc/xbmc: addons/skin.estuary/xml/DialogVideoInfo.xml.
+
+Validate the first detail viewport with one/two-line Russian titles, missing description,
+long metadata and unavailable playback; verify the recommendation row after scrolling.

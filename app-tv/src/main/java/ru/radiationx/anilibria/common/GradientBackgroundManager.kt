@@ -6,6 +6,7 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
 import androidx.annotation.ColorInt
+import androidx.core.graphics.ColorUtils
 import androidx.fragment.app.FragmentActivity
 import androidx.leanback.app.BackgroundManager
 import androidx.lifecycle.lifecycleScope
@@ -156,7 +157,7 @@ class GradientBackgroundManager @Inject constructor(
         @ColorInt color: Int,
         colorModifier: (Int) -> Int = defaultColorModifier,
     ) {
-        val finalColor = colorModifier.invoke(color)
+        val finalColor = ColorUtils.blendARGB(colorModifier.invoke(color), Color.BLACK, 0.65f)
         subscribeColorApplier()
         colorApplier.value = finalColor
     }

@@ -40,7 +40,7 @@ class SearchFragment : BaseVerticalGridFragment() {
         super.onCreate(savedInstanceState)
         title = "Каталог"
         setGridPresenter(VerticalGridPresenter(FocusHighlight.ZOOM_FACTOR_NONE, false).apply {
-            numberOfColumns = 6
+            numberOfColumns = 5
         })
     }
 

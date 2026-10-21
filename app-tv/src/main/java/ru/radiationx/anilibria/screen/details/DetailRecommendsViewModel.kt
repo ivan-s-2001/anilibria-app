@@ -28,7 +28,7 @@ class DetailRecommendsViewModel @Inject constructor(
 
     override val loadOnCreate: Boolean = false
 
-    override val defaultTitle: String = "Рекомендации"
+    override val defaultTitle: String = "Похожие по жанрам"
 
     init {
         cardsData.value = listOf(loadingCard)
