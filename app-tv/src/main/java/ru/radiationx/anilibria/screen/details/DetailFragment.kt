@@ -183,12 +183,12 @@ class DetailFragment : Fragment(R.layout.fragment_release_page) {
                 val type = card.type as? LibriaCard.Type.Release
                 type != null && type.releaseId != extra.id
             }.take(3)
-            freshHeading.rows = if (freshCards.itemCount > 0) listOf(ReleasePageText("Новые эпизоды", "Свежие обновления релизов")) else emptyList()
+            freshHeading.rows = if (freshCards.itemCount > 0) listOf(ReleasePageText("Новые эпизоды", "Свежие обновления релизов", heading = true)) else emptyList()
         }
         subscribeTo(recommends.cardsData) {
             recommendationCards.cards = it.filterIsInstance<LibriaCard>().take(9)
             recommendationHeading.rows = when {
-                recommendationCards.itemCount > 0 -> listOf(ReleasePageText("Рекомендуем", "Похожие по жанрам"))
+                recommendationCards.itemCount > 0 -> listOf(ReleasePageText("Рекомендуем", "Похожие по жанрам", heading = true))
                 it.any { card -> card is LoadingCard } -> listOf(ReleasePageText("Рекомендации · Повторить загрузку", click = recommends::onRefreshClick))
                 else -> emptyList()
             }

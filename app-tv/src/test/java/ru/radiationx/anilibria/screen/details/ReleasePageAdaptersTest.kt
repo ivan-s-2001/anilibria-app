@@ -44,6 +44,16 @@ class ReleasePageAdaptersTest {
         assertNotNull(holder.itemView.findViewById<android.view.View>(R.id.detailBackdrop))
     }
 
+    @Test fun sectionHeadingsAreNotFocusableCards() {
+        val adapter = ReleaseTextAdapter()
+        adapter.rows = listOf(ReleasePageText("Новые эпизоды", "Свежие обновления", heading = true))
+        val holder = adapter.onCreateViewHolder(parent(), 0)
+        adapter.onBindViewHolder(holder, 0)
+        assertFalse(holder.itemView.isFocusable)
+        assertFalse(holder.itemView.isClickable)
+        assertNull(holder.itemView.background)
+    }
+
     @Test fun torrentAndMemberRowsExposeTheirOwnActions() {
         var opened = false
         val adapter = ReleaseTextAdapter()
