@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<paths>
-    <cache-path
-        name="anilibria_remote"
-        path="anilibria_remote/" />
-    <cache-path
-        name="anilibria_export"
-        path="anilibria_export/" />
-</paths>

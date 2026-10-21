@@ -1,0 +1,30 @@
+name: New Android TV app
+on:
+  push:
+    branches: [rewrite/tv-next]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tv-next-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - run: bash ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon --console=plain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AniLiberty-TV-Next-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

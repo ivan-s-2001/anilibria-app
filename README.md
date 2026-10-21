@@ -1,23 +1,21 @@
-# AniLiberty (ex AniLibria)
-Клиент для [aniliberty.top](https://aniliberty.top/)
+# AniLiberty TV Next
 
-Мобильное приложение: [RuStore](https://www.rustore.ru/catalog/app/ru.radiationx.anilibria.app) | [Releases](https://github.com/anilibria/anilibria-app/releases?q=version)
+Новый Android TV клиент в ветке `rewrite/tv-next`. Это отдельная кодовая база с нуля: один модуль `app`, без старого `app-tv`, Leanback, Quill, старых моделей и PHP API. Из предыдущего проекта сохранены только лицензия и Gradle Wrapper.
 
-Android TV приложение: [RuStore](https://www.rustore.ru/catalog/app/ru.radiationx.anilibria.app.tv) | [Releases](https://github.com/anilibria/anilibria-app/releases?q=tv)
+Визуальный источник — страница релиза AniLiberty из предоставленного HTML-архива. Навигация рассчитана на пульт: стрелки выбирают вкладку, OK / ↓ переносят в содержимое, ↑ из первого ряда возвращает к вкладкам. Заголовки не получают фокус.
 
-## Сборка для разработки
+Первая рабочая сборка: стартовый экран, последние обновления, каталог с поиском и страницами, тайтл, эпизоды с превью и длительностью, команда, торренты, Media3 HLS-плеер с выбором качества и серии. Прогресс сохраняется по UUID эпизода. Локальная библиотека не связана с серверным избранным.
 
-Debug-сборка не требует приватных ключей подписи:
+Это начальный этап новой реализации, не завершённая замена всех функций. Серверная авторизация, коллекции и синхронизация ещё не реализованы. Связанные релизы и обсуждение пока открываются на сайте. Автопереход между эпизодами, субтитры и пропуск опенинга ещё предстоят.
 
-```shell
-./gradlew :media-mobile:assembleDebug :app-mobile:assembleDebug :app-tv:assembleDebug
+## Сборка
+
+JDK 17, Android SDK 36:
+
+```powershell
+.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug
 ```
 
-# Лицензия #
-Исходный код распостраняется под лицензией GPL v3
+Пакет `tv.aniliberty.next`, APK `app/build/outputs/apk/debug/app-debug.apk`. Устанавливается рядом с предыдущим приложением. Данные предыдущего клиента не мигрируются и не удаляются.
 
-> Copyright (C) 2017-2024  Evgeniy Nizamiev [(radiationx@yandex.ru)](mailto:radiationx@yandex.ru)
-> 
-> This program is free software; you can redistribute it and/or modify
-> it under the terms of the GNU General Public License as published by
-> the Free Software Foundation; either version 3 of the License.
+В плеере кнопка MENU открывает выбор серии и качества. Экранные контролы скрываются через 3 секунды. Недоступные HLS-потоки не подменяются внешними источниками.
