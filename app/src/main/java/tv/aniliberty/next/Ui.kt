@@ -174,6 +174,7 @@ class PageAdapter(
                 t.background=null
                 if(row.click!=null){t.focusBackground();t.setPadding(view.dp(12),view.dp(10),view.dp(12),view.dp(10))}
                 t.setOnClickListener(row.click?.let{callback->View.OnClickListener{callback()}})
+                t.isClickable = row.click != null
                 if(position==contentStart) t.setOnKeyListener{_,key,event->if(key==KeyEvent.KEYCODE_DPAD_UP){if(event.action==KeyEvent.ACTION_UP)returnToTabs();true}else false}
             }
         }
