@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
 import androidx.leanback.app.BrowseSupportFragment
+import androidx.leanback.widget.BrowseFrameLayout
 import androidx.leanback.widget.ArrayObjectAdapter
 import androidx.leanback.widget.HeaderItem
 import androidx.leanback.widget.ListRowPresenter
@@ -33,10 +34,20 @@ class MainPagesFragment : BrowseSupportFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        headersSupportFragment.view?.apply {
-            visibility = View.GONE
-            (this as? ViewGroup)?.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
-        }
+        hideLegacyNavigation(view)
+        view.findViewById<BrowseFrameLayout>(androidx.leanback.R.id.browse_frame)
+            .setOnFocusSearchListener { focused, direction ->
+                when {
+                    focused == null -> null
+                    titleView?.hasFocus() == true -> when (direction) {
+                        View.FOCUS_DOWN -> mainFragment?.view
+                        View.FOCUS_UP -> focused
+                        else -> null
+                    }
+                    direction == View.FOCUS_UP -> titleView
+                    else -> null
+                }
+            }
         viewLifecycleOwner.lifecycle.addObserver(viewModel)
         (titleView as? BrowseTitleView)?.apply {
             setHomeNavigation(
@@ -56,6 +67,14 @@ class MainPagesFragment : BrowseSupportFragment() {
         }
     }
 
+    private fun hideLegacyNavigation(root: View) {
+        root.findViewById<ViewGroup>(androidx.leanback.R.id.browse_headers_dock)?.apply {
+            visibility = View.GONE
+            descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            isFocusable = false
+        }
+    }
+
     private fun openPage(position: Int) {
         lastSelectedPosition = position
         setSelectedPosition(position, false)
@@ -64,6 +83,7 @@ class MainPagesFragment : BrowseSupportFragment() {
 
     override fun onStart() {
         super.onStart()
+        view?.let(::hideLegacyNavigation)
         setSelectedPosition(lastSelectedPosition, false)
     }
 
