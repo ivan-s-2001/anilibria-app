@@ -11,25 +11,28 @@ sealed interface Screen {
     data object Welcome : Screen
     data object Home : Screen
     data class Catalog(val query: String = "", val page: Int = 1, val genre: Int? = null, val title: String? = null) : Screen
+    data class Section(val kind:HomeSection,val page:Int=1):Screen
     data class Franchise(val id: String, val title: String) : Screen
     data class Detail(val id: Int, val tab: Int = 0) : Screen
 }
-data class UiState(val screen: Screen = Screen.Welcome, val loading: Boolean = false, val error: String? = null, val releases: List<Release> = emptyList(), val detail: Release? = null, val more: Boolean = false, val home: HomeData? = null, val homeDay: Int = 1, val discovery: Discovery? = null, val discoveryLoading: Boolean = false)
+data class UiState(val screen: Screen = Screen.Welcome, val loading: Boolean = false, val error: String? = null, val releases: List<Release> = emptyList(), val detail: Release? = null, val more: Boolean = false, val home: HomeData? = null, val homeDay: Int = 1, val discovery: Discovery? = null, val discoveryLoading: Boolean = false, val section:SectionData?=null)
 class TvModel : ViewModel() {
     val api = Api()
     val state = MutableStateFlow(UiState())
     private val stack = mutableListOf<Screen>()
     private var job: Job? = null
     private var homeCache: HomeData? = null
+    private val sectionCache=linkedMapOf<Screen.Section,SectionData>()
     private var homeLoadedAt = 0L
     private var selectedHomeDay = 1
     fun open(screen: Screen, remember: Boolean = true) {
         if (remember && state.value.screen != Screen.Welcome && screen != state.value.screen) stack.add(state.value.screen)
         job?.cancel()
-        if (screen == Screen.Home && homeCache != null && android.os.SystemClock.elapsedRealtime() - homeLoadedAt < 300000) {
+        if (screen == Screen.Home && homeCache != null) {
             state.value = UiState(screen, home = homeCache, homeDay = selectedHomeDay)
             return
         }
+        if(screen is Screen.Section && sectionCache[screen]!=null){state.value=UiState(screen,section=sectionCache[screen]);return}
         val previous = state.value
         if (screen is Screen.Detail && previous.detail?.id == screen.id) {
             state.value = previous.copy(screen = screen); return
@@ -41,6 +44,10 @@ class TvModel : ViewModel() {
                 state.value = when (screen) {
                     Screen.Home -> api.home().let { home -> homeCache = home; homeLoadedAt = android.os.SystemClock.elapsedRealtime(); UiState(screen, home = home, homeDay = selectedHomeDay) }
                     is Screen.Catalog -> api.catalog(screen.query, screen.page, screen.genre).let { (items, more) -> UiState(screen, releases = items, more = more) }
+                    is Screen.Section -> api.section(screen.kind,screen.page).let{data->
+                        if(sectionCache.size>=16)sectionCache.remove(sectionCache.keys.first())
+                        sectionCache[screen]=data;UiState(screen,section=data)
+                    }
                     is Screen.Franchise -> UiState(screen, releases = api.franchise(screen.id))
                     is Screen.Detail -> UiState(screen, detail = api.release(screen.id))
                     else -> UiState(screen)
@@ -70,5 +77,5 @@ class TvModel : ViewModel() {
             if((state.value.screen as? Screen.Detail)?.id==screen.id)state.value=state.value.copy(discovery=result,discoveryLoading=false)
         }
     }
-    fun retry() { if (state.value.screen == Screen.Home) homeCache = null; open(state.value.screen, false) }
+    fun retry() { (state.value.screen as?Screen.Section)?.let{sectionCache.remove(it)}; if (state.value.screen == Screen.Home) homeCache = null; open(state.value.screen, false) }
 }

@@ -47,8 +47,8 @@ fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int
     setOnClickListener { click() }
 }
 
-enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF }
-data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList())
+enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE }
+data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList())
 
 class PageAdapter(
     private val navigate: (Int) -> Unit,
@@ -133,7 +133,7 @@ class PageAdapter(
             }
             else -> TextView(context)
         }
-        view.layoutParams = RecyclerView.LayoutParams(if(shelfMode)view.dp(144)else -1, when(Kind.entries[type]){Kind.EPISODE->view.dp(160);Kind.POSTER->view.dp(236);Kind.SHELF->view.dp(252);Kind.SPOTLIGHT->view.dp(220);Kind.FEATURE->view.dp(126);else->-2}).apply {
+        view.layoutParams = RecyclerView.LayoutParams(if(shelfMode)view.dp(if(Kind.entries[type]==Kind.FEATURE)232 else 144)else -1, when(Kind.entries[type]){Kind.EPISODE->view.dp(160);Kind.POSTER->view.dp(270);Kind.MORE->view.dp(270);Kind.SHELF->view.dp(286);Kind.SPOTLIGHT->view.dp(160);Kind.FEATURE->view.dp(204);else->-2}).apply {
             val card = Kind.entries[type] in listOf(Kind.POSTER,Kind.EPISODE,Kind.FEATURE)
             setMargins(view.dp(4), view.dp(4),view.dp(4),view.dp(4))
         }
@@ -155,8 +155,20 @@ class PageAdapter(
                 val oldKey=shelf.getTag(R.id.shelf_key) as? String
                 if(oldKey!=row.key){shelf.adapter=PageAdapter(navigate,tab,play,favorite,details,progress,lastEpisode,returnToTabs,day,quickActions,true);shelf.scrollToPosition(0)}
                 shelf.setTag(R.id.shelf_key,row.key)
-                (shelf.adapter as PageAdapter).submit(row.items.map{Row("${row.key}:release:${it.id}",Kind.POSTER,release=it)})
+                shelf.layoutParams=shelf.layoutParams.apply{height=view.dp(if(row.selected==1)220 else 286)}
+                val cards=if(row.cards.isNotEmpty())row.cards else row.items.map{Row("${row.key}:release:${it.id}",Kind.POSTER,release=it)}
+                (shelf.adapter as PageAdapter).submit(cards)
                 restoreShelf(shelf,false)
+            }
+            Kind.MORE -> {
+                val text=view as TextView
+                text.layoutParams=text.layoutParams.apply{if(shelfMode){width=view.dp(if(row.selected==1)232 else 144);height=view.dp(if(row.selected==1)204 else 270)}}
+                text.label("Все\n${row.title}",16f,WHITE,true)
+                val arrow=view.context.getDrawable(R.drawable.ic_arrow_right)!!.mutate().apply{setBounds(0,0,view.dp(32),view.dp(32));setTint(WHITE)}
+                text.setCompoundDrawables(null,arrow,null,null);text.compoundDrawablePadding=view.dp(12)
+                text.gravity=Gravity.CENTER;text.isFocusable=true;text.isClickable=true
+                text.focusBackground();text.contentDescription="Открыть раздел ${row.title} полностью"
+                text.setOnClickListener{row.click?.invoke()}
             }
             Kind.DAYS -> {
                 val line=(view as HorizontalScrollView).getChildAt(0) as LinearLayout;line.removeAllViews()
@@ -223,35 +235,34 @@ class PageAdapter(
                 val release=row.release
                 val poster=row.kind==Kind.POSTER
                 val spotlight=row.kind==Kind.SPOTLIGHT
-                (box.getChildAt(0)as ImageView).apply {
-                    layoutParams=FrameLayout.LayoutParams(-1,if(poster)view.dp(184)else -1,Gravity.TOP)
-                    load(if(poster)release?.poster else row.image)
-                }
-                box.getChildAt(1).visibility=if(poster && !box.hasFocus())View.GONE else View.VISIBLE
-                title.label(release?.title?:row.title,if(spotlight)30f else if(poster)14f else 19f,WHITE,true)
-                val metadata=if(release!=null) listOfNotNull(release.latestEpisode?.let{"Эпизод ${number(it.ordinal)}"},release.metadata,release.genres.joinToString(" · ")).filter(String::isNotBlank).joinToString("\n") else row.subtitle
-                subtitle.label(metadata,if(spotlight)15f else 13f,MUTED)
-                subtitle.visibility=if(poster && !box.hasFocus())View.GONE else View.VISIBLE
+                val image=box.getChildAt(0)as ImageView
+                image.layoutParams=FrameLayout.LayoutParams(-1,if(poster)view.dp(198)else if(spotlight)-1 else view.dp(130),Gravity.TOP)
+                image.scaleType=if(poster)ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_CROP
+                image.background=shape(0xFF212121.toInt(),view.dp(6).toFloat())
+                image.clipToOutline=true
+                image.load(if(poster)release?.poster else row.image)
+                box.getChildAt(1).visibility=if(spotlight)View.VISIBLE else View.GONE
+                title.label(release?.title?:row.title,if(spotlight)24f else 14f,WHITE,true)
+                title.maxLines=2
+                val short=if(release!=null)listOf(release.year,release.type,release.latestEpisode?.let{"Эп. ${number(it.ordinal)}"}.orEmpty()).filter(String::isNotBlank).joinToString(" · ")else row.subtitle
+                val full=if(release!=null)listOf(release.metadata,release.genres.take(2).joinToString(" · ")).filter(String::isNotBlank).joinToString(" · ")else row.subtitle
+                subtitle.label(if(box.hasFocus())full else short,12f,MUTED)
+                subtitle.maxLines=1;subtitle.visibility=if(short.isBlank()&&full.isBlank())View.GONE else View.VISIBLE
                 if(spotlight){
-                    content.setPadding(view.dp(32),view.dp(24),view.dp(32),view.dp(24))
-                    content.layoutParams=FrameLayout.LayoutParams((view.resources.displayMetrics.widthPixels*.65f).toInt(),-2,Gravity.BOTTOM or Gravity.START)
-                    subtitle.text=metadata+release?.description?.let{ description->android.text.Html.fromHtml(description,android.text.Html.FROM_HTML_MODE_LEGACY).toString().take(140).takeIf{it.isNotBlank()}?.let{"\n$it"}}.orEmpty()+"\n\n▶  Смотреть"
-                    subtitle.maxLines=6
-                } else {
-                    content.layoutParams=FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM)
-                    content.setPadding(view.dp(8),view.dp(6),view.dp(8),view.dp(6))
+                    content.setPadding(view.dp(24),view.dp(12),view.dp(24),view.dp(12))
+                    content.layoutParams=FrameLayout.LayoutParams((view.resources.displayMetrics.widthPixels*.6f).toInt(),-2,Gravity.BOTTOM or Gravity.START)
+                    subtitle.text=listOf(release?.metadata.orEmpty(),"Открыть релиз").filter(String::isNotBlank).joinToString("\n")
+                }else{
+                    content.layoutParams=FrameLayout.LayoutParams(-1,view.dp(66),Gravity.BOTTOM)
+                    content.setPadding(view.dp(4),view.dp(6),view.dp(4),0)
                 }
-                box.setOnFocusChangeListener { _, focused -> if(poster){
-                    subtitle.visibility=if(focused)View.VISIBLE else View.GONE
-                    box.getChildAt(1).visibility=if(focused)View.VISIBLE else View.GONE
-                    content.setBackgroundColor(if(focused)0xEE121212.toInt()else Color.TRANSPARENT)
-                    title.textSize=14f
-                    title.maxLines=if(focused)3 else 2
-                } }
-                content.setBackgroundColor(if(poster && box.hasFocus())0xEE121212.toInt()else Color.TRANSPARENT)
-                title.maxLines=if(poster && box.hasFocus())3 else 2
-                box.contentDescription=release?.title?:row.title
-                box.setOnClickListener{if(row.click!=null)row.click.invoke() else if(release!=null)details(release)}
+                content.setBackgroundColor(Color.TRANSPARENT)
+                box.setOnFocusChangeListener{_,focused->
+                    if(!spotlight){subtitle.text=if(focused)full else short;title.setTextColor(if(focused)WHITE else 0xFFDDDDDD.toInt())}
+                    box.animate().scaleX(if(focused)1.025f else 1f).scaleY(if(focused)1.025f else 1f).setDuration(140).start()
+                }
+                box.contentDescription=listOf(release?.title?:row.title,short).filter(String::isNotBlank).joinToString(". ")
+                box.setOnClickListener{if(row.click!=null)row.click.invoke()else if(release!=null)details(release)}
                 box.setOnLongClickListener(if(release!=null)View.OnLongClickListener{quickActions(release);true}else null)
                 box.isLongClickable=release!=null
             }
@@ -292,6 +303,12 @@ class PageAdapter(
         val view=holder.itemView
         if(view is FrameLayout)(view.getChildAt(0)as?ImageView)?.load(null)
         if(view is LinearLayout && view.childCount>0)(view.getChildAt(0)as?ImageView)?.load(null)
+        view.animate().cancel();view.scaleX=1f;view.scaleY=1f
         view.setOnClickListener(null);view.setOnKeyListener(null);view.setOnLongClickListener(null);view.onFocusChangeListener=null
     }
 }
+
+
+/** Home previews contain at most nine real cards and one explicit full-section destination. */
+fun shelfCards(key:String,title:String,items:List<Row>,wide:Boolean=false,openAll:()->Unit):List<Row> =
+    items.take(9)+Row("$key:all",Kind.MORE,title,selected=if(wide)1 else 0,click=openAll)

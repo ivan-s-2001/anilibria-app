@@ -32,7 +32,7 @@ class FocusTest {
         tab.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP,KeyEvent.KEYCODE_DPAD_DOWN))
         assertEquals(3,selected)
     }
-    @Test fun posterRevealsMetadataWithoutResizingGrid() {
+    @Test fun posterKeepsReadableCaptionAndGeometryWhenFocused() {
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
         val release=parseRelease(org.json.JSONObject("""{"id":10,"name":{"main":"Тайтл"},"year":2026,"latest_episode":{"id":"episode-3","ordinal":3}}"""))
         adapter.submit(listOf(Row("release:10",Kind.POSTER,release=release)))
@@ -42,10 +42,11 @@ class FocusTest {
         val content=box.getChildAt(2)as LinearLayout
         val metadata=content.getChildAt(1)as android.widget.TextView
         val height=box.layoutParams.height
-        assertEquals(android.view.View.GONE,metadata.visibility)
+        assertEquals(android.view.View.VISIBLE,metadata.visibility)
+        assertTrue(metadata.text.contains("Эп. 3"))
         box.requestFocus()
         assertEquals(android.view.View.VISIBLE,metadata.visibility)
-        assertTrue(metadata.text.contains("Эпизод 3"))
+        assertTrue(metadata.text.contains("2026"))
         assertEquals(height,box.layoutParams.height)
     }
     @Test fun longOkOpensActionsForTheExactRelease() {

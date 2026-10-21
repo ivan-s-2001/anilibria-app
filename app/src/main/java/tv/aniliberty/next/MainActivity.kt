@@ -175,6 +175,32 @@ class MainActivity : ComponentActivity() {
         if(url==null)return
         try{startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url)))}catch(_:ActivityNotFoundException){Toast.makeText(this,"Нет приложения для открытия ссылки",Toast.LENGTH_LONG).show()}
     }
+    private fun showTorrents(releaseId:Int){
+        val loading=AlertDialog.Builder(this).setMessage("Загрузка раздач…").setNegativeButton("Отмена",null).create()
+        val task=lifecycleScope.launch {
+            try{
+                val items=model.api.releaseTorrents(releaseId)
+                loading.dismiss()
+                if(items.isEmpty())AlertDialog.Builder(this@MainActivity).setMessage("Раздачи пока недоступны").setPositiveButton("Закрыть",null).show()
+                else AlertDialog.Builder(this@MainActivity).setTitle("Торренты").setItems(items.map{listOf(it.title,it.description).filter(String::isNotBlank).joinToString("\n")}.toTypedArray()){_,index->openLink(items[index].magnet)}.setNegativeButton("Закрыть",null).show()
+            }catch(e:kotlinx.coroutines.CancellationException){throw e}catch(_:Exception){loading.dismiss();Toast.makeText(this@MainActivity,"Не удалось загрузить раздачи",Toast.LENGTH_LONG).show()}
+        }
+        loading.setOnCancelListener{task.cancel()}
+        loading.setOnShowListener{loading.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener{task.cancel();loading.dismiss()}}
+        loading.show()
+    }
+    private fun openSection(kind:HomeSection){rememberFocus();model.open(Screen.Section(kind))}
+    private fun releaseCards(items:List<Release>,key:String)=items.distinctBy{it.id}.map{Row("$key:release:${it.id}",Kind.POSTER,release=it)}
+    private fun featureCards(items:List<Feature>,kind:HomeSection)=items.map{feature->
+        Row("${kind.name}:${feature.id}",Kind.FEATURE,feature.title,feature.subtitle,image=feature.image,click={
+            rememberFocus()
+            if(kind==HomeSection.FRANCHISES)model.open(Screen.Franchise(feature.id,feature.title))
+            else model.open(Screen.Catalog(genre=feature.id.toIntOrNull(),title=feature.title))
+        })
+    }
+    private fun videoCards(items:List<HomeVideo>)=items.map{video->Row("video:${video.id}",Kind.FEATURE,video.title,video.subtitle,image=video.image,click={openLink(video.url.takeIf{it.startsWith("https://")})})}
+    private fun homeShelf(kind:HomeSection,items:List<Row>,wide:Boolean=false,key:String=kind.name):Row =
+        Row("shelf:$key",Kind.SHELF,selected=if(wide)1 else 0,cards=shelfCards(key,kind.title,items,wide){openSection(kind)})
     private fun render(state:UiState){
         val retainedFocus = if(current==state.screen) list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String } else null
         current=state.screen
@@ -194,29 +220,44 @@ class MainActivity : ComponentActivity() {
                     home.promotions?.firstOrNull()?.let { promotion ->
                         rows+=Row("promotion:${promotion.id}",Kind.SPOTLIGHT,release=promotion.release,image=promotion.image)
                     }
-                    rows+=Row("heading",Kind.HEADING,"Новые эпизоды","Самые новые и свежие эпизоды в любимой озвучке")
-                    rows+=Row("latest-shelf",Kind.SHELF,items=home.latest)
-                    rows+=Row("support",Kind.ACTION,"Поддержите AniLiberty!","Поддержите команду проекта",click={openLink("https://www.aniliberty.top/support")})
-                    rows+=Row("schedule-heading",Kind.HEADING,"Расписание релизов","Список релизов, над которыми команда трудится прямо сейчас")
+                    rows+=Row("latest-heading",Kind.HEADING,"Новые эпизоды")
+                    rows+=homeShelf(HomeSection.LATEST,releaseCards(home.latest,"latest"))
+                    rows+=Row("schedule-heading",Kind.HEADING,"Расписание релизов")
                     rows+=Row("schedule-days",Kind.DAYS,selected=state.homeDay)
                     val schedule=home.schedule?.getOrNull(state.homeDay)
                     if(schedule==null)rows+=Row("schedule-retry",Kind.ACTION,"Не удалось загрузить расписание · Повторить",click=model::retry)
-                    else if(schedule.isEmpty())rows+=Row("schedule-empty",Kind.TEXT,"На этот день релизы не запланированы")
-                    else rows+=Row("schedule-shelf",Kind.SHELF,items=schedule)
-                    if(!home.videos.isNullOrEmpty()){
-                        rows+=Row("videos-heading",Kind.HEADING,"Видео","Ролики команды AniLiberty")
-                        rows+=home.videos.map{video->Row("video:${video.id}",Kind.FEATURE,video.title,video.subtitle,click={openLink(video.url.takeIf{it.startsWith("https://")})},image=video.image)}
-                    }
-                    rows+=Row("franchises-heading",Kind.HEADING,"Франшизы","Самые интересные и захватывающие франшизы в любимой озвучке")
+                    else rows+=homeShelf(HomeSection.SCHEDULE,releaseCards(schedule,"schedule:${state.homeDay}"),key="schedule:${state.homeDay}")
+                    rows+=Row("franchises-heading",Kind.HEADING,"Франшизы")
                     if(home.franchises==null)rows+=Row("franchises-retry",Kind.ACTION,"Не удалось загрузить франшизы · Повторить",click=model::retry)
-                    else rows+=home.franchises.map{feature->Row("franchise:${feature.id}",Kind.FEATURE,feature.title,feature.subtitle,click={rememberFocus();model.open(Screen.Franchise(feature.id,feature.title))},image=feature.image)}
-                    rows+=Row("genres-heading",Kind.HEADING,"Жанры","Список жанров на любой вкус и цвет")
+                    else rows+=homeShelf(HomeSection.FRANCHISES,featureCards(home.franchises,HomeSection.FRANCHISES),true)
+                    rows+=Row("genres-heading",Kind.HEADING,"Жанры")
                     if(home.genres==null)rows+=Row("genres-retry",Kind.ACTION,"Не удалось загрузить жанры · Повторить",click=model::retry)
-                    else rows+=home.genres.map{feature->Row("genre:${feature.id}",Kind.FEATURE,feature.title,feature.subtitle,click={rememberFocus();model.open(Screen.Catalog(genre=feature.id.toIntOrNull(),title=feature.title))},image=feature.image)}
-                    rows+=Row("torrents-heading",Kind.HEADING,"Торренты","Самые свежие торренты: любимая озвучка + оригинальное качество")
-                    if(home.torrents==null)rows+=Row("torrents-retry",Kind.ACTION,"Не удалось загрузить торренты · Повторить",click=model::retry)
-                    else rows+=home.torrents.mapIndexed{index,torrent->Row("home-torrent:$index",Kind.ACTION,torrent.release?.title?:torrent.title,torrent.subtitle,click={openLink(torrent.magnet.takeIf{it.startsWith("magnet:")})})}
+                    else rows+=homeShelf(HomeSection.GENRES,featureCards(home.genres,HomeSection.GENRES),true)
+                    rows+=Row("videos-heading",Kind.HEADING,"Видео команды")
+                    if(home.videos==null)rows+=Row("videos-retry",Kind.ACTION,"Не удалось загрузить видео · Повторить",click=model::retry)
+                    else rows+=homeShelf(HomeSection.VIDEOS,videoCards(home.videos),true)
+                    rows+=Row("refresh-home",Kind.ACTION,"Обновить главную",click={rememberFocus();model.retry()})
+                    rows+=Row("support",Kind.ACTION,"Поддержать AniLiberty",click={openLink("https://www.aniliberty.top/support")})
                 }
+                is Screen.Section->{
+                    val data=state.section?:return
+                    rows+=Row("section-heading",Kind.HEADING,screen.kind.title)
+                    val cards=when(screen.kind){
+                        HomeSection.LATEST,HomeSection.SCHEDULE->releaseCards(data.releases,screen.kind.name)
+                        HomeSection.FRANCHISES,HomeSection.GENRES->featureCards(data.features,screen.kind)
+                        HomeSection.VIDEOS->videoCards(data.videos)
+                    }
+                    rows+=cards
+                    if(data.more)rows+=Row("section-next",Kind.ACTION,"Показать больше",click={
+                        rememberFocus()
+                        val next=screen.copy(page=screen.page+1)
+                        cards.lastOrNull()?.key?.let{focusMemory[next]=it}
+                        scrollMemory[screen]?.let{scrollMemory[next]=it}
+                        model.open(next,false)
+                    })
+                    if(cards.isEmpty())rows+=Row("section-empty",Kind.ACTION,"Пока ничего нет · Вернуться",click={model.back()})
+                }
+
                 is Screen.Franchise->{
                     rows+=Row("franchise-heading",Kind.HEADING,screen.title,"Порядок просмотра")
                     rows+=state.releases.map{Row("release:${it.id}",Kind.POSTER,release=it)}
@@ -234,10 +275,10 @@ class MainActivity : ComponentActivity() {
                     rows+=Row("hero",Kind.HERO,release=r)
                     val description=android.text.Html.fromHtml(r.description,android.text.Html.FROM_HTML_MODE_LEGACY).toString().trim()
                     if(description.isNotBlank())rows+=Row("synopsis",Kind.ACTION,description.take(220).let{if(it.length<description.length)"$it…"else it},"Описание",click={AlertDialog.Builder(this).setTitle(r.title).setMessage(description).setPositiveButton("Закрыть",null).show()})
-                    rows+=Row("more",Kind.ACTION,"Ещё", "Торренты · Открыть на сайте",click={
-                        AlertDialog.Builder(this).setTitle(r.title).setItems(arrayOf("Торренты","Открыть на сайте")){_,choice->
-                            if(choice==1)openLink("https://www.aniliberty.top/anime/releases/release/${r.alias}/episodes")
-                            else AlertDialog.Builder(this).setTitle("Торренты").setItems(r.torrents.map{it.label}.toTypedArray()){_,i->openLink(r.torrents[i].magnet)}.setNegativeButton("Закрыть",null).show()
+                    rows+=Row("more",Kind.ACTION,"Ещё",click={
+                        AlertDialog.Builder(this).setTitle(r.title).setItems(arrayOf("Открыть страницу на сайте","Торренты")){_,choice->
+                            if(choice==0)openLink("https://www.aniliberty.top/anime/releases/release/${r.alias}/episodes")
+                            else showTorrents(r.id)
                         }.show()
                     })
                     rows+=Row("tabs",Kind.TABS,selected=screen.tab)
@@ -265,7 +306,6 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         3->{rows+=r.credits.groupBy{it.role}.map{(role,people)->Row("role:$role",Kind.TEXT,role,people.joinToString(" · "){it.name})};if(r.credits.isEmpty())rows+=Row("empty",Kind.TEXT,"Участники пока не указаны")}
-                        4->{rows+=r.torrents.mapIndexed{i,t->Row("torrent:$i",Kind.ACTION,t.label,t.description,click={openLink(t.magnet)})};if(r.torrents.isEmpty())rows+=Row("empty",Kind.TEXT,"Раздачи пока недоступны")}
                     }
 
                 }
@@ -275,8 +315,8 @@ class MainActivity : ComponentActivity() {
         adapter.submit(rows)
         if(enterDay){
             enterDay=false
-            val index=rows.indexOfFirst{it.key.startsWith("schedule:")}.takeIf{it>=0}?:rows.indexOfFirst{it.key=="schedule-days"}
-            if(index>=0){list.doOnNextLayout{list.findViewHolderForAdapterPosition(index)?.itemView?.let{item->if(item.isFocusable)item.requestFocus()else if(item is ViewGroup)item.getFocusables(View.FOCUS_FORWARD).firstOrNull()?.requestFocus()}};grid.scrollToPositionWithOffset(index,list.dp(64))}
+            val index=rows.indexOfFirst{it.key.startsWith("shelf:schedule:")}.takeIf{it>=0}?:rows.indexOfFirst{it.key=="schedule-days"}
+            if(index>=0){list.doOnNextLayout{focusItem(list.findViewHolderForAdapterPosition(index)?.itemView)};grid.scrollToPositionWithOffset(index,list.dp(64))}
         }else if(enterContent && adapter.contentStart in rows.indices){
             enterContent=false
             val index=(adapter.contentStart until rows.size).firstOrNull { rows[it].kind != Kind.HEADING } ?: adapter.contentStart
@@ -286,7 +326,7 @@ class MainActivity : ComponentActivity() {
             val key=retainedFocus?:focusMemory[screenKey(state.screen)]
             val index=rows.indexOfFirst{it.key==key}.takeIf{it>=0}
                 ?: if(key!=null && adapter.contentStart>=0) (adapter.contentStart until rows.size).firstOrNull{rows[it].kind!=Kind.HEADING}?:adapter.contentStart
-                else rows.indexOfFirst{it.kind in listOf(Kind.ACTION,Kind.POSTER,Kind.HERO,Kind.SPOTLIGHT,Kind.SHELF)}
+                else rows.indexOfFirst{it.kind in listOf(Kind.ACTION,Kind.POSTER,Kind.HERO,Kind.SPOTLIGHT,Kind.SHELF,Kind.FEATURE,Kind.MORE)}
             if(index>=0&&!state.loading){list.doOnNextLayout{
                 val item=list.findViewHolderForAdapterPosition(index)?.itemView
                 focusItem(item)
