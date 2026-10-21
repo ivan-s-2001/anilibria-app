@@ -1,7 +1,10 @@
 package ru.radiationx.anilibria.screen.player.episodes
 
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -15,6 +18,7 @@ import ru.radiationx.data.entity.domain.types.EpisodeId
 import ru.radiationx.data.interactors.ReleaseInteractor
 import ru.radiationx.shared.ktx.asTimeSecString
 import java.util.Date
+import java.math.BigDecimal
 import javax.inject.Inject
 
 class PlayerEpisodesViewModel @Inject constructor(
@@ -26,38 +30,68 @@ class PlayerEpisodesViewModel @Inject constructor(
 
     val episodesData = MutableStateFlow<List<Group>>(emptyList())
     val selectedAction = MutableStateFlow<Action?>(null)
+    val releaseTitle = MutableStateFlow("")
+    val loading = MutableStateFlow(true)
+    val loadError = MutableStateFlow<String?>(null)
+    private var applyingEpisode = false
+    private var loadJob: Job? = null
 
     init {
+        loadEpisodes()
+    }
+
+    fun loadEpisodes() {
+        loadJob?.cancel()
+        loading.value = true
+        loadError.value = null
         val playerData = playerController.data.value
-        if (playerData != null) {
-            updateEpisodes(playerData)
+        if (playerData?.any { it.id == argExtra.releaseId } == true) {
+            loadJob = viewModelScope.launch {
+                try {
+                    updateEpisodes(playerData)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    loadError.value = "Не удалось загрузить серии. Нажмите «Повторить»."
+                    loading.value = false
+                }
+            }
         } else {
-            releaseInteractor
+            loadJob = releaseInteractor
                 .observeFull(argExtra.releaseId)
                 .onEach {
                     updateEpisodes(listOf(it))
+                }
+                .catch {
+                    loadError.value = "Не удалось загрузить серии. Нажмите «Повторить»."
+                    loading.value = false
                 }
                 .launchIn(viewModelScope)
         }
     }
 
     fun applyEpisode(actionId: Long) {
+        val action = episodesData.value.findAction { it.id == actionId } ?: return
+        if (applyingEpisode) return
+        applyingEpisode = true
         guidedRouter.close()
-        val action = episodesData.value.findAction { it.id == actionId }
-        if (action != null) {
-            playerController.selectEpisodeRelay.emit(action.episodeId)
-        }
+        playerController.selectEpisodeRelay.emit(action.episodeId)
     }
 
-    private fun updateEpisodes(releases: List<Release>) {
-        viewModelScope.launch {
-            val accesses = releases
-                .flatMap { releaseInteractor.getAccesses(it.id) }
-                .associateBy { it.id }
-            val groups = releases.toGroups(accesses)
-            episodesData.value = groups
-            selectedAction.value = groups.findAction { it.episodeId == argExtra.episodeId }
-        }
+    private suspend fun updateEpisodes(releases: List<Release>) {
+        val accesses = releases
+            .flatMap { releaseInteractor.getAccesses(it.id) }
+            .associateBy { it.id }
+        val groups = releases.toGroups(accesses)
+        releaseTitle.value = releases.firstOrNull { it.id == argExtra.releaseId }?.title.orEmpty()
+        episodesData.value = groups
+        loading.value = false
+        val available = groups.flatMap { it.actions }
+        selectedAction.value = available.find { it.episodeId == argExtra.episodeId }
+            ?: available.filter { accesses[it.episodeId]?.lastValidAccess != null }
+                .maxByOrNull { accesses[it.episodeId]?.lastAccessRaw ?: 0L }
+            ?: available.firstOrNull { !it.watched }
+            ?: available.firstOrNull()
     }
 
     private fun List<Group>.findAction(block: (Action) -> Boolean): Action? {
@@ -74,18 +108,22 @@ class PlayerEpisodesViewModel @Inject constructor(
         var id = 0L
         return map { release ->
             val groupId = id++
-            val actions = release.episodes.asReversed().map { episode ->
+            val actions = release.episodes.sortedBy {
+                it.id.id.toBigDecimalOrNull() ?: BigDecimal.ZERO
+            }.map { episode ->
                 val access = accesses[episode.id]
-                val description = if (access != null && access.isViewed && access.seek > 0) {
-                    "Остановлена на ${Date(access.seek).asTimeSecString()}"
-                } else {
-                    null
-                }
+                val description = listOfNotNull(
+                    "Текущая серия".takeIf { episode.id == argExtra.episodeId },
+                    "Просмотрено".takeIf { access?.isViewed == true },
+                    access?.seek?.takeIf { it > 0 }?.let { "Продолжить с ${Date(it).asTimeSecString()}" },
+                ).joinToString(" · ").ifEmpty { "Не просмотрено" }
                 Action(
                     id = id++,
                     episodeId = episode.id,
-                    title = episode.title.orEmpty(),
-                    description = description
+                    title = episode.title?.takeIf { it.isNotBlank() } ?: "Серия ${episode.id.id}",
+                    description = description,
+                    number = episode.id.id,
+                    watched = access?.isViewed == true,
                 )
             }
             Group(
@@ -107,5 +145,7 @@ class PlayerEpisodesViewModel @Inject constructor(
         val episodeId: EpisodeId,
         val title: String,
         val description: String?,
+        val number: String,
+        val watched: Boolean,
     )
 }
