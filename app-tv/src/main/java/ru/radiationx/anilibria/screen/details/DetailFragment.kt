@@ -15,6 +15,7 @@ import ru.radiationx.anilibria.R
 import ru.radiationx.anilibria.common.GradientBackgroundManager
 import ru.radiationx.anilibria.common.LibriaCard
 import ru.radiationx.anilibria.common.LoadingCard
+import ru.radiationx.anilibria.screen.main.MainFeedViewModel
 import ru.radiationx.anilibria.screen.player.PlayerExtra
 import ru.radiationx.anilibria.screen.player.episodes.EpisodeListAdapter
 import ru.radiationx.anilibria.screen.player.episodes.PlayerEpisodesViewModel
@@ -41,6 +42,7 @@ class DetailFragment : Fragment(R.layout.fragment_release_page) {
     private val header by viewModel<DetailHeaderViewModel> { extra }
     private val related by viewModel<DetailRelatedViewModel> { extra }
     private val recommends by viewModel<DetailRecommendsViewModel> { extra }
+    private val newEpisodes by viewModel<MainFeedViewModel>()
     private val episodes by viewModel<PlayerEpisodesViewModel> { PlayerExtra(extra.id, null) }
     private var selectedTab = 0
     private var descending = false
@@ -58,9 +60,12 @@ class DetailFragment : Fragment(R.layout.fragment_release_page) {
         val list = view as RecyclerView
         list.itemAnimator = null
         backgroundManager.clearGradient()
-        listOf(header, related, recommends, episodes).forEach { viewLifecycleOwner.lifecycle.addObserver(it) }
+        listOf(header, related, recommends, episodes, newEpisodes).forEach { viewLifecycleOwner.lifecycle.addObserver(it) }
         val content = ReleaseTextAdapter()
         val relatedCards = ReleaseCardsAdapter(related::onLibriaCardClick)
+        var pendingEpisodeRestore = focusedEpisode != null && selectedTab == 0
+        val freshHeading = ReleaseTextAdapter()
+        val freshCards = ReleaseCardsAdapter(newEpisodes::onLibriaCardClick)
         val recommendationHeading = ReleaseTextAdapter()
         val recommendationCards = ReleaseCardsAdapter(recommends::onLibriaCardClick)
         val episodeCards = EpisodeListAdapter(
@@ -100,7 +105,10 @@ class DetailFragment : Fragment(R.layout.fragment_release_page) {
                 }, if (count > 0) "OK — изменить порядок" else "",
                 { if (episodes.loadError.value != null) episodes.loadEpisodes() else { descending = !descending; renderEpisodes() } },
             ))
-            if (hadEpisodeFocus) focusEpisode()
+            if (hadEpisodeFocus || (pendingEpisodeRestore && count > 0)) {
+                pendingEpisodeRestore = false
+                focusEpisode()
+            }
         }
 
         fun renderTextContent() {
@@ -135,7 +143,7 @@ class DetailFragment : Fragment(R.layout.fragment_release_page) {
                 desired.add(content)
                 if (index == 1) desired.add(relatedCards)
             }
-            desired.addAll(listOf(recommendationHeading, recommendationCards))
+            desired.addAll(listOf(freshHeading, freshCards, recommendationHeading, recommendationCards))
             page.adapters.filter { it !in desired }.forEach(page::removeAdapter)
             desired.forEachIndexed { position, adapter ->
                 if (adapter !in page.adapters) page.addAdapter(position, adapter)
@@ -151,7 +159,7 @@ class DetailFragment : Fragment(R.layout.fragment_release_page) {
                 page.adapters.forEach { adapter ->
                     if (offset < adapter.itemCount) return if (adapter === episodeCards) {
                         if (episodeCards.rows.getOrNull(offset)?.episode != null) 1 else 3
-                    } else if (adapter === relatedCards || adapter === recommendationCards) 1 else 3
+                    } else if (adapter === relatedCards || adapter === recommendationCards || adapter === freshCards) 1 else 3
                     offset -= adapter.itemCount
                 }
                 return 3
@@ -168,6 +176,13 @@ class DetailFragment : Fragment(R.layout.fragment_release_page) {
         subscribeTo(episodes.loadError) { renderEpisodes() }
         subscribeTo(related.cardsData) {
             relatedCards.cards = it.filterIsInstance<LibriaCard>(); if (selectedTab == 1) renderTextContent()
+        }
+        subscribeTo(newEpisodes.cardsData) {
+            freshCards.cards = it.filterIsInstance<LibriaCard>().filter { card ->
+                val type = card.type as? LibriaCard.Type.Release
+                type != null && type.releaseId != extra.id
+            }.take(3)
+            freshHeading.rows = if (freshCards.itemCount > 0) listOf(ReleasePageText("Новые эпизоды", "Свежие обновления релизов")) else emptyList()
         }
         subscribeTo(recommends.cardsData) {
             recommendationCards.cards = it.filterIsInstance<LibriaCard>().take(9)
