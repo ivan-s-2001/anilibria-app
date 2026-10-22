@@ -30,7 +30,10 @@ class AccountApi(private val transport: AccountTransport = AccountHttpTransport(
             )
         val code = json.getJSONObject("otp").getString("code")
         require(Regex("[0-9]{6}").matches(code)) { "Сервис вернул некорректный код" }
-        return DeviceCode(code, json.getInt("remaining_time").coerceIn(1, 600))
+        return DeviceCode(
+            code,
+            kotlin.math.ceil(json.getDouble("remaining_time")).toInt().coerceIn(1, 600),
+        )
     }
 
     suspend fun deviceLogin(deviceId: String, code: String): String =
