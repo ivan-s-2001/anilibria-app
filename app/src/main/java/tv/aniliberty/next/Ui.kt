@@ -643,6 +643,8 @@ class PageAdapter(
         return object : RecyclerView.ViewHolder(view) {}
     }
 
+    // Native Material theme with ComponentActivity; AppCompat is only an IMA dependency.
+    @android.annotation.SuppressLint("AppCompatCustomView")
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         val row = rows[position]
         val view = holder.itemView
