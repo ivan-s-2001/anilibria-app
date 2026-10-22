@@ -13,19 +13,25 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [30])
 class StartupScreenTest {
-    private fun labels(view: View): List<TextView> = when (view) {
-        is TextView -> listOf(view)
-        is ViewGroup -> (0 until view.childCount).flatMap { labels(view.getChildAt(it)) }
-        else -> emptyList()
-    }
+    private fun labels(view: View): List<TextView> =
+        when (view) {
+            is TextView -> listOf(view)
+            is ViewGroup -> (0 until view.childCount).flatMap { labels(view.getChildAt(it)) }
+            else -> emptyList()
+        }
 
-    @Test fun welcomeLoadingAndRetryExposeOnlyTheRelevantAction() {
+    @Test
+    fun welcomeLoadingAndRetryExposeOnlyTheRelevantAction() {
         var started = 0
         var retried = 0
-        val screen = StartupScreen(RuntimeEnvironment.getApplication(), { started++ }, { retried++ })
+        val screen =
+            StartupScreen(RuntimeEnvironment.getApplication(), { started++ }, { retried++ })
         fun actions() = labels(screen).filter { it.visibility == View.VISIBLE && it.isClickable }
         screen.show(welcome = true, error = false)
-        assertEquals(listOf("Войти по QR-коду", "Войти по логину и паролю", "Продолжить как гость"), actions().map { it.text.toString() })
+        assertEquals(
+            listOf("Войти по QR-коду", "Войти по логину и паролю", "Продолжить как гость"),
+            actions().map { it.text.toString() },
+        )
         actions().last().performClick()
         assertEquals(1, started)
         screen.show(welcome = false, error = false)
