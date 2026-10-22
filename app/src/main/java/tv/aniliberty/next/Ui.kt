@@ -319,9 +319,28 @@ class PageAdapter(
                     content.gravity=Gravity.CENTER;content.setPadding(view.dp(10),view.dp(10),view.dp(10),view.dp(10))
                     title.gravity=Gravity.CENTER;title.maxLines=4
                     subtitle.gravity=Gravity.CENTER;subtitle.maxLines=4
-                    subtitle.text=listOf(release?.latestEpisode?.let{"Эпизод ${number(it.ordinal)}"}.orEmpty(),full).filter(String::isNotBlank).joinToString("\n")
+                    subtitle.text=listOf(release?.metadata.orEmpty(),release?.genres?.joinToString(" • ").orEmpty()).filter(String::isNotBlank).joinToString("\n")
+                    val episodeBadge=(box.getChildAt(3)as?TextView)?:TextView(view.context).also{
+                        box.addView(it,FrameLayout.LayoutParams(-2,view.dp(28),Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply{topMargin=view.dp(10)})
+                    }
+                    episodeBadge.label(release?.latestEpisode?.let{"${number(it.ordinal)} эпизод"}?:"Релиз",12f,WHITE,true)
+                    episodeBadge.gravity=Gravity.CENTER;episodeBadge.setPadding(view.dp(10),0,view.dp(10),0)
+                    episodeBadge.background=shape(0x1AFFFFFF,view.dp(6).toFloat());episodeBadge.isFocusable=false
+                    val watchHint=(box.getChildAt(4)as?TextView)?:TextView(view.context).also{
+                        box.addView(it,FrameLayout.LayoutParams(-2,view.dp(30),Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply{bottomMargin=view.dp(10)})
+                    }
+                    watchHint.label("Смотреть",12f,WHITE,true)
+                    watchHint.gravity=Gravity.CENTER;watchHint.setPadding(view.dp(10),0,view.dp(10),0)
+                    watchHint.background=shape(0x1AFFFFFF,view.dp(6).toFloat());watchHint.isFocusable=false
+                    val icon=view.context.getDrawable(R.drawable.ic_play)!!.mutate().apply{setTint(WHITE);setBounds(0,0,view.dp(14),view.dp(14))}
+                    watchHint.setCompoundDrawables(icon,null,null,null);watchHint.compoundDrawablePadding=view.dp(4)
+                    content.setPadding(view.dp(10),view.dp(44),view.dp(10),view.dp(46))
+                    title.layoutParams=LinearLayout.LayoutParams(-1,0,1f)
+                    subtitle.maxLines=3
                     fun focusPoster(focused:Boolean){
                         content.visibility=if(focused)View.VISIBLE else View.GONE
+                        episodeBadge.visibility=if(focused)View.VISIBLE else View.GONE
+                        watchHint.visibility=if(focused)View.VISIBLE else View.GONE
                         image.colorFilter=if(focused)android.graphics.ColorMatrixColorFilter(floatArrayOf(.045f,0f,0f,0f,12.75f,0f,.045f,0f,0f,12.75f,0f,0f,.045f,0f,12.75f,0f,0f,0f,1f,0f))else null
                     }
                     focusPoster(box.hasFocus())
@@ -329,7 +348,11 @@ class PageAdapter(
                 }else{
                     image.clearColorFilter();content.visibility=View.VISIBLE;content.gravity=Gravity.TOP
                     title.gravity=Gravity.START;subtitle.gravity=Gravity.START
-                    if(poster)box.layoutParams=box.layoutParams.apply{height=view.cardDp(270)}
+                    if(poster){
+                        box.layoutParams=box.layoutParams.apply{height=view.cardDp(270)}
+                        title.layoutParams=LinearLayout.LayoutParams(-1,-2)
+                        for(index in 3 until box.childCount)box.getChildAt(index).visibility=View.GONE
+                    }
                 }
                 if(continuing){
                     // Preserve the original 272 × 150 episode preview; overlay text without stretching it.

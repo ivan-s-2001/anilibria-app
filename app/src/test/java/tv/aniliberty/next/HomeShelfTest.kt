@@ -82,6 +82,9 @@ class HomeShelfTest {
         assertEquals(android.view.View.VISIBLE,card.getChildAt(2).visibility)
         assertNotNull((card.getChildAt(0)as android.widget.ImageView).colorFilter)
         assertEquals(height,card.layoutParams.height)
+        assertEquals(android.view.View.VISIBLE,card.getChildAt(3).visibility)
+        assertEquals("Смотреть",(card.getChildAt(4)as android.widget.TextView).text.toString())
+        assertFalse(card.getChildAt(4).isFocusable)
     }
 
     @Test fun discoveryContainsFourCardsRefreshAndAll(){
