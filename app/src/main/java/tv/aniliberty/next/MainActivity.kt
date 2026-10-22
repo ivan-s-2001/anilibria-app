@@ -703,7 +703,7 @@ class MainActivity : ComponentActivity() {
                 dismiss();accountHistoryLoadJob?.cancel();accountHistoryJob?.cancel()
                 model.resetNavigation(Screen.Profile)
                 accountAction(done={lastHistoryHydration=0;accountHistoryItems=emptyList();accountSessions=emptyList();accountHistoryPage=0;model.open(Screen.Profile,false)}){
-                    if(!account.logout())Toast.makeText(this,"Вышли на этом ТВ. Сервис не подтвердил завершение сеанса.",Toast.LENGTH_LONG).show()
+                    if(!account.logout())Toast.makeText(this@MainActivity,"Вышли на этом ТВ. Сервис не подтвердил завершение сеанса.",Toast.LENGTH_LONG).show()
                 }
             }
             addAction("Отмена"){dismiss()};show()
