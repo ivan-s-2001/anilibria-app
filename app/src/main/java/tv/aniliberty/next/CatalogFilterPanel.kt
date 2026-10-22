@@ -18,7 +18,7 @@ class CatalogFilterPanel(context:Context,screen:Screen.Catalog,private val refer
         shell.addView(TextView(context).apply{label("Фильтры",24f,WHITE,true)},LinearLayout.LayoutParams(-1,dp(48)))
         shell.addView(ScrollView(context).apply{addView(body)},LinearLayout.LayoutParams(-1,0,1f))
         shell.addView(action(shell,"Применить",primary=true){apply(draft);dismiss()},LinearLayout.LayoutParams(-1,dp(46)).apply{topMargin=dp(16)})
-        shell.addView(action(shell,"Сбросить"){draft=CatalogFilter(sorting=draft.sorting);build()},LinearLayout.LayoutParams(-1,dp(44)).apply{topMargin=dp(8)})
+        shell.addView(action(shell,"Сбросить"){draft=CatalogFilter(sorting=draft.sorting);focusIndex=-1;build();shell.getChildAt(3)?.requestFocus()},LinearLayout.LayoutParams(-1,dp(44)).apply{topMargin=dp(8)})
         setContentView(shell);build()
     }
     private fun selection(key:String):Set<String> = when(key){
@@ -56,7 +56,7 @@ class CatalogFilterPanel(context:Context,screen:Screen.Catalog,private val refer
                     }.setNegativeButton("Отмена",null).show()
             },LinearLayout.LayoutParams(-1,dp(46)).apply{bottomMargin=dp(8)})
         }
-        body.post{body.getChildAt(focusIndex)?.requestFocus()}
+        body.post{if(focusIndex>=0)body.getChildAt(focusIndex)?.requestFocus()}
     }
     override fun show(){
         super.show()

@@ -35,6 +35,12 @@ class CatalogTest{
         assertEquals(3,first.total)
         assertEquals(listOf(1,2,3),mergeCatalogPages(first.releases,next.releases).map{it.id})
     }
+    @Test fun episodeTotalComesFromServerEvenWhenEpisodeListIsNotIncluded(){
+        val release=parseRelease(org.json.JSONObject("""{"id":1,"episodes_total":434}"""))
+        assertEquals(434,release.totalEpisodes)
+        assertTrue(release.episodes.isEmpty())
+        assertNull(parseRelease(org.json.JSONObject("""{"id":2}""")).totalEpisodes)
+    }
     @Test(expected=IllegalArgumentException::class) fun rejectsReversedYearRange(){
         catalogPath(Screen.Catalog(filters=CatalogFilter(fromYear="2026",toYear="2024")),1)
     }

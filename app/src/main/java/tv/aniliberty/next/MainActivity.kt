@@ -97,7 +97,7 @@ class MainActivity : ComponentActivity() {
     }
     private fun openMenu(){
         if(current==Screen.Welcome)return
-        homeTransition++;homeFocusTarget=null;list.stopScroll()
+        homeTransition++;homeFocusTarget=null;catalogToolsPending=false;list.stopScroll()
         contentFocus=list.findFocus();rememberFocus();menuOpen=true;buildMenu()
         menu.getChildAt(listOf(2,0,1,3).indexOf(selectedSection).coerceAtLeast(0)+1)?.requestFocus()
     }
@@ -144,8 +144,33 @@ class MainActivity : ComponentActivity() {
         }.apply{targetPosition=header})
         return true
     }
+    private var catalogToolsPending=false
+    private fun focusCatalogTools(){
+        if(catalogToolsPending)return
+        val screen=current
+        val target=adapter.rows.indexOfFirst{it.kind==Kind.CATALOG_BAR}
+        if(target<0)return
+        val tools=list.findViewHolderForAdapterPosition(target)?.itemView
+        if(tools!=null && tools.top>=list.paddingTop){focusItem(tools);return}
+        catalogToolsPending=true
+        list.stopScroll()
+        val listener=object:RecyclerView.OnScrollListener(){
+            override fun onScrollStateChanged(view:RecyclerView,state:Int){
+                if(state!=RecyclerView.SCROLL_STATE_IDLE)return
+                list.removeOnScrollListener(this)
+                val active=catalogToolsPending;catalogToolsPending=false
+                if(active && current==screen && !menuOpen)focusItem(list.findViewHolderForAdapterPosition(target)?.itemView)
+            }
+        }
+        list.addOnScrollListener(listener)
+        grid.startSmoothScroll(object:androidx.recyclerview.widget.LinearSmoothScroller(this){
+            override fun getVerticalSnapPreference()=SNAP_TO_START
+            override fun calculateTimeForDeceleration(dx:Int)=160
+        }.apply{targetPosition=target})
+    }
     override fun dispatchKeyEvent(event:KeyEvent):Boolean {
         if(current is Screen.Catalog && !menuOpen){
+            if(catalogToolsPending && event.keyCode in listOf(KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN,KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT))return true
             val focused=list.findFocus()?.let{list.findContainingItemView(it)}
             val position=focused?.let{list.getChildAdapterPosition(it)}?:-1
             if(adapter.rows.getOrNull(position)?.kind==Kind.POSTER){
@@ -157,13 +182,12 @@ class MainActivity : ComponentActivity() {
                     return true
                 }
                 if(event.keyCode==KeyEvent.KEYCODE_DPAD_DOWN && model.state.value.more && position>=adapter.rows.size-10 && model.state.value.moreError==null){
-                    model.loadMoreCatalog()
+                    if(event.action==KeyEvent.ACTION_DOWN)model.loadMoreCatalog()
                     if(adapter.rows.getOrNull(position+4)?.kind!=Kind.POSTER)return true
                 }
                 if(event.keyCode==KeyEvent.KEYCODE_DPAD_UP && position-first<4){
                     if(event.action==KeyEvent.ACTION_DOWN){
-                        val tools=adapter.rows.indexOfFirst{it.kind==Kind.CATALOG_BAR}
-                        focusItem(list.findViewHolderForAdapterPosition(tools)?.itemView)
+                        focusCatalogTools()
                     }
                     return true
                 }
@@ -218,7 +242,7 @@ class MainActivity : ComponentActivity() {
         adapter=PageAdapter(::navigate,::selectTab,::play,::favorite,{rememberFocus();model.open(Screen.Detail(it.id))},
             { id -> prefs.getLong("position:$id",0) to prefs.getLong("duration:$id",0) },
             { id -> prefs.getString("last:$id",null) },::returnToTabs, { index -> enterDay=true;val previous=model.state.value;model.homeDay(index);if(previous==model.state.value)render(model.state.value) },::quickActions)
-        grid.spanSizeLookup=object:GridLayoutManager.SpanSizeLookup(){override fun getSpanSize(position:Int)=when(adapter.rows[position].kind){Kind.POSTER->if(current is Screen.Catalog)5 else 3;Kind.GENRE->3;Kind.EPISODE,Kind.FEATURE,Kind.FRANCHISE->5;else->grid.spanCount}}
+        grid.spanSizeLookup=object:GridLayoutManager.SpanSizeLookup(){override fun getSpanSize(position:Int)=when(adapter.rows.getOrNull(position)?.kind){Kind.POSTER->if(current is Screen.Catalog)5 else 3;Kind.GENRE->3;Kind.EPISODE,Kind.FEATURE,Kind.FRANCHISE->5;else->grid.spanCount}}
         list.addOnScrollListener(object:RecyclerView.OnScrollListener(){
             override fun onScrolled(view:RecyclerView,dx:Int,dy:Int){
                 val state=model.state.value
@@ -288,7 +312,18 @@ class MainActivity : ComponentActivity() {
     private var enterCatalogResults=false
     private var catalogReferences:Map<String,List<CatalogChoice>> = emptyMap()
     private fun applyCatalog(screen:Screen.Catalog){
-        rememberFocus();enterCatalogResults=true;model.open(screen.copy(page=1),false)
+        rememberFocus()
+        val next=screen.copy(page=1)
+        if(next==model.state.value.screen && !model.state.value.loading){
+            enterCatalogResults=false
+            val index=adapter.rows.indexOfFirst{it.kind==Kind.POSTER}
+            if(index>=0){
+                list.doOnNextLayout{focusItem(list.findViewHolderForAdapterPosition(index)?.itemView)}
+                grid.scrollToPositionWithOffset(index,list.dp(96))
+            }
+            return
+        }
+        enterCatalogResults=true;model.open(next,false)
     }
     private fun catalogSearch(screen:Screen.Catalog){
         val input=EditText(this).apply{setText(screen.query);hint="Название аниме";isSingleLine=true;imeOptions=EditorInfo.IME_ACTION_SEARCH}
@@ -423,13 +458,30 @@ class MainActivity : ComponentActivity() {
         else shelfCards(key,kind.title,items,wide,style){openSection(kind)}
         return Row("shelf:$key",Kind.SHELF,selected=style,cards=cards)
     }
+    private var pendingRender:UiState?=null
+    private var renderPosted=false
     private fun render(state:UiState){
+        if(list.isComputingLayout){
+            pendingRender=state
+            if(!renderPosted){
+                renderPosted=true
+                list.post{
+                    renderPosted=false
+                    val latest=pendingRender;pendingRender=null
+                    if(latest!=null && !isFinishing && !isDestroyed)render(latest)
+                }
+            }
+            return
+        }
+        pendingRender=null
         (state.screen as?Screen.Detail)?.let{history.restore(it.id)}
         if(current==state.screen && !state.loading && adapter.rows.none{it.key=="loading"})rememberFocus()
         val sameCatalog=current is Screen.Catalog && current==state.screen && adapter.rows.any{it.kind==Kind.CATALOG_BAR}
         val sameHome=current==Screen.Home && state.screen==Screen.Home && adapter.rows.any{it.kind==Kind.SHELF}
         val retainedFocus = if(current==state.screen) list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String } else null
         current=state.screen
+        val section=when(current){Screen.Home->0;is Screen.Catalog,is Screen.Section,is Screen.Franchise->1;else->selectedSection}
+        if(section!=selectedSection){selectedSection=section;buildMenu()}
         homeMenuLayout()
         val spans=if(current is Screen.Catalog)20 else 15
         if(grid.spanCount!=spans)grid.spanCount=spans
