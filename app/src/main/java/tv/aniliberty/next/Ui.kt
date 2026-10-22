@@ -333,7 +333,7 @@ class PageAdapter(
                 image.scaleType=if(poster)ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_CROP
                 image.background=shape(0xFF212121.toInt(),view.dp(12).toFloat())
                 image.clipToOutline=true
-                if(continuing && row.image==null){image.scaleType=ImageView.ScaleType.FIT_CENTER;image.setImageResource(R.drawable.ic_aniliberty)}else image.load(if(poster)release?.poster else row.image)
+                if(continuing && row.image==null){image.scaleType=ImageView.ScaleType.FIT_CENTER;image.load(R.drawable.ic_aniliberty)}else image.load(if(poster)release?.poster else row.image)
                 box.getChildAt(1).visibility=if(spotlight)View.VISIBLE else View.GONE
                 title.label(release?.title?:row.title,if(spotlight)30f else if(shelfMode)17f else 14f,WHITE,true)
                 title.maxLines=2
@@ -539,7 +539,8 @@ class PageAdapter(
         (holder.itemView as?RecyclerView)?.let{saveShelf(it);attachedShelves.remove(it)}
         val view=holder.itemView
         if(view is FrameLayout)(view.getChildAt(0)as?ImageView)?.load(null)
-        if(view is LinearLayout && view.childCount>0)(view.getChildAt(0)as?ImageView)?.load(null)
+        // MORE/REFRESH contain vector resources, not Coil image requests.
+        if(view is LinearLayout && holder.itemViewType==Kind.HERO.ordinal)(view.getChildAt(0)as?ImageView)?.load(null)
         view.animate().cancel();view.scaleX=1f;view.scaleY=1f
         view.setOnClickListener(null);view.setOnKeyListener(null);view.setOnLongClickListener(null);view.onFocusChangeListener=null
     }

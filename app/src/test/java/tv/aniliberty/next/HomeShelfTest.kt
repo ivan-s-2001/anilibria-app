@@ -78,6 +78,25 @@ class HomeShelfTest {
         assertTrue(adapter.hasStableIds())
     }
 
+    @Test fun shelfActionVectorSurvivesRecyclingAndRefreshRebinding(){
+        for(kind in listOf(Kind.MORE,Kind.REFRESH)){
+            val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
+            val row=Row("action",kind,"Обновить",selected=2,click={})
+            adapter.submit(listOf(row))
+            val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),kind.ordinal)
+            adapter.onBindViewHolder(holder,0)
+            val image=(holder.itemView as android.widget.LinearLayout).getChildAt(0)as android.widget.ImageView
+            val icon=image.drawable
+            assertNotNull(icon)
+            adapter.onViewRecycled(holder)
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+            assertSame(icon,image.drawable)
+            adapter.submit(listOf(row.copy(title="Обновление…",click=null)))
+            adapter.onBindViewHolder(holder,0)
+            assertNotNull(image.drawable)
+        }
+    }
+
     @Test fun genrePlacesCaptionInsideImageLikeWeb(){
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
         adapter.submit(listOf(Row("genre:1",Kind.GENRE,"Фэнтези","628 релизов")))
