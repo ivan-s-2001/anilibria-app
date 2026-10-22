@@ -223,7 +223,7 @@ class MainActivity : ComponentActivity() {
         homeTransition++;homeFocusTarget=null;catalogToolsPending=false;list.stopScroll()
         contentFocus=list.findFocus();rememberFocus();menuOpen=true;buildMenu()
         fun focusMenu(){if(menuOpen)(menu.findViewWithTag<View>("menu-route:$selectedSection")?:menu.findViewWithTag<View>("menu-route:0"))?.requestFocus()}
-        focusMenu();menu.doOnNextLayout{focusMenu()};menu.requestLayout()
+        focusMenu();menu.doOnNextLayout{menu.post{focusMenu()}};menu.requestLayout()
     }
     private fun closeMenu(restore:Boolean=true){menuOpen=false;buildMenu();if(restore){if(contentFocus?.isAttachedToWindow==true)contentFocus?.requestFocus()else {
             val key=focusMemory[screenKey(current)];val index=adapter.rows.indexOfFirst{it.key==key}
