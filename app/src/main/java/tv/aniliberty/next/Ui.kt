@@ -1042,9 +1042,12 @@ class PageAdapter(
                 val line = (view as HorizontalScrollView).getChildAt(0) as LinearLayout
                 if (line.childCount != row.controls.size) {
                     line.removeAllViews()
-                    row.controls.forEach { (title, callback) ->
+                    row.controls.forEachIndexed { index, (title, callback) ->
+                        val collectionType =
+                            if (row.key == "account-collections-tabs") CollectionType.entries.getOrNull(index)
+                            else null
                         line.addView(
-                            action(line, title, click = callback),
+                            action(line, title, icon = collectionType?.icon ?: 0, click = callback),
                             LinearLayout.LayoutParams(-2, view.dp(44)).apply {
                                 marginEnd = view.dp(8)
                             },
@@ -1054,7 +1057,11 @@ class PageAdapter(
                 row.controls.forEachIndexed { i, (title, callback) ->
                     (line.getChildAt(i) as TextView).apply {
                         text = title
-                        setTextColor(if (i == row.selected) RED else WHITE)
+                        val collectionType =
+                            if (row.key == "account-collections-tabs") CollectionType.entries.getOrNull(i)
+                            else null
+                        setTextColor(if (i == row.selected) collectionType?.color ?: RED else WHITE)
+                        compoundDrawablesRelative[0]?.mutate()?.setTint(collectionType?.color ?: WHITE)
                         setOnClickListener { callback() }
                     }
                 }
@@ -1329,6 +1336,9 @@ class PageAdapter(
                         textSize = 14f
                         contentDescription = description
                         setOnClickListener { click() }
+                        CollectionType.entries.firstOrNull { it.title == label }?.let { type ->
+                            compoundDrawablesRelative[0]?.mutate()?.setTint(type.color)
+                        }
                         if (favorite) {
                             gravity = Gravity.CENTER
                             compoundDrawablePadding = 0
@@ -1372,9 +1382,9 @@ class PageAdapter(
                         label,
                         when {
                             label == "Описание" -> R.drawable.ic_comments
-                            label == "Коллекция" ||
-                                CollectionType.entries.any { it.title == label } ->
-                                R.drawable.ic_library
+                            CollectionType.entries.any { it.title == label } ->
+                                CollectionType.entries.first { it.title == label }.icon
+                            label == "Коллекция" -> R.drawable.ic_library
                             else -> R.drawable.ic_settings
                         },
                         click = callback,
@@ -2239,7 +2249,13 @@ class PageAdapter(
                 icon.visibility = if (row.kind == Kind.ACCOUNT_TILE) View.VISIBLE else View.GONE
                 if (row.kind == Kind.ACCOUNT_TILE) {
                     icon.setImageResource(row.selected)
-                    icon.setColorFilter(WHITE)
+                    icon.setColorFilter(
+                        when (row.selected) {
+                            R.drawable.ic_favorite -> CollectionVisuals.FAVORITE_COLOR
+                            R.drawable.ic_collection_history -> CollectionVisuals.HISTORY_COLOR
+                            else -> WHITE
+                        }
+                    )
                 }
                 val labels = box.getChildAt(1) as LinearLayout
                 (labels.getChildAt(0) as TextView).apply {
