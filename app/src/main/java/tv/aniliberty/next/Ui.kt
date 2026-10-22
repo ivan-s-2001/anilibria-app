@@ -170,7 +170,17 @@ class PageAdapter(
                 orientation=LinearLayout.VERTICAL;setPadding(0,dp(8),0,dp(4))
                 addView(TextView(context));addView(TextView(context),LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(4)})
             }
-            Kind.POSTER, Kind.SPOTLIGHT, Kind.FEATURE, Kind.GENRE, Kind.FRANCHISE, Kind.CONTINUE -> FrameLayout(context).apply {
+            Kind.POSTER, Kind.SPOTLIGHT, Kind.FEATURE, Kind.GENRE, Kind.FRANCHISE, Kind.CONTINUE -> object:FrameLayout(context){
+                override fun onMeasure(widthMeasureSpec:Int,heightMeasureSpec:Int){
+                    val width=View.MeasureSpec.getSize(widthMeasureSpec)
+                    if(Kind.entries[type]==Kind.FRANCHISE && !shelfMode && getTag(R.id.shelf_key)==true && width>0){
+                        val imageWidth=(width*150f/312f).toInt()
+                        getChildAt(0)?.let{image->if(image.layoutParams.width!=imageWidth)image.layoutParams=image.layoutParams.apply{this.width=imageWidth}}
+                        getChildAt(2)?.let{content->val params=content.layoutParams as FrameLayout.LayoutParams;if(params.marginStart!=imageWidth)content.layoutParams=params.apply{marginStart=imageWidth}}
+                        super.onMeasure(widthMeasureSpec,View.MeasureSpec.makeMeasureSpec((width*190f/312f).toInt(),View.MeasureSpec.EXACTLY))
+                    }else super.onMeasure(widthMeasureSpec,heightMeasureSpec)
+                }
+            }.apply {
                 isFocusable = true; isClickable = true; focusBackground(radiusDp=12); clipToOutline=true; setPadding(dp(3),dp(3),dp(3),dp(3))
                 addView(ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_CROP },FrameLayout.LayoutParams(-1,-1))
                 addView(View(context).apply { background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,intArrayOf(0xF5121212.toInt(),0x10121212)) },FrameLayout.LayoutParams(-1,-1))
