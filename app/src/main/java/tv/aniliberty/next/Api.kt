@@ -16,7 +16,8 @@ data class Episode(val id: String, val ordinal: Double, val name: String, val pr
     val label: String get() = name.ifBlank { "Эпизод ${number(ordinal)}" }
 }
 data class Credit(val role: String, val name: String)
-data class Release(val id: Int, val alias: String, val title: String, val english: String, val poster: String?, val year: String, val season: String, val type: String, val age: String, val genres: List<String>, val description: String, val episodes: List<Episode>, val credits: List<Credit>, val blocked: Boolean, val latestEpisode: Episode? = null, val externalIds: ExternalIds = ExternalIds(), val ratings: List<Rating> = emptyList(), val ongoing:Boolean? = null, val updatedAt:String = "",val totalEpisodes:Int?=null) {
+data class Release(val id: Int, val alias: String, val title: String, val english: String, val poster: String?, val year: String, val season: String, val type: String, val age: String, val genres: List<String>, val description: String, val episodes: List<Episode>, val credits: List<Credit>, val blocked: Boolean, val latestEpisode: Episode? = null, val externalIds: ExternalIds = ExternalIds(), val ratings: List<Rating> = emptyList(), val ongoing:Boolean? = null, val updatedAt:String = "",val totalEpisodes:Int?=null,val releasedEpisodes:Int?=null) {
+    val catalogueEpisodeCount:Int? get() = if(ongoing==true) releasedEpisodes else totalEpisodes
     val metadata: String get() = listOf(year, season, type, age).filter(String::isNotBlank).joinToString(" · ")
 }
 fun number(value: Double): String = java.math.BigDecimal.valueOf(value).stripTrailingZeros().toPlainString()
@@ -41,8 +42,18 @@ fun parseRelease(json: JSONObject): Release {
         json.optBoolean("is_blocked_by_geo") || json.optBoolean("is_blocked_by_copyrights"),
         json.optJSONObject("latest_episode")?.let { parseRelease(JSONObject().put("id",json.getInt("id")).put("episodes",JSONArray().put(it))).episodes.firstOrNull() },
         ExternalIds(json.optJSONObject("shikimori")?.optInt("id")?.takeIf { it > 0 },json.optJSONObject("mal")?.optInt("id")?.takeIf { it > 0 }),
-        listOf("Shikimori" to "shikimori", "MyAnimeList" to "mal").mapNotNull { (source,key) -> json.optJSONObject(key)?.let { site -> site.optDouble("rating",Double.NaN).takeIf { it.isFinite() && it in 1.0..10.0 }?.let { Rating(source,it,site.optInt("votes").takeIf { it > 0 }) } } }).copy(ongoing=if(json.has("is_ongoing") && !json.isNull("is_ongoing"))json.getBoolean("is_ongoing")else null,updatedAt=json.text("updated_at"),totalEpisodes=json.optInt("episodes_total",-1).takeIf{it>0})
+        listOf("Shikimori" to "shikimori", "MyAnimeList" to "mal").mapNotNull { (source,key) -> json.optJSONObject(key)?.let { site -> site.optDouble("rating",Double.NaN).takeIf { it.isFinite() && it in 1.0..10.0 }?.let { Rating(source,it,site.optInt("votes").takeIf { it > 0 }) } } }).copy(ongoing=if(json.has("is_ongoing") && !json.isNull("is_ongoing"))json.getBoolean("is_ongoing")else null,updatedAt=json.text("updated_at"),totalEpisodes=json.optInt("episodes_total",-1).takeIf{it>0},releasedEpisodes=json.optJSONArray("episodes")?.let{publishedEpisodeCount(it)})
 }
+
+internal fun publishedEpisodeCount(episodes:JSONArray):Int = episodes.objects()
+    .map{it.text("id")}.filter{it.isNotBlank()}.distinct().size
+
+internal fun parseReleasedEpisodeCounts(body:String):Map<Int,Int> =
+    JSONObject(body).optJSONArray("data").objects().mapNotNull{release->
+        val id=release.optInt("id",-1)
+        val episodes=release.optJSONArray("episodes")
+        if(id>0 && episodes!=null)id to publishedEpisodeCount(episodes)else null
+    }.toMap()
 
 class Api {
     private val cache = linkedMapOf<Int, Release>()
@@ -107,7 +118,19 @@ class Api {
     }
     suspend fun franchise(id: String): List<Release> = JSONObject(request("/anime/franchises/${URLEncoder.encode(id,"UTF-8")}")).optJSONArray("franchise_releases").objects().sortedBy { it.optInt("sort_order") }.mapNotNull { it.optJSONObject("release")?.let(::parseRelease) }
     suspend fun latest(limit:Int=9): List<Release> = JSONArray(request("/anime/releases/latest?limit=$limit")).objects().map(::parseRelease)
-    suspend fun catalog(screen:Screen.Catalog,page:Int=screen.page):CatalogPage=parseCatalogPage(request(catalogPath(screen,page)),page)
+    suspend fun catalog(screen:Screen.Catalog,page:Int=screen.page):CatalogPage {
+        val result=parseCatalogPage(request(catalogPath(screen,page)),page)
+        val ids=result.releases.filter{it.ongoing==true}.map{it.id}
+        if(ids.isEmpty())return result
+        // One batch per catalogue page; planned episodes_total is never a released count.
+        val counts=try {
+            parseReleasedEpisodeCounts(request("/anime/releases/list?ids=${ids.joinToString(",")}&limit=${ids.size}&include=id,episodes.id"))
+        } catch(cancelled:CancellationException){throw cancelled}
+          catch(_:Exception){emptyMap<Int,Int>()}
+        return result.copy(releases=result.releases.map{release->
+            if(release.ongoing==true)release.copy(releasedEpisodes=counts[release.id])else release
+        })
+    }
     private var references:Map<String,List<CatalogChoice>>?=null
     suspend fun catalogReferences():Map<String,List<CatalogChoice>>{
         references?.let{return it}

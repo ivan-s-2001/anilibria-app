@@ -454,11 +454,11 @@ class PageAdapter(
                     if(row.selected==2){
                         val count=(box.getChildAt(5)as?TextView)?:TextView(view.context).also{box.addView(it)}
                         count.layoutParams=FrameLayout.LayoutParams(-2,view.dp(24),Gravity.TOP or Gravity.END).apply{topMargin=view.dp(10);marginEnd=view.dp(8)}
-                        count.label(release?.totalEpisodes?.let{"$it эп."}.orEmpty(),10f,WHITE,true)
+                        count.label(release?.catalogueEpisodeCount?.let{"$it эп."}.orEmpty(),10f,WHITE,true)
                         count.gravity=Gravity.CENTER;count.includeFontPadding=false
                         count.setPadding(view.dp(6),0,view.dp(6),0)
                         count.background=shape(0x1AFFFFFF,view.dp(4).toFloat())
-                        count.visibility=if(release?.totalEpisodes!=null)View.VISIBLE else View.GONE
+                        count.visibility=if(release?.catalogueEpisodeCount!=null)View.VISIBLE else View.GONE
                         count.isFocusable=false
                     }else box.getChildAt(5)?.visibility=View.GONE
                     focusPoster(box.hasFocus())

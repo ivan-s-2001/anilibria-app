@@ -10,6 +10,16 @@ import java.net.URLDecoder
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[30])
 class CatalogTest{
+    @Test fun ongoingUsesAvailableEpisodesInsteadOfPlannedTotal(){
+        val release=parseRelease(org.json.JSONObject("""{"id":1,"is_ongoing":true,"episodes_total":24,"episodes":[{"id":"a","ordinal":1},{"id":"b","ordinal":2},{"id":"special","ordinal":2.5}]}"""))
+        assertEquals(3,release.catalogueEpisodeCount)
+        assertNull(release.copy(releasedEpisodes=null).catalogueEpisodeCount)
+        assertEquals(24,release.copy(ongoing=false).catalogueEpisodeCount)
+    }
+    @Test fun batchCountsUniqueAvailableEpisodesAndDistinguishesMissingFromEmpty(){
+        val counts=parseReleasedEpisodeCounts("""{"data":[{"id":1,"episodes":[{"id":"a"},{"id":"a"},{"id":"b"},{"id":""}]},{"id":2,"episodes":[]},{"id":3}]}""")
+        assertEquals(mapOf(1 to 2,2 to 0),counts)
+    }
     @Test fun encodesServerFilterValuesAndPreservesGenreDeepLink(){
         val screen=Screen.Catalog(query="Мастер & меч",genre=15,filters=CatalogFilter(genres=setOf("20","15"),types=setOf("TV"),seasons=setOf("autumn"),ages=setOf("R18_PLUS"),publish=setOf("IS_ONGOING"),production=setOf("IS_IN_PRODUCTION"),fromYear="2024",toYear="2026",sorting="RATING_DESC"))
         val path=catalogPath(screen,3)
