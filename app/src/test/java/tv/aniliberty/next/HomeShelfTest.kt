@@ -41,7 +41,7 @@ class HomeShelfTest {
         val parent=FrameLayout(RuntimeEnvironment.getApplication())
         val feature=adapter.onCreateViewHolder(parent,Kind.FEATURE.ordinal);adapter.onBindViewHolder(feature,0)
         val more=adapter.onCreateViewHolder(parent,Kind.MORE.ordinal);adapter.onBindViewHolder(more,1)
-        assertEquals(more.itemView.dp(96),more.itemView.layoutParams.width)
+        assertEquals(more.itemView.dp(136),more.itemView.layoutParams.width)
         assertEquals(feature.itemView.layoutParams.height,more.itemView.layoutParams.height)
     }
     @Test fun everyShelfEndUsesSameSizeAndCentersIconAboveCaption(){
@@ -55,7 +55,7 @@ class HomeShelfTest {
             val box=holder.itemView as android.widget.LinearLayout
             assertEquals(box.dp((height*1.18f).toInt()),box.layoutParams.height)
             val width=when(kind){Kind.FEATURE->232;Kind.GENRE->172;Kind.FRANCHISE->312;Kind.CONTINUE->272;else->144}
-            assertEquals(box.dp(96),box.layoutParams.width)
+            assertEquals(box.dp(136),box.layoutParams.width)
             assertEquals(android.view.Gravity.CENTER,box.gravity)
             assertEquals(android.widget.LinearLayout.VERTICAL,box.orientation)
             assertTrue(box.getChildAt(0)is android.widget.ImageView)

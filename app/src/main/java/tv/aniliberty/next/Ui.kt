@@ -202,7 +202,7 @@ class PageAdapter(
             Kind.MORE,Kind.REFRESH -> {
                 val box=view as LinearLayout
                 box.layoutParams=box.layoutParams.apply{
-                    width=view.dp(96)
+                    width=view.dp(136)
                     height=view.cardDp(when(row.selected){1->204;2->236;3->190;4->206;5->150;else->270})
                     if(this is RecyclerView.LayoutParams)topMargin=view.dp(4)
                 }
@@ -212,7 +212,7 @@ class PageAdapter(
                 icon.setColorFilter(RED)
                 val caption=box.getChildAt(1)as TextView
                 caption.label(if(row.kind==Kind.REFRESH)row.title else "Открыть всё",14f,WHITE,true)
-                caption.gravity=Gravity.CENTER;caption.maxLines=2
+                caption.gravity=Gravity.CENTER;caption.setSingleLine(true)
                 box.gravity=Gravity.CENTER;box.isFocusable=true;box.isClickable=row.click!=null
                 box.background=StateListDrawable().apply{
                     addState(intArrayOf(android.R.attr.state_focused),shape(0xFF292929.toInt(),view.dp(12).toFloat(),WHITE,view.dp(2)))
