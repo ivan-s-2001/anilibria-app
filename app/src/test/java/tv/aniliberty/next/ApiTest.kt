@@ -10,6 +10,20 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[30])
 class ApiTest {
+    @Test fun libraryKeepsRequestedOrderAndUsesUnauthenticatedSharedTransport()=kotlinx.coroutines.runBlocking{
+        var requests=0
+        val api=Api(AccountTransport{path,method,body,token->
+            requests++
+            assertTrue(path.contains("ids=8,3"))
+            assertEquals("GET",method);assertNull(body);assertNull(token)
+            """{"data":[{"id":3},{"id":8}]}"""
+        })
+        assertEquals(listOf(8,3),api.libraryReleases(listOf(8,3,8)).map{it.id})
+        assertEquals(1,requests)
+        assertTrue(api.libraryReleases(emptyList()).isEmpty())
+        assertEquals(1,requests)
+    }
+
     @Test fun usesUuidAndSortOrderInsteadOfArrayPosition() {
         val release=parseRelease(JSONObject("""{"id":7439,"name":{"main":"Тайтл"},"episodes":[
             {"id":"uuid-special","ordinal":12.5,"sort_order":2,"name":null,"duration":1580,"preview":{"preview":"/images/preview.jpg"},"hls_720":"https://video.example/episode.m3u8"},

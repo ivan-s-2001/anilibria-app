@@ -1226,8 +1226,7 @@ class MainActivity : ComponentActivity() {
                     localToggle("skip-opening","Автопропуск опенингов","",false)
                     localToggle("skip-ending","Автопропуск эндингов","",false)
                     localToggle("auto-next","Следующий эпизод автоматически","",prefs.getBoolean("auto-next",true))
-                    rows+=Row("settings-ads",Kind.HEADING,"Реклама в аккаунте")
-                    rows+=Row("settings-ads-info",Kind.TEXT,"Настройки рекламы на сайте AniLiberty")
+                    rows+=Row("settings-ads",Kind.HEADING,"Реклама на сайте AniLiberty")
                     if(account.signedIn){
                         val profile=account.session.profile()
                         listOf(Triple("video","Показывать видеорекламу",profile?.videoAds),Triple("always","Реклама перед каждым эпизодом",profile?.videoAdsAlways),Triple("content","Показывать контентную рекламу",profile?.contentAds)).forEach{(key,title,value)->
@@ -1245,7 +1244,7 @@ class MainActivity : ComponentActivity() {
                     val title=if(screen is Screen.Favorites)"Избранное"else"Коллекции"
                     rows+=Row("account-list-heading",Kind.HEADING,title,selected=1,click=if(account.signedIn)({loadAccountReleases(screen,true);render(model.state.value)})else null)
                     if(!account.signedIn){
-                        rows+=Row("account-list-login",Kind.ACTION,"Войти по QR-коду","Список хранится в вашем аккаунте AniLiberty",click={login()})
+                        rows+=Row("account-list-login",Kind.ACTION,"Войти в аккаунт",click={login()})
                     }else{
                         if(screen is Screen.Collections){
                             rows+=Row("account-collections-tabs",Kind.ACCOUNT_TABS,selected=CollectionType.entries.indexOf(screen.type),controls=CollectionType.entries.map{type->type.title to {model.open(screen.copy(type=type),false)}})

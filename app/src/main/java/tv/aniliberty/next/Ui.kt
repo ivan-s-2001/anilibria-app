@@ -228,6 +228,7 @@ class PageAdapter(
     }
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         val row = rows[position]; val view = holder.itemView
+        val inContent=contentStart>=0 && position>=contentStart
         view.tag = row.key
         if(shelfMode && visibleShelfCards>0)view.layoutParams=view.layoutParams.apply{width=view.cardDp(144)}
         if(row.kind!=Kind.SHELF)view.setTag(R.id.shelf_key,row.homeStyle)
@@ -822,13 +823,12 @@ class PageAdapter(
             Kind.TEXT,Kind.ACTION -> {
                 val t=view as TextView
                 t.label(listOf(row.title,row.subtitle).filter(String::isNotBlank).joinToString("\n"),16f,if(row.kind==Kind.TEXT)MUTED else WHITE)
-                t.setPadding(0,view.dp(8),0,view.dp(8));t.isFocusable=row.click!=null || (contentStart>=0 && position>=contentStart);t.isClickable=row.click!=null
+                t.setPadding(0,view.dp(8),0,view.dp(8));t.isFocusable=row.click!=null || inContent;t.isClickable=row.click!=null
                 t.background=null
                 if(t.isFocusable)t.webControlBackground()
                 if(row.click!=null){t.webControlBackground();t.setPadding(view.dp(12),view.dp(10),view.dp(12),view.dp(10))}
                 t.setOnClickListener(row.click?.let{callback->View.OnClickListener{callback()}})
                 t.isClickable = row.click != null
-                if(position==contentStart) t.setOnKeyListener{_,key,event->if(holder.bindingAdapterPosition==contentStart && key==KeyEvent.KEYCODE_DPAD_UP){if(event.action==KeyEvent.ACTION_UP)returnToTabs();true}else false}
             }
         }
     }

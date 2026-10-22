@@ -15,7 +15,7 @@ import org.robolectric.annotation.Config
 class BrandAssetsTest {
     @Test fun convertedBrandAndMenuVectorsLoadWithCorrectDimensions(){
         val context=RuntimeEnvironment.getApplication()
-        listOf(R.drawable.ic_aniliberty,R.drawable.ic_search,R.drawable.ic_home,R.drawable.ic_catalog,R.drawable.ic_library,R.drawable.ic_refresh,R.drawable.ic_arrow_right,R.drawable.ic_play,R.drawable.ic_pause,R.drawable.ic_previous,R.drawable.ic_next).forEach{id->
+        listOf(R.mipmap.ic_launcher,R.drawable.tv_banner,R.drawable.ic_aniliberty,R.drawable.ic_search,R.drawable.ic_home,R.drawable.ic_catalog,R.drawable.ic_library,R.drawable.ic_refresh,R.drawable.ic_arrow_right,R.drawable.ic_play,R.drawable.ic_pause,R.drawable.ic_previous,R.drawable.ic_next).forEach{id->
             val drawable=context.getDrawable(id)!!
             assertTrue(drawable.intrinsicWidth>0);assertTrue(drawable.intrinsicHeight>0)
             drawable.setBounds(0,0,64,64)
