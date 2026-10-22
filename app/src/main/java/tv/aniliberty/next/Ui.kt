@@ -1674,10 +1674,21 @@ class PageAdapter(
                             )
                             .filter(String::isNotBlank)
                             .joinToString(" · ")
-                    subtitle.text =
+                    val publicationAndYear =
                         listOf(publicationTime, yearDetails)
                             .filter(String::isNotBlank)
                             .joinToString("\n")
+                    subtitle.text =
+                        android.text.SpannableString(publicationAndYear).apply {
+                            if (publicationTime.isNotBlank()) {
+                                setSpan(
+                                    android.text.style.RelativeSizeSpan(0.75f),
+                                    0,
+                                    publicationTime.length,
+                                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+                                )
+                            }
+                        }
                     subtitle.maxLines = 2
                     val genresLine =
                         (content.getChildAt(2) as? TextView)
