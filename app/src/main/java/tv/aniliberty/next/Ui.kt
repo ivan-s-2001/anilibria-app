@@ -691,13 +691,15 @@ class PageAdapter(
                     favorites.setCompoundDrawablesRelative(view.context.getDrawable(R.drawable.ic_favorite)?.apply{setBounds(0,0,view.dp(13),view.dp(13))},null,null,null)
                     favorites.background=shape(0x1AFFFFFF,view.dp(4).toFloat())
                     favorites.contentDescription=release?.favoriteCount?.let{"В избранном у $it пользователей"}.orEmpty()
-                    box.findViewWithTag<TextView>("schedule-rating")?.visibility=if(schedulePoster)View.VISIBLE else View.GONE
+                    box.findViewWithTag<TextView>("schedule-favorites")?.visibility=if(schedulePoster)View.VISIBLE else View.GONE
                     if(schedulePoster){
-                        val rating=box.findViewWithTag<TextView>("schedule-rating")?:TextView(view.context).also{it.tag="schedule-rating";box.addView(it)}
+                        val rating=box.findViewWithTag<TextView>("schedule-favorites")?:TextView(view.context).also{it.tag="schedule-favorites";box.addView(it)}
                         rating.layoutParams=FrameLayout.LayoutParams(-2,view.dp(28),Gravity.TOP or Gravity.START).apply{topMargin=view.dp(10);marginStart=view.dp(8)}
-                        rating.label(release?.ratings?.firstOrNull()?.let{"%.1f".format(java.util.Locale.US,it.value)}?:"—",12f,WHITE,true)
+                        rating.label(release?.favoriteCount?.let(::compactCount)?:"—",12f,WHITE,true)
+                        rating.compoundDrawablePadding=view.dp(4)
+                        rating.setCompoundDrawablesRelative(view.context.getDrawable(R.drawable.ic_favorite)?.apply{setBounds(0,0,view.dp(13),view.dp(13))},null,null,null)
                         rating.setPadding(view.dp(8),0,view.dp(8),0);rating.gravity=Gravity.CENTER;rating.background=shape(0xCC181818.toInt(),view.dp(6).toFloat());rating.isFocusable=false
-                        rating.contentDescription=release?.ratings?.firstOrNull()?.let{"${it.source}: ${it.value}"}?:"Оценки пока нет"
+                        rating.contentDescription=release?.favoriteCount?.let{"В избранном у $it пользователей"}?:"Количество добавлений в избранное неизвестно"
                     }
                     focusPoster(box.hasFocus())
                     box.setOnFocusChangeListener{_,focused->focusPoster(focused);box.animate().scaleX(if(focused && !homeCard)1.025f else 1f).scaleY(if(focused && !homeCard)1.025f else 1f).setDuration(140).start()}
