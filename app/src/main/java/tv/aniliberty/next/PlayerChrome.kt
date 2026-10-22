@@ -50,11 +50,6 @@ class PlayerChrome(context: Context) : LinearLayout(context) {
             tag = "player-skip-actions"
         }
     val buttons = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
-    val hint =
-        TextView(context).apply {
-            label("← → перемотка   ·   OK пауза   ·   ↓ управление", 12f, MUTED)
-            maxLines = 1
-        }
 
     init {
         orientation = VERTICAL
@@ -95,7 +90,6 @@ class PlayerChrome(context: Context) : LinearLayout(context) {
                 bottomMargin = dp(10)
             },
         )
-        addView(hint)
     }
 
     fun icon(label: String, icon: Int, primary: Boolean = false, click: () -> Unit): TextView =
@@ -118,7 +112,7 @@ class PlayerChrome(context: Context) : LinearLayout(context) {
             buttons.addView(this, LayoutParams(-2, dp(48)).apply { marginEnd = dp(8) })
         }
 
-    fun update(position: Long, duration: Long, preview: Boolean, playing: Boolean) {
+    fun update(position: Long, duration: Long) {
         elapsed.text = playbackTime(position)
         remaining.text =
             if (duration > 0)
@@ -127,12 +121,5 @@ class PlayerChrome(context: Context) : LinearLayout(context) {
         seek.isEnabled = duration > 0
         seek.progress =
             if (duration > 0) (position.coerceIn(0, duration) * 1000 / duration).toInt() else 0
-        hint.visibility = if (preview || !playing) View.VISIBLE else View.GONE
-        hint.text =
-            when {
-                preview -> "OK — перейти · Назад — отменить"
-                !playing -> "Пауза"
-                else -> ""
-            }
     }
 }
