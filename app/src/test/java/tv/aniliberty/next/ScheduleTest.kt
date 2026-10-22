@@ -51,4 +51,15 @@ class ScheduleTest {
         assertEquals(android.view.View.GONE,rating.visibility)
     }
 
+    @Test fun favoritesAndCollectionsAreIndependentUnionFilters(){
+        val items=(1..4).map{parseRelease(org.json.JSONObject().put("id",it))}
+        val favorites=setOf(1,2);val collections=setOf(2,3)
+        fun ids(a:Boolean,b:Boolean)=filterScheduleSources(items,favorites,collections,a,b).map{it.id}
+        assertEquals(listOf(1,2,3,4),ids(false,false))
+        assertEquals(listOf(1,2),ids(true,false))
+        assertEquals(listOf(2,3),ids(false,true))
+        assertEquals(listOf(1,2,3),ids(true,true))
+        assertEquals(listOf(1,2),ids(true,false))
+    }
+
 }

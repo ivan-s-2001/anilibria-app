@@ -10,6 +10,8 @@ import android.widget.TextView
 
 /** A single, remote-friendly surface shared by catalogue tools. */
 open class TvSidePanel(context:Context,title:String):Dialog(context){
+    private val remoteClick=RemoteClick()
+    private val remoteRepeat=RemoteRepeat()
     val heading=TextView(context).apply{label(title,24f,WHITE,true);includeFontPadding=false;maxLines=3;ellipsize=android.text.TextUtils.TruncateAt.END;setPadding(0,dp(4),0,dp(20))}
     val body=LinearLayout(context).apply{orientation=LinearLayout.VERTICAL}
     val footer=LinearLayout(context).apply{orientation=LinearLayout.VERTICAL}
@@ -37,6 +39,8 @@ open class TvSidePanel(context:Context,title:String):Dialog(context){
             body.addView(this,LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=dp(8)})
         }
     override fun dispatchKeyEvent(event:android.view.KeyEvent):Boolean {
+        if(remoteRepeat.discard(event))return true
+        if(remoteClick.handle(event,currentFocus))return true
         if(event.keyCode in listOf(android.view.KeyEvent.KEYCODE_DPAD_UP,android.view.KeyEvent.KEYCODE_DPAD_DOWN,android.view.KeyEvent.KEYCODE_DPAD_LEFT,android.view.KeyEvent.KEYCODE_DPAD_RIGHT)){
             val focused=currentFocus
             if(focused is TextView && focused !is android.widget.EditText && focused.isClickable){
@@ -51,6 +55,7 @@ open class TvSidePanel(context:Context,title:String):Dialog(context){
         return super.dispatchKeyEvent(event)
     }
     override fun dismiss(){
+        remoteClick.cancel()
         super.dismiss()
         returnFocus?.let{caller->caller.post{if(caller.isAttachedToWindow && caller.isShown)caller.requestFocus()}}
     }

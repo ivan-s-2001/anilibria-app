@@ -26,6 +26,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
+    private val remoteRepeat=RemoteRepeat()
+    private val remoteClick=RemoteClick()
+    private var shelfMoveToken=0
+    private var pendingShelf:Pair<RecyclerView,String>?=null
+    private var remotePendingKey:String?=null
     private val model by viewModels<TvModel>()
     private lateinit var list: RecyclerView
     private lateinit var adapter: PageAdapter
@@ -218,6 +223,7 @@ class MainActivity : ComponentActivity() {
     }
     private fun openMenu(){
         if(current==Screen.Welcome)return
+        remoteClick.cancel();shelfMoveToken++;pendingShelf=null;remotePendingKey=null
         adapter.cancelPendingShelfFocus()
         remoteFocusToken++;detailFocusToken++;detailFocusPending=false
         homeTransition++;homeFocusTarget=null;catalogToolsPending=false;list.stopScroll()
@@ -297,13 +303,38 @@ class MainActivity : ComponentActivity() {
             override fun calculateTimeForDeceleration(dx:Int)=160
         }.apply{targetPosition=target})
     }
+    private fun shelfRemoteKey(event:KeyEvent):Boolean {
+        if(menuOpen || event.keyCode !in listOf(KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT))return false
+        val focus=list.findFocus()?:return false
+        val shelf=list.findContainingItemView(focus)as?RecyclerView?:return false
+        if(event.action!=KeyEvent.ACTION_DOWN)return true
+        val childAdapter=shelf.adapter as?PageAdapter?:return true
+        adapter.rememberShelf(shelf)
+        val saved=pendingShelf?.takeIf{it.first===shelf}?.second
+        val actual=shelf.findContainingItemView(focus)?.let{shelf.getChildAdapterPosition(it)}?:-1
+        val index=childAdapter.rows.indexOfFirst{it.key==saved}.takeIf{it>=0}?:actual
+        if(index<0)return true
+        val step=if(event.keyCode==KeyEvent.KEYCODE_DPAD_RIGHT)1 else -1
+        val target=index+step
+        if(target<0){if(event.repeatCount==0)openMenu();return true}
+        val key=childAdapter.rows.getOrNull(target)?.key?:return true
+        val token=++shelfMoveToken;val screen=current;pendingShelf=shelf to key
+        fun apply(){if(token==shelfMoveToken && current==screen && !menuOpen && shelf.adapter===childAdapter){
+            val position=childAdapter.rows.indexOfFirst{it.key==key}
+            shelf.findViewHolderForAdapterPosition(position)?.itemView?.let{it.requestFocus();pendingShelf=null}
+        }}
+        if(shelf.findViewHolderForAdapterPosition(target)!=null)apply()else{
+            shelf.stopScroll();shelf.doOnNextLayout{apply()};shelf.scrollToPosition(target);shelf.requestLayout()
+        }
+        return true
+    }
     private fun pageRemoteKey(event:KeyEvent):Boolean {
         if(menuOpen || current==Screen.Home || current is Screen.Detail)return false
         val direction=when(event.keyCode){KeyEvent.KEYCODE_DPAD_LEFT->View.FOCUS_LEFT;KeyEvent.KEYCODE_DPAD_RIGHT->View.FOCUS_RIGHT;KeyEvent.KEYCODE_DPAD_UP->View.FOCUS_UP;KeyEvent.KEYCODE_DPAD_DOWN->View.FOCUS_DOWN;else->return false}
         val focused=list.findFocus()?:return false
         if(focused is EditText)return false
         val outer=list.findContainingItemView(focused)?:return false
-        val position=list.getChildAdapterPosition(outer)
+        val position=remotePendingKey?.let{key->adapter.rows.indexOfFirst{it.key==key}.takeIf{it>=0}}?:list.getChildAdapterPosition(outer)
         if(position !in adapter.rows.indices)return true
         val horizontal=direction==View.FOCUS_LEFT || direction==View.FOCUS_RIGHT
         if(event.action!=KeyEvent.ACTION_DOWN)return true
@@ -335,7 +366,8 @@ class MainActivity : ComponentActivity() {
             return true
         }
         val screen=current;val key=adapter.rows[target].key;val token=++remoteFocusToken
-        fun apply(){if(token==remoteFocusToken && current==screen && !menuOpen){val index=adapter.rows.indexOfFirst{it.key==key};focusItem(list.findViewHolderForAdapterPosition(index)?.itemView)}}
+        remotePendingKey=key
+        fun apply(){if(token==remoteFocusToken && current==screen && !menuOpen){val index=adapter.rows.indexOfFirst{it.key==key};val targetView=list.findViewHolderForAdapterPosition(index)?.itemView;if(targetView!=null){focusItem(targetView);remotePendingKey=null}}}
         val item=list.findViewHolderForAdapterPosition(target)?.itemView
         if(item!=null){apply()}else{
             list.stopScroll();list.doOnNextLayout{apply()};grid.scrollToPositionWithOffset(target,dp(16));list.requestLayout()
@@ -343,6 +375,12 @@ class MainActivity : ComponentActivity() {
         return true
     }
     override fun dispatchKeyEvent(event:KeyEvent):Boolean {
+        if(list.findFocus() !is EditText && remoteRepeat.discard(event))return true
+        if(event.action==KeyEvent.ACTION_DOWN && event.keyCode in listOf(KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN,KeyEvent.KEYCODE_BACK)){
+            shelfMoveToken++;pendingShelf=null
+        }
+        if(event.keyCode==KeyEvent.KEYCODE_MENU && current!=Screen.Welcome){if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0){remoteClick.cancel();if(menuOpen)closeMenu()else openMenu()};return true}
+
         if(menuOpen && event.keyCode in listOf(KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN,KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT,KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER)){
             val focused=menu.findFocus()
             when(event.keyCode){
@@ -352,6 +390,8 @@ class MainActivity : ComponentActivity() {
             }
             return true
         }
+        if(remoteClick.handle(event,list.findFocus()))return true
+        if(shelfRemoteKey(event))return true
         if(pageRemoteKey(event))return true
         if(detailKey(event))return true
         if(current==Screen.Home && !menuOpen){
@@ -444,9 +484,9 @@ class MainActivity : ComponentActivity() {
         shell.addView(menu,LinearLayout.LayoutParams(dp(60),-1));shell.addView(list,LinearLayout.LayoutParams(0,-1,1f));buildMenu()
         root=android.widget.FrameLayout(this).apply{addView(shell,android.widget.FrameLayout.LayoutParams(-1,-1))}
         setContentView(root)
-        onBackPressedDispatcher.addCallback(this,object:OnBackPressedCallback(true){override fun handleOnBackPressed(){if(catalogSearchEditing){finishCatalogSearch();return};if(menuOpen){if(current==Screen.Home){finish()}else closeMenu();return}
+        onBackPressedDispatcher.addCallback(this,object:OnBackPressedCallback(true){override fun handleOnBackPressed(){remoteClick.cancel();remotePendingKey=null;remoteFocusToken++;shelfMoveToken++;pendingShelf=null;if(catalogSearchEditing){finishCatalogSearch();return};if(menuOpen){closeMenu();return}
             rememberFocus()
-            if(current==Screen.Home){if(list.computeVerticalScrollOffset()>0){list.smoothScrollToPosition(0)}else openMenu()}
+            if(current==Screen.Home){if(list.computeVerticalScrollOffset()>0){val index=adapter.rows.indexOfFirst{it.kind==Kind.SPOTLIGHT || it.kind==Kind.SHELF};if(index>=0){grid.scrollToPositionWithOffset(0,0);list.doOnNextLayout{focusItem(list.findViewHolderForAdapterPosition(index)?.itemView)};list.requestLayout()}}else finish()}
             else if(!model.back())finish()}})
         lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED){model.state.collect{render(it)}} }
         if(savedInstanceState==null && getSharedPreferences("viewing",MODE_PRIVATE).getBoolean("welcomed",false))model.open(Screen.Home,false)
@@ -460,6 +500,7 @@ class MainActivity : ComponentActivity() {
             if(index>=0)focusDetail(index,bookmark?.child)
         }
     }
+    override fun onStop(){remoteClick.cancel();remoteFocusToken++;shelfMoveToken++;pendingShelf=null;remotePendingKey=null;super.onStop()}
     override fun onResume(){
         super.onResume()
         if(resumedOnce && ::adapter.isInitialized){rememberFocus();render(model.state.value)}
@@ -523,6 +564,15 @@ class MainActivity : ComponentActivity() {
             return
         }
         enterCatalogResults=true;model.open(next,false)
+    }
+    private var scheduleFavorites=false
+    private var scheduleCollections=false
+    private var scheduleFilterUser:Int?=null
+    private fun toggleScheduleSource(favorites:Boolean){
+        if(!account.signedIn){login();return}
+        val user=account.session.userId
+        fun apply(){if(account.session.userId==user){if(favorites)scheduleFavorites=!scheduleFavorites else scheduleCollections=!scheduleCollections;rememberFocus();render(model.state.value)}}
+        if(account.lists==null)accountAction(done={apply()}){account.refresh()}else apply()
     }
     private var scheduleDay=java.time.LocalDate.now().dayOfWeek.value
     private val sectionQueries=mutableMapOf<HomeSection,String>()
@@ -1028,6 +1078,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         pendingRender=null
+        if(scheduleFilterUser!=account.session.userId){scheduleFavorites=false;scheduleCollections=false;scheduleFilterUser=account.session.userId}
         if(state.screen !is Screen.Catalog && state.screen !is Screen.Section && !isAccountList(state.screen)){catalogSearchEditing=false;catalogSearchJob?.cancel()}
         (state.screen as?Screen.Detail)?.let{history.restore(it.id)}
         if(current==state.screen && !state.loading && adapter.rows.none{it.key=="loading"})rememberFocus()
@@ -1093,15 +1144,20 @@ class MainActivity : ComponentActivity() {
                     rows+=Row("section-heading",Kind.HEADING,screen.kind.title,selected=1,click={rememberFocus();model.retry()})
                     val query=sectionQueries[screen.kind].orEmpty()
                     rows+=Row("section-tools",Kind.CATALOG_BAR,title=if(catalogSearchEditing)catalogSearchDraft else query,selected=if(catalogSearchEditing)1 else 0,
-                        queryChanged=::liveCatalogSearch,searchDone=::finishCatalogSearch,controls=listOf(
-                            (query.ifBlank{"Поиск в разделе…"}) to {catalogSearchDraft=query;catalogSearchEditing=true;render(model.state.value)},
-                            "Сбросить" to {sectionQueries.remove(screen.kind);catalogSearchDraft="";catalogSearchEditing=false;render(model.state.value)}
-                        ))
+                        queryChanged=::liveCatalogSearch,searchDone=::finishCatalogSearch,activeControls=if(screen.kind==HomeSection.SCHEDULE)buildSet{if(scheduleFavorites)add(1);if(scheduleCollections)add(2)}else emptySet(),controls=buildList{
+                            add((query.ifBlank{"Поиск в разделе…"}) to {catalogSearchDraft=query;catalogSearchEditing=true;render(model.state.value)})
+                            if(screen.kind==HomeSection.SCHEDULE){
+                                add("Избранное" to {toggleScheduleSource(true)})
+                                add("Коллекции" to {toggleScheduleSource(false)})
+                            }
+                            add("Сбросить" to {sectionQueries.remove(screen.kind);catalogSearchDraft="";catalogSearchEditing=false;if(screen.kind==HomeSection.SCHEDULE){scheduleFavorites=false;scheduleCollections=false};render(model.state.value)})
+                        })
                     if(query.isNotBlank() && data.more)rows+=Row("section-search-scope",Kind.TEXT,"Поиск по загруженным · остальные появляются при прокрутке")
                     if(screen.kind==HomeSection.SCHEDULE){
                         rows+=Row("schedule-week-days",Kind.ACCOUNT_TABS,selected=scheduleDay,controls=(listOf("Вся неделя")+listOf("Пн","Вт","Ср","Чт","Пт","Сб","Вс")).mapIndexed{i,label->label to {scheduleDay=i;rememberFocus();render(model.state.value)}})
                     }
-                    val searched=filterSectionData(data,query)
+                    val source=if(screen.kind==HomeSection.SCHEDULE)data.copy(releases=filterScheduleSources(data.releases,account.lists?.favorites.orEmpty(),account.lists?.collections?.keys.orEmpty(),scheduleFavorites,scheduleCollections))else data
+                    val searched=filterSectionData(source,query)
                     val filtered=if(screen.kind==HomeSection.SCHEDULE && scheduleDay!=0)searched.copy(releases=searched.releases.filter{it.publishDay==scheduleDay})else searched
                     val cards=when(screen.kind){
                         HomeSection.LATEST,HomeSection.SCHEDULE->releaseCards(filtered.releases,screen.kind.name)

@@ -256,3 +256,6 @@ internal fun scheduleEpisodeLabel(release:Release?):String=when{
     release?.latestEpisode!=null->"${number(release.latestEpisode.ordinal)} эп."
     else->"Эпизод —"
 }
+
+internal fun filterScheduleSources(items:List<Release>,favorites:Set<Int>,collections:Set<Int>,favoritesOnly:Boolean,collectionsOnly:Boolean):List<Release> =
+    if(!favoritesOnly && !collectionsOnly)items else items.filter{(favoritesOnly && it.id in favorites)||(collectionsOnly && it.id in collections)}

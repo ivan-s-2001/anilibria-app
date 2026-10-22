@@ -34,10 +34,10 @@ fun View.focusBackground(primary: Boolean = false, radiusDp:Int=6) {
     }
 }
 /** Shared web catalogue/home control surface; focus never changes geometry. */
-fun View.webControlBackground() {
+fun View.webControlBackground(selected:Boolean=false) {
     background=StateListDrawable().apply {
         addState(intArrayOf(android.R.attr.state_focused),shape(0xFF292929.toInt(),dp(6).toFloat(),WHITE,dp(2)))
-        addState(intArrayOf(),shape(0xFF212121.toInt(),dp(6).toFloat()))
+        addState(intArrayOf(),shape(if(selected)0xFF352323.toInt()else 0xFF212121.toInt(),dp(6).toFloat(),if(selected)RED else 0,dp(1)))
     }
 }
 fun TextView.label(value: String, size: Float, color: Int = WHITE, bold: Boolean = false) {
@@ -57,7 +57,7 @@ fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int
 }
 
 enum class Kind { SETTING, ACCOUNT_TILE, ACCOUNT_TABS, PROFILE, NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH, CONTINUE, CATALOG_BAR }
-data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList(),val composition:List<String>?=null,val focusLoad:(()->Unit)?=null,val homeStyle:Boolean=false,val queryChanged:((String)->Unit)?=null,val searchDone:(()->Unit)?=null,val favoriteTitle:String?=null,val episodeProgress:Pair<Long,Long>?=null,val profile:AccountProfile?=null)
+data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList(),val composition:List<String>?=null,val focusLoad:(()->Unit)?=null,val homeStyle:Boolean=false,val queryChanged:((String)->Unit)?=null,val searchDone:(()->Unit)?=null,val favoriteTitle:String?=null,val episodeProgress:Pair<Long,Long>?=null,val profile:AccountProfile?=null,val activeControls:Set<Int> = emptySet())
 
 class PageAdapter(
     private val navigate: (Int) -> Unit,
@@ -291,13 +291,15 @@ class PageAdapter(
                 box.isClickable=row.click!=null
             }
             Kind.CATALOG_BAR -> {
+                fun decorate(button:View,index:Int){button.isSelected=index in row.activeControls;button.webControlBackground(button.isSelected);button.contentDescription=row.controls[index].first+if(button.isSelected)" · включено"else""}
+                fun controlIcon(index:Int):Int=when(row.controls[index].first){"Избранное"->R.drawable.ic_favorite;"Коллекции"->R.drawable.ic_library;"Сбросить"->R.drawable.ic_refresh;else->if(index==1)R.drawable.ic_filter else R.drawable.ic_sort}
                 val line=(view as HorizontalScrollView).getChildAt(0)as LinearLayout
                 view.layoutParams=view.layoutParams.apply{height=view.dp(60)}
                 if(row.selected==1){
                     val existing=line.getChildAt(0)as?android.widget.EditText
                     if(existing!=null && line.childCount==row.controls.size){
                         row.controls.drop(1).forEachIndexed{index,control->
-                            line.getChildAt(index+1).apply{contentDescription=control.first;setOnClickListener{control.second()}}
+                            line.getChildAt(index+1).apply{decorate(this,index+1);setOnClickListener{control.second()}}
                         }
                         return
                     }
@@ -326,9 +328,9 @@ class PageAdapter(
                     }
                     line.addView(input,LinearLayout.LayoutParams(0,view.dp(48),1f).apply{marginEnd=view.dp(8)})
                     row.controls.drop(1).forEachIndexed{index,(title,callback)->
-                        val icon=when(index){0->if(row.controls.size==2)R.drawable.ic_refresh else R.drawable.ic_filter;1->if(title=="Сбросить")R.drawable.ic_refresh else R.drawable.ic_sort;else->R.drawable.ic_refresh}
+                        val icon=controlIcon(index+1)
                         line.addView(action(line,"",icon=icon,click=callback).apply{
-                            contentDescription=title;setPadding(dp(14),0,dp(14),0);compoundDrawablePadding=0
+                            decorate(this,index+1);setPadding(dp(14),0,dp(14),0);compoundDrawablePadding=0
                         },LinearLayout.LayoutParams(view.dp(48),view.dp(48)).apply{if(index<row.controls.size-2)marginEnd=view.dp(8)})
                     }
                     view.scrollTo(0,0)
@@ -337,17 +339,17 @@ class PageAdapter(
                     return
                 }
                 if(line.childCount==row.controls.size && row.controls.indices.all{(line.getChildAt(it)as?TextView)?.text?.toString()==row.controls[it].first}){
-                    row.controls.forEachIndexed{index,control->line.getChildAt(index).setOnClickListener{control.second()}}
+                    row.controls.forEachIndexed{index,control->line.getChildAt(index).apply{decorate(this,index);setOnClickListener{control.second()}}}
                     return
                 }
                 val focused=line.indexOfChild(line.findFocus())
                 line.removeAllViews();line.setPadding(0,view.dp(4),0,view.dp(8))
                 row.controls.forEachIndexed{index,(title,callback)->
-                    val icon=when(index){0->R.drawable.ic_search;1->if(row.controls.size==2)R.drawable.ic_refresh else R.drawable.ic_filter;2->if(title=="Сбросить")R.drawable.ic_refresh else R.drawable.ic_sort;else->R.drawable.ic_refresh}
+                    val icon=if(index==0)R.drawable.ic_search else controlIcon(index)
                     line.addView(action(line,title,icon=icon,click=callback).apply{
                         textSize=14f;setSingleLine();ellipsize=android.text.TextUtils.TruncateAt.END
                         if(index==0)gravity=Gravity.CENTER_VERTICAL or Gravity.START
-                        webControlBackground()
+                        decorate(this,index)
                     },LinearLayout.LayoutParams(if(index==0)0 else -2,view.dp(48),if(index==0)1f else 0f).apply{if(index<row.controls.lastIndex)marginEnd=view.dp(8)})
                 }
                 view.scrollTo(0,0)

@@ -52,6 +52,10 @@ class PlayerActivity : ComponentActivity() {
     private var nextRemaining=10
     private var countdownRunning=false
     private val handler=Handler(Looper.getMainLooper())
+    private val remoteRepeat=RemoteRepeat()
+    private val remoteClick=RemoteClick()
+    private var revealKey=-1
+    private var lastControl:View?=null
     private val settings by lazy{TvSettings(this)}
     private val skippedRanges=mutableSetOf<String>()
     private val prefs by lazy{playbackPreferences(this)}
@@ -110,8 +114,7 @@ class PlayerActivity : ComponentActivity() {
                 KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT->{
                     if(event.action==KeyEvent.ACTION_DOWN){
                         val engine=player
-                        val step=if(event.repeatCount>5)30000L else 10000L
-                        pendingSeek=((pendingSeek?:engine?.currentPosition?:0)+(if(key==KeyEvent.KEYCODE_DPAD_RIGHT)step else -step)).coerceIn(0,(engine?.duration?:0).coerceAtLeast(0))
+                        pendingSeek=remoteSeekTarget(pendingSeek?:engine?.currentPosition?:0,engine?.duration?:0,key==KeyEvent.KEYCODE_DPAD_RIGHT,event.eventTime-event.downTime)
                         refreshControls()
                     };true
                 }
@@ -137,6 +140,7 @@ class PlayerActivity : ComponentActivity() {
         for(index in 0 until buttons.childCount){buttons.getChildAt(index).layoutParams=(buttons.getChildAt(index).layoutParams as?LinearLayout.LayoutParams?:LinearLayout.LayoutParams(-2,-2)).apply{marginEnd=dp(8)}}
         setContentView(root)
         onBackPressedDispatcher.addCallback(this,object:OnBackPressedCallback(true){override fun handleOnBackPressed(){
+            remoteClick.cancel()
             when{
                 panel!=null->closePanel()
                 pendingSeek!=null->{pendingSeek=null;refreshControls()}
@@ -267,6 +271,11 @@ class PlayerActivity : ComponentActivity() {
         hideControls();now.requestFocus();countdownRunning=auto;if(auto)handler.postDelayed(countdown,1000)
     }
     override fun dispatchKeyEvent(event:KeyEvent):Boolean{
+        if(remoteRepeat.discard(event))return true
+        if(event.action==KeyEvent.ACTION_UP && event.keyCode==revealKey){revealKey=-1;return true}
+        val focused=panel?.findFocus()?:nextOffer?.findFocus()?:controls.findFocus()
+        if(focused!==seek && (controls.visibility==View.VISIBLE || panel!=null || nextOffer!=null) && remoteClick.handle(event,focused))return true
+
         if(event.keyCode==KeyEvent.KEYCODE_BACK)return super.dispatchKeyEvent(event)
         if(panel!=null){
             val direction=when(event.keyCode){KeyEvent.KEYCODE_DPAD_LEFT->View.FOCUS_LEFT;KeyEvent.KEYCODE_DPAD_RIGHT->View.FOCUS_RIGHT;KeyEvent.KEYCODE_DPAD_UP->View.FOCUS_UP;KeyEvent.KEYCODE_DPAD_DOWN->View.FOCUS_DOWN;else->0}
@@ -279,12 +288,26 @@ class PlayerActivity : ComponentActivity() {
             return super.dispatchKeyEvent(event)
         }
         when(event.keyCode){
-            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE->{if(event.action==KeyEvent.ACTION_DOWN)togglePause();return true}
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE->{if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0)togglePause();return true}
+            KeyEvent.KEYCODE_MEDIA_NEXT->{if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0)nextEpisode(release?.episodes.orEmpty(),current?.id)?.let{startEpisode(it)};return true}
+            KeyEvent.KEYCODE_MEDIA_PREVIOUS->{if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0){val items=release?.episodes.orEmpty();items.getOrNull(items.indexOfFirst{it.id==current?.id}-1)?.let{startEpisode(it)}};return true}
             KeyEvent.KEYCODE_MEDIA_PLAY->{if(event.action==KeyEvent.ACTION_DOWN)player?.play();return true}
             KeyEvent.KEYCODE_MEDIA_PAUSE->{if(event.action==KeyEvent.ACTION_DOWN){player?.pause();save()};return true}
             KeyEvent.KEYCODE_MENU->{if(event.action==KeyEvent.ACTION_DOWN)episodes();return true}
-            KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN->{if(controls.visibility!=View.VISIBLE){if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0)showControls();return true}}
-            KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT->{if(controls.visibility!=View.VISIBLE){if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0){showControls(seek);pendingSeek=player?.currentPosition};return true}}
+            KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN->{if(controls.visibility!=View.VISIBLE){if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0){revealKey=event.keyCode;showControls()};return true}}
+            KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT->{if(controls.visibility!=View.VISIBLE){if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0){showControls(seek);pendingSeek=remoteSeekTarget(player?.currentPosition?:0,player?.duration?:0,event.keyCode==KeyEvent.KEYCODE_DPAD_RIGHT,0)};return true}}
+        }
+        if(controls.visibility==View.VISIBLE && panel==null && nextOffer==null){
+            val direction=event.keyCode
+            if(focused===seek && direction==KeyEvent.KEYCODE_DPAD_DOWN){if(event.action==KeyEvent.ACTION_DOWN)(lastControl?.takeIf{it.isShown && it.isEnabled}?:pause).requestFocus();return true}
+            if(focused!==seek && focused!=null && insideView(focused,controls) && direction in listOf(KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN,KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT)){
+                if(event.action==KeyEvent.ACTION_DOWN){
+                    lastControl=focused
+                    if(direction==KeyEvent.KEYCODE_DPAD_UP)seek.requestFocus()
+                    else if(direction!=KeyEvent.KEYCODE_DPAD_DOWN){val choices=controls.getFocusables(View.FOCUS_FORWARD).filter{it!==seek && it.isEnabled && it.isShown};val index=choices.indexOf(focused);choices.getOrNull(index+if(direction==KeyEvent.KEYCODE_DPAD_RIGHT)1 else -1)?.requestFocus()}
+                    refreshControls()
+                };return true
+            }
         }
         if(event.action==KeyEvent.ACTION_DOWN)refreshControls()
         return super.dispatchKeyEvent(event)
@@ -292,6 +315,6 @@ class PlayerActivity : ComponentActivity() {
     private fun insidePanel(view:View):Boolean=panel?.let{insideView(view,it)}?:false
     private fun insideView(view:View,container:View):Boolean{var node:android.view.ViewParent?=view.parent;while(node!=null){if(node===container)return true;node=node.parent};return false}
     override fun onStart(){super.onStart();stopped=false;handler.post(ticker);if(player==null)current?.let{startEpisode(it,quality,desiredPlay)}}
-    override fun onStop(){errorPanel?.dismiss();errorPanel=null;stopped=true;desiredPlay=player?.playWhenReady?:desiredPlay;save();cancelNext();handler.removeCallbacksAndMessages(null);video.player=null;player?.release();player=null;super.onStop()}
+    override fun onStop(){remoteClick.cancel();errorPanel?.dismiss();errorPanel=null;stopped=true;desiredPlay=player?.playWhenReady?:desiredPlay;save();cancelNext();handler.removeCallbacksAndMessages(null);video.player=null;player?.release();player=null;super.onStop()}
     override fun onSaveInstanceState(out:Bundle){out.putString("episode",current?.id);out.putInt("quality",quality);out.putBoolean("playing",player?.playWhenReady?:desiredPlay);super.onSaveInstanceState(out)}
 }
