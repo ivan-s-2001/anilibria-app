@@ -97,37 +97,51 @@ class MainActivity : ComponentActivity() {
     }
     private fun openMenu(){
         if(current==Screen.Welcome)return
+        homeTransition++;homeFocusTarget=null;list.stopScroll()
         contentFocus=list.findFocus();rememberFocus();menuOpen=true;buildMenu()
         menu.getChildAt(listOf(2,0,1,3).indexOf(selectedSection).coerceAtLeast(0)+1)?.requestFocus()
     }
     private fun closeMenu(restore:Boolean=true){menuOpen=false;buildMenu();if(restore){if(contentFocus?.isAttachedToWindow==true)contentFocus?.requestFocus()else list.requestFocus()}}
     private var homeFocusTarget:Int?=null
     private var lastHomeMove=0L
+    private var homeTransition=0
     private fun moveHomeFocus(direction:Int):Boolean{
+        if(homeFocusTarget!=null)return true
         val focus=list.findFocus()?:return false
         val outer=list.findContainingItemView(focus)?:return false
         val index=list.getChildAdapterPosition(outer)
         if(outer is RecyclerView)adapter.rememberShelf(outer)
-        val candidates=if(direction<0)(index-1 downTo 0)else(index+1 until adapter.rows.size)
-        val target=candidates.firstOrNull{adapter.rows[it].kind in setOf(Kind.SHELF,Kind.DAYS,Kind.SPOTLIGHT,Kind.ACTION)}?:return true
-        if(homeFocusTarget!=null)return true
-        fun focusTarget(){
-            val item=list.findViewHolderForAdapterPosition(target)?.itemView?:return
-            focusItem(item)
-        }
-        val attached=list.findViewHolderForAdapterPosition(target)?.itemView
-        if(attached!=null){focusTarget();return true}
+        val target=homeFocusDestination(adapter.rows,index,direction)?:return true
+        val key=adapter.rows[target].key
+        val header=if(adapter.rows[target].kind==Kind.SHELF)homeSectionHeader(adapter.rows,target)?:target else target
+        val token=++homeTransition
         homeFocusTarget=target
+        fun finish(){
+            if(token!=homeTransition)return
+            homeFocusTarget=null
+            if(current!=Screen.Home || menuOpen)return
+            val resolved=adapter.rows.indexOfFirst{it.key==key}
+            if(resolved>=0)focusItem(list.findViewHolderForAdapterPosition(resolved)?.itemView)
+        }
+        val heading=grid.findViewByPosition(header)
+        val card=grid.findViewByPosition(target)
+        val delta=if(heading!=null && card!=null)homeScrollDelta(heading.top,card.bottom,list.paddingTop+dp(6),list.height-list.paddingBottom)else null
+        if(delta==0){finish();return true}
+        // Only this transition owns the vertical scroll. Focus changes once it ends.
         list.stopScroll()
-        list.addOnScrollListener(object:RecyclerView.OnScrollListener(){
+        val listener=object:RecyclerView.OnScrollListener(){
             override fun onScrollStateChanged(view:RecyclerView,state:Int){
                 if(state!=RecyclerView.SCROLL_STATE_IDLE)return
                 list.removeOnScrollListener(this)
-                val pending=homeFocusTarget;homeFocusTarget=null
-                if(current==Screen.Home && pending==target)focusTarget()
+                finish()
             }
-        })
-        list.smoothScrollToPosition(target)
+        }
+        list.addOnScrollListener(listener)
+        if(delta!=null)list.smoothScrollBy(0,delta,android.view.animation.DecelerateInterpolator(),180)
+        else grid.startSmoothScroll(object:androidx.recyclerview.widget.LinearSmoothScroller(this){
+            override fun getVerticalSnapPreference()=SNAP_TO_START
+            override fun calculateTimeForDeceleration(dx:Int)=180
+        }.apply{targetPosition=header})
         return true
     }
     override fun dispatchKeyEvent(event:KeyEvent):Boolean {
@@ -169,16 +183,18 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         list = object:RecyclerView(this){
             override fun requestChildRectangleOnScreen(child:View,rect:android.graphics.Rect,immediate:Boolean):Boolean=
-                super.requestChildRectangleOnScreen(child,rect,if(current==Screen.Home)false else immediate)
+                if(current==Screen.Home)false else super.requestChildRectangleOnScreen(child,rect,immediate)
         }.apply {
             setBackgroundColor(0xFF121212.toInt()); setPadding(dp(32),dp(8),dp(32),dp(24));clipToPadding=false;itemAnimator=null
         }
-        grid=GridLayoutManager(this,15);list.layoutManager=grid
+        grid=object:GridLayoutManager(this,15){
+            override fun onRequestChildFocus(parent:RecyclerView,state:RecyclerView.State,child:View,focused:View?):Boolean=
+                current==Screen.Home || super.onRequestChildFocus(parent,state,child,focused)
+        };list.layoutManager=grid
         adapter=PageAdapter(::navigate,::selectTab,::play,::favorite,{rememberFocus();model.open(Screen.Detail(it.id))},
             { id -> prefs.getLong("position:$id",0) to prefs.getLong("duration:$id",0) },
             { id -> prefs.getString("last:$id",null) },::returnToTabs, { index -> enterDay=true;val previous=model.state.value;model.homeDay(index);if(previous==model.state.value)render(model.state.value) },::quickActions)
         grid.spanSizeLookup=object:GridLayoutManager.SpanSizeLookup(){override fun getSpanSize(position:Int)=when(adapter.rows[position].kind){Kind.POSTER,Kind.GENRE->3;Kind.EPISODE,Kind.FEATURE,Kind.FRANCHISE->5;else->15}}
-        list.viewTreeObserver.addOnGlobalFocusChangeListener{old,new->keepHomeHeadingVisible(old,new)}
         list.adapter=adapter
         shell=LinearLayout(this).apply{setBackgroundColor(0xFF121212.toInt())}
         menu=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(12),dp(4),0);setBackgroundColor(0xFF212121.toInt())}
@@ -191,26 +207,6 @@ class MainActivity : ComponentActivity() {
             else if(!model.back())finish()}})
         lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED){model.state.collect{render(it)}} }
         if(savedInstanceState==null && prefs.getBoolean("welcomed",false))model.open(Screen.Home,false)
-    }
-    private fun keepHomeHeadingVisible(old:View?,new:View?){
-        if(current!=Screen.Home || new==null)return
-        val row=list.findContainingItemView(new)?:return
-        val index=list.getChildAdapterPosition(row)
-        if(adapter.rows.getOrNull(index)?.kind!=Kind.SHELF)return
-        val previous=old?.let{list.findContainingItemView(it)}
-        if(previous===row)return
-        val header=homeSectionHeader(adapter.rows,index)?:return
-        val key=adapter.rows[index].key
-        list.postOnAnimation{
-            if(current!=Screen.Home || adapter.rows.getOrNull(index)?.key!=key)return@postOnAnimation
-            val focused=list.findFocus()?.let{list.findContainingItemView(it)}
-            if(focused?.tag!=key)return@postOnAnimation
-            val heading=grid.findViewByPosition(header)
-            if(homeFocusTarget==null){
-                if(heading==null)list.smoothScrollToPosition(header)
-                else if(heading.top<list.paddingTop)list.smoothScrollBy(0,heading.top-list.paddingTop-dp(6))
-            }
-        }
     }
     override fun onResume(){
         super.onResume()
@@ -337,12 +333,13 @@ class MainActivity : ComponentActivity() {
             else model.open(Screen.Catalog(genre=feature.id.toIntOrNull(),title=feature.title))
         })
     }
-    private fun videoCards(items:List<HomeVideo>)=items.map{video->Row("video:${video.id}",Kind.FEATURE,video.title,video.subtitle,image=video.image,click={openLink(video.url.takeIf{it.startsWith("https://")})})}
+    private fun videoCards(items:List<HomeVideo>)=items.map{video->Row("video:${video.id}",Kind.FEATURE,video.title,video.subtitle,image=video.image,click={if(video.url.startsWith("https://"))openLink(video.url)else Toast.makeText(this,"У этого ролика нет доступной ссылки",Toast.LENGTH_SHORT).show()})}
+    private val pendingShelfRefresh=mutableSetOf<HomeSection>()
     private fun homeShelf(kind:HomeSection,items:List<Row>,wide:Boolean=false,key:String=kind.name):Row {
         val style=when(kind){HomeSection.LATEST,HomeSection.SCHEDULE->4;HomeSection.GENRES->2;HomeSection.FRANCHISES->3;else->if(wide)1 else 0}
         val state=model.state.value
         val cards=if(kind==HomeSection.GENRES||kind==HomeSection.FRANCHISES)
-            discoveryShelfCards(key,kind.title,items,style,kind in state.refreshing,kind in state.refreshErrors,{model.refreshFeatures(kind)},{openSection(kind)})
+            discoveryShelfCards(key,kind.title,items,style,kind in state.refreshing,kind in state.refreshErrors,{pendingShelfRefresh.add(kind);model.refreshFeatures(kind)},{openSection(kind)})
         else shelfCards(key,kind.title,items,wide,style){openSection(kind)}
         return Row("shelf:$key",Kind.SHELF,selected=style,cards=cards)
     }
@@ -361,7 +358,7 @@ class MainActivity : ComponentActivity() {
             rows+=Row("start",Kind.ACTION,"Начать просмотр",click={prefs.edit().putBoolean("welcomed",true).apply();model.open(Screen.Home,false)})
         }else{
             
-            if(state.loading)rows+=Row("loading",Kind.TEXT,"Загрузка…")
+            if(state.loading && !(state.screen==Screen.Home && state.home!=null))rows+=Row("loading",Kind.TEXT,"Загрузка…")
             else if(state.error!=null)rows+=Row("retry",Kind.ACTION,"Не удалось загрузить",state.error,click=model::retry)
             else when(val screen=state.screen){
                 Screen.Home->{
@@ -369,7 +366,9 @@ class MainActivity : ComponentActivity() {
                     home.promotions?.firstOrNull()?.let { promotion ->
                         rows+=Row("promotion:${promotion.id}",Kind.SPOTLIGHT,release=promotion.release,image=promotion.image)
                     }
-                    rows+=Row("latest-heading",Kind.HEADING,"Новые эпизоды",selected=1)
+                    rows+=Row("latest-heading",Kind.HEADING,"Новые эпизоды",selected=1,click={
+                        if(!model.state.value.loading){rememberFocus();lastHistoryHydration=0;hydrateHistory();model.retry()}
+                    })
                     rows+=homeShelf(HomeSection.LATEST,releaseCards(home.latest,"latest"))
                     val unfinished=history.items()
                     if(unfinished.isNotEmpty()){
@@ -393,11 +392,9 @@ class MainActivity : ComponentActivity() {
                     rows+=homeShelf(HomeSection.FRANCHISES,featureCards(home.franchises.orEmpty(),HomeSection.FRANCHISES),true)
                     rows+=Row("genres-heading",Kind.HEADING,"Жанры",selected=1)
                     rows+=homeShelf(HomeSection.GENRES,featureCards(home.genres.orEmpty(),HomeSection.GENRES),true)
-                    rows+=Row("videos-heading",Kind.HEADING,"Видео команды",selected=1)
+                    rows+=Row("videos-heading",Kind.HEADING,"Видео от AniLiberty",selected=1)
                     if(home.videos==null)rows+=Row("videos-retry",Kind.ACTION,"Не удалось загрузить видео · Повторить",click=model::retry)
                     else rows+=homeShelf(HomeSection.VIDEOS,videoCards(home.videos),true)
-                    rows+=Row("refresh-home",Kind.ACTION,"Обновить главную",click={rememberFocus();lastHistoryHydration=0;hydrateHistory();model.retry()})
-                    rows+=Row("support",Kind.ACTION,"Поддержать AniLiberty",click={openLink("https://www.aniliberty.top/support")})
                 }
                 is Screen.Section->{
                     val data=state.section?:return
@@ -472,6 +469,14 @@ class MainActivity : ComponentActivity() {
                 else->Unit
             }
         }
+        if(current==Screen.Home){
+            val completed=pendingShelfRefresh.filter{it !in state.refreshing}
+            val focusedShelf=list.findFocus()?.let{list.findContainingItemView(it)?.tag}
+            completed.forEach{kind->
+                if(kind !in state.refreshErrors)adapter.resetShelf("shelf:${kind.name}",!menuOpen && focusedShelf=="shelf:${kind.name}")
+                pendingShelfRefresh.remove(kind)
+            }
+        }
         adapter.submit(rows)
         if(current==Screen.Home && menuOpen)return
         if(enterDay){
@@ -498,7 +503,7 @@ class MainActivity : ComponentActivity() {
             if(index>=0&&!state.loading){list.doOnNextLayout{
                 if(current!=state.screen || (current==Screen.Home && menuOpen))return@doOnNextLayout
                 val item=list.findViewHolderForAdapterPosition(index)?.itemView
-                focusItem(item)
+                if(!sameHome || list.findFocus()==null)focusItem(item)
             };val scroll=scrollMemory[screenKey(state.screen)]
                 val anchor=scroll?.first?.let{saved->rows.indexOfFirst{it.key==saved}.takeIf{it>=0}}
                 if(!sameHome)grid.scrollToPositionWithOffset(anchor?:if(key==null)0 else index,scroll?.second?:if(key==null)0 else list.dp(12))}

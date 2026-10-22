@@ -71,6 +71,8 @@ class PageAdapter(
     private fun View.cardDp(value:Int)=dp(if(shelfMode)(value*1.18f).toInt()else value)
     private data class ShelfPosition(val focusedKey:String?,val anchorKey:String?,val offset:Int)
     private val shelfPositions=mutableMapOf<String,ShelfPosition>()
+    private val shelfResets=mutableMapOf<String,Boolean>()
+    fun resetShelf(key:String,requestFocus:Boolean){shelfResets[key]=requestFocus}
     private fun saveShelf(shelf:RecyclerView) {
         val key=shelf.getTag(R.id.shelf_key) as?String?:return
         val child=shelf.adapter as?PageAdapter?:return
@@ -187,7 +189,15 @@ class PageAdapter(
                 shelf.layoutParams=shelf.layoutParams.apply{height=view.dp((when(row.selected){1->220;2->252;3->206;4->222;5->166;else->286}*1.18f).toInt())}
                 val cards=if(row.cards.isNotEmpty())row.cards else row.items.map{Row("${row.key}:release:${it.id}",Kind.POSTER,release=it)}
                 (shelf.adapter as PageAdapter).submit(cards)
-                restoreShelf(shelf,false)
+                if(shelfResets.containsKey(row.key)){
+                    val focusFirst=shelfResets.remove(row.key)==true
+                    shelfPositions.remove(row.key)
+                    (shelf.layoutManager as androidx.recyclerview.widget.LinearLayoutManager).scrollToPositionWithOffset(0,shelf.paddingLeft)
+                    if(focusFirst)shelf.post{
+                        if(shelf.isAttachedToWindow && (shelf.hasFocus() || shelf.rootView.findFocus()==null))
+                            shelf.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
+                    }
+                }else restoreShelf(shelf,false)
             }
             Kind.MORE,Kind.REFRESH -> {
                 val box=view as LinearLayout
@@ -490,6 +500,19 @@ class PageAdapter(
                 val box=view as LinearLayout
                 (box.getChildAt(0)as TextView).label(row.title,if(row.selected==1)24f else 18f,WHITE,true)
                 (box.getChildAt(1)as TextView).apply{label(row.subtitle,12f,MUTED);visibility=if(row.subtitle.isBlank())View.GONE else View.VISIBLE}
+                val title=box.getChildAt(0)as TextView
+                val refresh=(box.getChildAt(2)as?android.widget.ImageButton)?:android.widget.ImageButton(view.context).also{
+                    box.addView(it,LinearLayout.LayoutParams(view.dp(44),view.dp(44)))
+                }
+                refresh.visibility=if(row.click!=null)View.VISIBLE else View.GONE
+                box.orientation=if(row.click!=null)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+                box.gravity=Gravity.CENTER_VERTICAL
+                title.layoutParams=LinearLayout.LayoutParams(if(row.click!=null)0 else -1,-2,if(row.click!=null)1f else 0f)
+                refresh.setImageResource(R.drawable.ic_refresh);refresh.setColorFilter(WHITE)
+                refresh.setPadding(view.dp(10),view.dp(10),view.dp(10),view.dp(10))
+                refresh.contentDescription="Обновить главную"
+                refresh.focusBackground(radiusDp=8)
+                refresh.setOnClickListener{row.click?.invoke()}
                 box.isFocusable=false;box.isClickable=false
             }
             Kind.TEXT,Kind.ACTION -> {

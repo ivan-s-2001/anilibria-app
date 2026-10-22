@@ -78,9 +78,7 @@ class Api {
         ).filter(String::isNotBlank).joinToString(" · ") else feature.text("total_releases").takeIf{it.isNotBlank()}?.let{"$it релизов"}.orEmpty()
         Feature(feature.text("id"),feature.text("name"),subtitle,feature.optJSONObject("image")?.image())
     }.distinctBy{it.id}
-    private suspend fun videos(limit:Int):List<HomeVideo> = JSONObject(request("/media/videos?limit=$limit")).optJSONArray("data").objects().map {
-        HomeVideo(it.text("id"),it.text("title"),it.text("views").takeIf{v->v.isNotBlank()}?.let{v->"$v просмотров"}.orEmpty(),it.optJSONObject("image")?.image(),it.text("url"))
-    }.distinctBy{it.id}
+    private suspend fun videos(limit:Int):List<HomeVideo> = parseHomeVideos(request("/media/videos?limit=$limit"))
     suspend fun releaseTorrents(releaseId:Int):List<TorrentLink> = JSONArray(request("/anime/torrents/release/$releaseId")).objects().map{t->
         TorrentLink(t.text("label").ifBlank{listOf(t.display("quality"),t.display("codec")).filter(String::isNotBlank).joinToString(" · ")},t.text("description"),t.text("magnet").takeIf{it.startsWith("magnet:")})
     }
@@ -153,4 +151,19 @@ fun replaceHomeFeatures(home:HomeData,section:HomeSection,features:List<Feature>
     HomeSection.GENRES->home.copy(genres=features.take(4))
     HomeSection.FRANCHISES->home.copy(franchises=features.take(3))
     else->error("Раздел не является случайной подборкой")
+}
+
+
+/** /media/videos returns an array, as consumed by the website's videoContentProxy. */
+fun parseHomeVideos(body:String):List<HomeVideo>{
+    val data=if(body.trimStart().startsWith("["))JSONArray(body)else JSONObject(body).optJSONArray("data")?:JSONArray()
+    return data.objects().map{item->
+        val origin=item.optJSONObject("origin")
+        val direct=item.text("url").takeIf{it.startsWith("https://")}
+        val youtubeId=item.text("video_id").takeIf{Regex("[A-Za-z0-9_-]{11}").matches(it)}
+        val url=direct?:if(origin?.optJSONObject("type")?.text("value")?.startsWith("YOUTUBE")==true && youtubeId!=null)"https://www.youtube.com/watch?v=$youtubeId"else ""
+        HomeVideo(item.text("id"),item.text("title"),
+            listOf(origin?.text("title").orEmpty(),item.text("views").takeIf{it.isNotBlank()}?.let{"$it просмотров"}.orEmpty()).filter(String::isNotBlank).joinToString(" · "),
+            item.optJSONObject("image")?.image(),url)
+    }.distinctBy{it.id}
 }
