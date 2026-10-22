@@ -565,23 +565,25 @@ class MainActivity : ComponentActivity() {
     private fun watchOrderCards(items:List<Release>,key:String)=items.distinctBy{it.id}.map{item->
         Row("$key:${item.id}",Kind.POSTER,release=item,selected=2)
     }
-    private val franchisePreviewGate=kotlinx.coroutines.sync.Semaphore(3)
-    private val franchisePreviews=mutableMapOf<String,List<Release>>()
+    private val franchisePreviewGate=kotlinx.coroutines.sync.Semaphore(2)
+    private val franchisePreviews=FranchisePreviewCache()
     private val franchisePreviewErrors=mutableSetOf<String>()
     private val franchisePreviewJobs=mutableMapOf<String,kotlinx.coroutines.Job>()
     private fun loadFranchisePreview(id:String){
         if(franchisePreviews.containsKey(id) || id in franchisePreviewErrors || franchisePreviewJobs[id]?.isActive==true)return
         franchisePreviewJobs[id]=lifecycleScope.launch{
-            try{val parts=franchisePreviewGate.withPermit{model.api.franchise(id)};franchisePreviews[id]=parts;franchisePreviewErrors.remove(id)}
+            try{val parts=franchisePreviewGate.withPermit{model.api.franchise(id)};franchisePreviews[id]=parts.map{it.title};franchisePreviewErrors.remove(id)}
             catch(e:kotlinx.coroutines.CancellationException){throw e}
             catch(_:Exception){franchisePreviewErrors.add(id)}
+            franchisePreviewJobs.remove(id)
             val screen=model.state.value.screen
             if(screen==Screen.Home || (screen is Screen.Section && screen.kind==HomeSection.FRANCHISES))render(model.state.value)
         }
     }
     private fun featureCards(items:List<Feature>,kind:HomeSection)=items.map{feature->
         Row("${kind.name}:${feature.id}",if(kind==HomeSection.GENRES)Kind.GENRE else Kind.FRANCHISE,feature.title,feature.subtitle,image=feature.image,
-            items=franchisePreviews[feature.id].orEmpty(),selected=if(feature.id in franchisePreviewErrors)-1 else if(franchisePreviews.containsKey(feature.id) && franchisePreviews[feature.id].isNullOrEmpty())-2 else 0,
+            composition=franchisePreviews[feature.id],selected=if(feature.id in franchisePreviewErrors)-1 else 0,
+            focusLoad=if(kind==HomeSection.FRANCHISES)({loadFranchisePreview(feature.id)})else null,
             click={
             rememberFocus()
             if(kind==HomeSection.FRANCHISES)model.open(Screen.Franchise(feature.id,feature.title))
@@ -787,7 +789,7 @@ class MainActivity : ComponentActivity() {
             is Screen.Section->if(screen.kind==HomeSection.FRANCHISES)state.section?.features.orEmpty()else emptyList()
             else->emptyList()
         }
-        preloadFranchises.forEach{loadFranchisePreview(it.id)}
+        preloadFranchises.take(12).forEach{loadFranchisePreview(it.id)}
         adapter.submit(rows)
         if(current==Screen.Home && menuOpen)return
         if(catalogSearchEditing && (current is Screen.Catalog || current is Screen.Section))return

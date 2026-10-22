@@ -55,7 +55,7 @@ fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int
 }
 
 enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH, CONTINUE, CATALOG_BAR }
-data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList(),val focusLoad:(()->Unit)?=null,val homeStyle:Boolean=false,val queryChanged:((String)->Unit)?=null,val searchDone:(()->Unit)?=null)
+data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList(),val composition:List<String>?=null,val focusLoad:(()->Unit)?=null,val homeStyle:Boolean=false,val queryChanged:((String)->Unit)?=null,val searchDone:(()->Unit)?=null)
 
 class PageAdapter(
     private val navigate: (Int) -> Unit,
@@ -174,7 +174,7 @@ class PageAdapter(
                 override fun onMeasure(widthMeasureSpec:Int,heightMeasureSpec:Int){
                     val width=View.MeasureSpec.getSize(widthMeasureSpec)
                     if(Kind.entries[type]==Kind.FEATURE && width>0){
-                        val ratio=getTag(R.id.video_ratio)as?Float?: (16f/9f)
+                        val ratio=16f/9f
                         super.onMeasure(widthMeasureSpec,View.MeasureSpec.makeMeasureSpec((width/ratio).toInt(),View.MeasureSpec.EXACTLY))
                         return
                     }
@@ -438,8 +438,8 @@ class PageAdapter(
                 composition.layoutParams=FrameLayout.LayoutParams(baseImage.width,-1,Gravity.START)
                 composition.removeAllViews()
                 if(!genre){
-                    val names=if(row.items.isNotEmpty())row.items.mapIndexed{index,item->"${index+1}. ${item.title}"}else listOf(if(row.selected==-1)"Состав недоступен"else if(row.selected==-2)"Состав пока не указан"else "Загрузка состава…")
-                    names.forEach{name->composition.addView(TextView(view.context).apply{label(name,if(row.items.size>9)11f else 13f,WHITE);setSingleLine();ellipsize=android.text.TextUtils.TruncateAt.END;isFocusable=false;includeFontPadding=false},LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=view.dp(3)})}
+                    val names=if(!row.composition.isNullOrEmpty())row.composition.mapIndexed{index,name->"${index+1}. $name"}else listOf(if(row.selected==-1)"Состав недоступен"else if(row.composition!=null)"Состав пока не указан"else "Загрузка состава…")
+                    names.forEach{name->composition.addView(TextView(view.context).apply{label(name,if((row.composition?.size?:0)>9)11f else 13f,WHITE);setSingleLine();ellipsize=android.text.TextUtils.TruncateAt.END;isFocusable=false;includeFontPadding=false},LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=view.dp(3)})}
                 }
                 fun featureFocus(focused:Boolean){
                     image.colorFilter=if(focused)android.graphics.ColorMatrixColorFilter(floatArrayOf(.15f,0f,0f,0f,0f,0f,.15f,0f,0f,0f,0f,0f,.15f,0f,0f,0f,0f,0f,1f,0f))else null
@@ -452,6 +452,7 @@ class PageAdapter(
                 box.setOnClickListener{row.click?.invoke()}
                 featureFocus(box.hasFocus())
                 box.setOnFocusChangeListener{_,focused->featureFocus(focused)}
+                if(!genre && row.composition==null)view.post{if(view.tag==row.key)row.focusLoad?.invoke()}
             }
             Kind.SPOTLIGHT,Kind.FEATURE,Kind.POSTER,Kind.CONTINUE -> {
                 val homeCard=shelfMode || row.homeStyle
@@ -635,24 +636,7 @@ class PageAdapter(
                 if(row.kind==Kind.FEATURE){
                     image.scaleType=ImageView.ScaleType.FIT_CENTER
                     image.layoutParams=FrameLayout.LayoutParams(-1,-1)
-                    image.load(row.image){
-                        listener(onSuccess={_,result->
-                            val source=result.image
-                            if(source.width>0 && source.height>0 && box.tag==row.key){
-                                box.setTag(R.id.video_ratio,source.width.toFloat()/source.height)
-                                box.post{
-                                    if(box.tag==row.key){
-                                        box.requestLayout()
-                                        val shelf=box.parent as?RecyclerView
-                                        if(shelf!=null && shelfMode){
-                                            val desired=(box.width*source.height.toFloat()/source.width).toInt()+box.dp(20)
-                                            if(desired>0 && shelf.layoutParams.height!=desired)shelf.layoutParams=shelf.layoutParams.apply{height=desired}
-                                        }
-                                    }
-                                }
-                            }
-                        })
-                    }
+                    image.load(row.image)
                     box.getChildAt(1).apply{background=GenreShade();visibility=View.VISIBLE}
                     content.layoutParams=FrameLayout.LayoutParams(-1,-1)
                     content.gravity=Gravity.CENTER;content.setPadding(view.dp(14),view.dp(14),view.dp(14),view.dp(14))

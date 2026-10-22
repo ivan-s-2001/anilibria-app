@@ -13,6 +13,14 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[30],application=Application::class)
 class HomeShelfTest {
+    @Test fun videoCardAlwaysKeepsSixteenByNine(){
+        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        adapter.submit(listOf(Row("video",Kind.FEATURE,"Ролик")))
+        val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.FEATURE.ordinal)
+        adapter.onBindViewHolder(holder,0)
+        holder.itemView.measure(android.view.View.MeasureSpec.makeMeasureSpec(640,android.view.View.MeasureSpec.EXACTLY),android.view.View.MeasureSpec.makeMeasureSpec(0,android.view.View.MeasureSpec.UNSPECIFIED))
+        assertEquals(360,holder.itemView.measuredHeight)
+    }
     @Test fun genreAndVideoDarkenOnlyWhileFocusedAndVideoRevealsInfo(){
         for(kind in listOf(Kind.GENRE,Kind.FEATURE)){
             val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
@@ -35,7 +43,7 @@ class HomeShelfTest {
     @Test fun franchiseCompositionHasOneNumberedLinePerPartOnFocus(){
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
         val parts=(1..3).map{parseRelease(org.json.JSONObject().put("id",it).put("name",org.json.JSONObject().put("main","Часть $it")))}
-        adapter.submit(listOf(Row("franchise",Kind.FRANCHISE,"Франшиза","3 части",items=parts)))
+        adapter.submit(listOf(Row("franchise",Kind.FRANCHISE,"Франшиза","3 части",composition=parts.map{it.title})))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.FRANCHISE.ordinal)
         adapter.onBindViewHolder(holder,0)
         val card=holder.itemView as FrameLayout
