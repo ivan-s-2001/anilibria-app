@@ -801,6 +801,7 @@ class HomeShelfTest {
         card.requestFocus()
         assertEquals(android.view.View.VISIBLE, title.visibility)
         assertEquals(android.view.View.VISIBLE, information.visibility)
+        assertEquals("Осталось 15 мин", information.text.toString())
         assertEquals(android.view.View.VISIBLE, badge.visibility)
         assertEquals(5, card.childCount)
         assertNotNull((card.getChildAt(0) as android.widget.ImageView).colorFilter)
