@@ -157,6 +157,8 @@ data class Row(
     val episodeProgress: Pair<Long, Long>? = null,
     val profile: AccountProfile? = null,
     val activeControls: Set<Int> = emptySet(),
+    val isFavorite: Boolean = false,
+    val collectionType: CollectionType? = null,
 )
 
 class PageAdapter(
@@ -1041,9 +1043,12 @@ class PageAdapter(
                 val line = (view as HorizontalScrollView).getChildAt(0) as LinearLayout
                 if (line.childCount != row.controls.size) {
                     line.removeAllViews()
-                    row.controls.forEach { (title, callback) ->
+                    row.controls.forEachIndexed { index, (title, callback) ->
+                        val collectionType =
+                            if (row.key == "account-collections-tabs") CollectionType.entries.getOrNull(index)
+                            else null
                         line.addView(
-                            action(line, title, click = callback),
+                            action(line, title, icon = collectionType?.icon ?: 0, click = callback),
                             LinearLayout.LayoutParams(-2, view.dp(44)).apply {
                                 marginEnd = view.dp(8)
                             },
@@ -1053,7 +1058,11 @@ class PageAdapter(
                 row.controls.forEachIndexed { i, (title, callback) ->
                     (line.getChildAt(i) as TextView).apply {
                         text = title
-                        setTextColor(if (i == row.selected) RED else WHITE)
+                        val collectionType =
+                            if (row.key == "account-collections-tabs") CollectionType.entries.getOrNull(i)
+                            else null
+                        setTextColor(if (i == row.selected) collectionType?.color ?: RED else WHITE)
+                        compoundDrawablesRelative[0]?.mutate()?.setTint(collectionType?.color ?: WHITE)
                         setOnClickListener { callback() }
                     }
                 }
@@ -1328,6 +1337,9 @@ class PageAdapter(
                         textSize = 14f
                         contentDescription = description
                         setOnClickListener { click() }
+                        CollectionType.entries.firstOrNull { it.title == label }?.let { type ->
+                            compoundDrawablesRelative[0]?.mutate()?.setTint(type.color)
+                        }
                         if (favorite) {
                             gravity = Gravity.CENTER
                             compoundDrawablePadding = 0
@@ -1371,9 +1383,9 @@ class PageAdapter(
                         label,
                         when {
                             label == "Описание" -> R.drawable.ic_comments
-                            label == "Коллекция" ||
-                                CollectionType.entries.any { it.title == label } ->
-                                R.drawable.ic_library
+                            CollectionType.entries.any { it.title == label } ->
+                                CollectionType.entries.first { it.title == label }.icon
+                            label == "Коллекция" -> R.drawable.ic_library
                             else -> R.drawable.ic_settings
                         },
                         click = callback,
@@ -1646,7 +1658,12 @@ class PageAdapter(
                     title.maxLines = 4
                     subtitle.gravity = Gravity.CENTER
                     subtitle.maxLines = 4
-                    subtitle.text =
+                    val publicationTime =
+                        relativeUpdateLabel(
+                            release?.latestEpisode?.updatedAt?.ifBlank { release.updatedAt }
+                                ?: release?.updatedAt.orEmpty()
+                        )
+                    val yearDetails =
                         listOf(
                                 release?.year.orEmpty(),
                                 release?.season.orEmpty(),
@@ -1657,7 +1674,22 @@ class PageAdapter(
                             )
                             .filter(String::isNotBlank)
                             .joinToString(" · ")
-                    subtitle.maxLines = 1
+                    val publicationAndYear =
+                        listOf(publicationTime, yearDetails)
+                            .filter(String::isNotBlank)
+                            .joinToString("\n")
+                    subtitle.text =
+                        android.text.SpannableString(publicationAndYear).apply {
+                            if (publicationTime.isNotBlank()) {
+                                setSpan(
+                                    android.text.style.RelativeSizeSpan(0.75f),
+                                    0,
+                                    publicationTime.length,
+                                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+                                )
+                            }
+                        }
+                    subtitle.maxLines = 2
                     val genresLine =
                         (content.getChildAt(2) as? TextView)
                             ?: TextView(view.context).also {
@@ -1780,10 +1812,14 @@ class PageAdapter(
                         }
                     content.setPadding(view.dp(10), view.dp(44), view.dp(10), view.dp(12))
                     title.layoutParams = LinearLayout.LayoutParams(-1, 0, 1f)
-                    subtitle.maxLines = 1
+                    // Keep the update timestamp and year/season/age on separate visible lines.
+                    subtitle.maxLines = 2
+                    subtitle.ellipsize = null
                     fun focusPoster(focused: Boolean) {
-                        box.findViewWithTag<TextView>("favorite-count")?.visibility =
-                            if (focused && !schedulePoster && release?.favoriteCount != null)
+                        box.findViewWithTag<TextView>("favorite-count")?.visibility = View.GONE
+                        box.findViewWithTag<TextView>("schedule-favorites")?.visibility = View.GONE
+                        box.findViewWithTag<LinearLayout>("poster-meta-badge")?.visibility =
+                            if (focused || cataloguePoster || schedulePoster || row.isFavorite || row.collectionType != null)
                                 View.VISIBLE
                             else View.GONE
                         content.visibility = if (focused) View.VISIBLE else View.GONE
@@ -1815,13 +1851,11 @@ class PageAdapter(
                             if (focused || schedulePoster) View.VISIBLE else View.GONE
                         statusBadge?.visibility =
                             if (focused && release?.ongoing != null) View.VISIBLE else View.GONE
-                        updateLabel?.visibility =
-                            if (focused && updateLabel.text.isNotBlank()) View.VISIBLE
-                            else View.GONE
+                        updateLabel?.visibility = View.GONE
                         if (!cataloguePoster) {
                             content.setPadding(
                                 view.dp(10),
-                                view.dp(if (updateLabel?.text?.isNotBlank() == true) 56 else 44),
+                                view.dp(44),
                                 view.dp(10),
                                 view.dp(12),
                             )
@@ -1864,21 +1898,21 @@ class PageAdapter(
                                     box.addView(it)
                                 }
                         count.layoutParams =
-                            FrameLayout.LayoutParams(-2, view.dp(24), Gravity.TOP or Gravity.END)
+                            FrameLayout.LayoutParams(-2, view.dp(28), Gravity.TOP or Gravity.END)
                                 .apply {
                                     topMargin = view.dp(10)
                                     marginEnd = view.dp(8)
                                 }
                         count.label(
                             release?.catalogueEpisodeCount?.let { "$it эп." }.orEmpty(),
-                            10f,
+                            12f,
                             WHITE,
                             true,
                         )
                         count.gravity = Gravity.CENTER
                         count.includeFontPadding = false
-                        count.setPadding(view.dp(6), 0, view.dp(6), 0)
-                        count.background = shape(0x1AFFFFFF, view.dp(4).toFloat())
+                        count.setPadding(view.dp(10), 0, view.dp(10), 0)
+                        count.background = shape(0xCC181818.toInt(), view.dp(6).toFloat())
                         count.visibility =
                             if (release?.catalogueEpisodeCount != null) View.VISIBLE else View.GONE
                         count.isFocusable = false
@@ -1890,31 +1924,36 @@ class PageAdapter(
                                 box.addView(it)
                             }
                     favorites.layoutParams =
-                        FrameLayout.LayoutParams(-2, view.dp(24), Gravity.TOP or Gravity.START)
+                        FrameLayout.LayoutParams(-2, view.dp(if (cataloguePoster) 28 else 24), Gravity.TOP or Gravity.START)
                             .apply {
                                 topMargin = view.dp(10)
                                 marginStart = view.dp(8)
                             }
                     favorites.label(
-                        release?.favoriteCount?.let(::compactCount).orEmpty(),
-                        10f,
+                        release?.favoriteCount?.let(::compactCount) ?: if (cataloguePoster) "—" else "",
+                        if (cataloguePoster) 12f else 10f,
                         WHITE,
                         true,
                     )
                     favorites.gravity = Gravity.CENTER_VERTICAL
                     favorites.includeFontPadding = false
                     favorites.isFocusable = false
-                    favorites.setPadding(view.dp(6), 0, view.dp(6), 0)
+                    favorites.setPadding(view.dp(if (cataloguePoster) 8 else 6), 0, view.dp(if (cataloguePoster) 8 else 6), 0)
                     favorites.compoundDrawablePadding = view.dp(3)
                     favorites.setCompoundDrawablesRelative(
-                        view.context.getDrawable(R.drawable.ic_favorite)?.apply {
+                        view.context.getDrawable(R.drawable.ic_favorite)?.mutate()?.apply {
+                            setTint(if (row.isFavorite) 0xFFFFD54F.toInt() else WHITE)
                             setBounds(0, 0, view.dp(13), view.dp(13))
                         },
                         null,
                         null,
                         null,
                     )
-                    favorites.background = shape(0x1AFFFFFF, view.dp(4).toFloat())
+                    favorites.background =
+                        shape(
+                            if (cataloguePoster) 0xCC181818.toInt() else 0x1AFFFFFF,
+                            view.dp(if (cataloguePoster) 6 else 4).toFloat(),
+                        )
                     favorites.contentDescription =
                         release?.favoriteCount?.let { "В избранном у $it пользователей" }.orEmpty()
                     box.findViewWithTag<TextView>("schedule-favorites")?.visibility =
@@ -1940,7 +1979,8 @@ class PageAdapter(
                         )
                         rating.compoundDrawablePadding = view.dp(4)
                         rating.setCompoundDrawablesRelative(
-                            view.context.getDrawable(R.drawable.ic_favorite)?.apply {
+                            view.context.getDrawable(R.drawable.ic_favorite)?.mutate()?.apply {
+                                setTint(if (row.isFavorite) 0xFFFFD54F.toInt() else WHITE)
                                 setBounds(0, 0, view.dp(13), view.dp(13))
                             },
                             null,
@@ -1955,6 +1995,59 @@ class PageAdapter(
                             release?.favoriteCount?.let { "В избранном у $it пользователей" }
                                 ?: "Количество добавлений в избранное неизвестно"
                     }
+                    val posterBadge =
+                        box.findViewWithTag<LinearLayout>("poster-meta-badge")
+                            ?: LinearLayout(view.context).also {
+                                it.tag = "poster-meta-badge"
+                                box.addView(it)
+                            }
+                    posterBadge.layoutParams =
+                        FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply {
+                            topMargin = view.dp(10)
+                            marginStart = view.dp(8)
+                        }
+                    posterBadge.orientation = LinearLayout.VERTICAL
+                    posterBadge.gravity = Gravity.CENTER_HORIZONTAL
+                    posterBadge.setPadding(view.dp(8), view.dp(6), view.dp(8), view.dp(6))
+                    posterBadge.background = shape(0xCC181818.toInt(), view.dp(6).toFloat())
+                    posterBadge.isFocusable = false
+                    posterBadge.removeAllViews()
+                    posterBadge.addView(
+                        TextView(view.context).apply {
+                            label(release?.favoriteCount?.let(::compactCount) ?: "—", 12f, WHITE, true)
+                            gravity = Gravity.CENTER
+                            includeFontPadding = false
+                            compoundDrawablePadding = view.dp(4)
+                            setCompoundDrawablesRelative(
+                                view.context.getDrawable(R.drawable.ic_favorite)?.mutate()?.apply {
+                                    setTint(if (row.isFavorite) CollectionVisuals.FAVORITE_COLOR else WHITE)
+                                    setBounds(0, 0, view.dp(14), view.dp(14))
+                                },
+                                null,
+                                null,
+                                null,
+                            )
+                        },
+                        LinearLayout.LayoutParams(-2, -2),
+                    )
+                    row.collectionType?.let { type ->
+                        posterBadge.addView(
+                            ImageView(view.context).apply {
+                                setImageResource(type.icon)
+                                setColorFilter(type.color)
+                                contentDescription = "Коллекция: ${type.title}"
+                                isFocusable = false
+                            },
+                            LinearLayout.LayoutParams(view.dp(20), view.dp(20)).apply {
+                                topMargin = view.dp(5)
+                            },
+                        )
+                    }
+                    posterBadge.contentDescription =
+                        listOfNotNull(
+                            release?.favoriteCount?.let { "В избранном у $it пользователей" },
+                            row.collectionType?.let { "Коллекция: ${it.title}" },
+                        ).joinToString(". ")
                     focusPoster(box.hasFocus())
                     box.setOnFocusChangeListener { _, focused ->
                         focusPoster(focused)
@@ -2232,7 +2325,13 @@ class PageAdapter(
                 icon.visibility = if (row.kind == Kind.ACCOUNT_TILE) View.VISIBLE else View.GONE
                 if (row.kind == Kind.ACCOUNT_TILE) {
                     icon.setImageResource(row.selected)
-                    icon.setColorFilter(WHITE)
+                    icon.setColorFilter(
+                        when (row.selected) {
+                            R.drawable.ic_favorite -> CollectionVisuals.FAVORITE_COLOR
+                            R.drawable.ic_collection_history -> CollectionVisuals.HISTORY_COLOR
+                            else -> WHITE
+                        }
+                    )
                 }
                 val labels = box.getChildAt(1) as LinearLayout
                 (labels.getChildAt(0) as TextView).apply {
