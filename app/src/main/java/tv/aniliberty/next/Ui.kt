@@ -1658,7 +1658,12 @@ class PageAdapter(
                     title.maxLines = 4
                     subtitle.gravity = Gravity.CENTER
                     subtitle.maxLines = 4
-                    subtitle.text =
+                    val publicationTime =
+                        relativeUpdateLabel(
+                            release?.latestEpisode?.updatedAt?.ifBlank { release.updatedAt }
+                                ?: release?.updatedAt.orEmpty()
+                        )
+                    val yearDetails =
                         listOf(
                                 release?.year.orEmpty(),
                                 release?.season.orEmpty(),
@@ -1669,7 +1674,11 @@ class PageAdapter(
                             )
                             .filter(String::isNotBlank)
                             .joinToString(" · ")
-                    subtitle.maxLines = 1
+                    subtitle.text =
+                        listOf(publicationTime, yearDetails)
+                            .filter(String::isNotBlank)
+                            .joinToString("\n")
+                    subtitle.maxLines = 2
                     val genresLine =
                         (content.getChildAt(2) as? TextView)
                             ?: TextView(view.context).also {
@@ -1829,13 +1838,11 @@ class PageAdapter(
                             if (focused || schedulePoster) View.VISIBLE else View.GONE
                         statusBadge?.visibility =
                             if (focused && release?.ongoing != null) View.VISIBLE else View.GONE
-                        updateLabel?.visibility =
-                            if (focused && updateLabel.text.isNotBlank()) View.VISIBLE
-                            else View.GONE
+                        updateLabel?.visibility = View.GONE
                         if (!cataloguePoster) {
                             content.setPadding(
                                 view.dp(10),
-                                view.dp(if (updateLabel?.text?.isNotBlank() == true) 56 else 44),
+                                view.dp(44),
                                 view.dp(10),
                                 view.dp(12),
                             )
