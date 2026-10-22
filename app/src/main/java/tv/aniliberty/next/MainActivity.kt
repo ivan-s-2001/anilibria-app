@@ -1906,6 +1906,7 @@ class MainActivity : ComponentActivity() {
         items.map { row ->
             row.copy(
                 isFavorite = row.release?.let { isFavorite(it.id) } ?: false,
+                collectionType = row.release?.let { account.lists?.collections?.get(it.id) },
                 cards =
                     if (row.cards.isNotEmpty()) withFavoriteState(row.cards)
                     else if (row.items.isNotEmpty())
@@ -1915,6 +1916,7 @@ class MainActivity : ComponentActivity() {
                                 Kind.POSTER,
                                 release = it,
                                 isFavorite = isFavorite(it.id),
+                                collectionType = account.lists?.collections?.get(it.id),
                             )
                         }
                     else emptyList(),
