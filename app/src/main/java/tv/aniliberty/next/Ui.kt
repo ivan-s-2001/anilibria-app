@@ -1812,7 +1812,9 @@ class PageAdapter(
                         }
                     content.setPadding(view.dp(10), view.dp(44), view.dp(10), view.dp(12))
                     title.layoutParams = LinearLayout.LayoutParams(-1, 0, 1f)
-                    subtitle.maxLines = 1
+                    // Keep the update timestamp and year/season/age on separate visible lines.
+                    subtitle.maxLines = 2
+                    subtitle.ellipsize = null
                     fun focusPoster(focused: Boolean) {
                         box.findViewWithTag<TextView>("favorite-count")?.visibility = View.GONE
                         box.findViewWithTag<TextView>("schedule-favorites")?.visibility = View.GONE
