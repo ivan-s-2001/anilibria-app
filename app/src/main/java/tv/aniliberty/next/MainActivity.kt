@@ -68,9 +68,11 @@ class MainActivity : ComponentActivity() {
                     val row = adapter.rows.firstOrNull { it.key == item.tag }
                     val saved =
                         childFocusMemory[screenKey(current) to (item.tag as? String).orEmpty()]
-                    choices
-                        .getOrNull(saved ?: if (row?.kind == Kind.ACCOUNT_TABS) row.selected else 0)
-                        ?.requestFocus() ?: choices.firstOrNull()?.requestFocus()
+                    val target =
+                        if (row?.key == "account-collections-tabs") row.selected
+                        else saved ?: if (row?.kind == Kind.ACCOUNT_TABS) row.selected else 0
+                    choices.getOrNull(target)?.requestFocus()
+                        ?: choices.firstOrNull()?.requestFocus()
                 }
             }
             null -> Unit
@@ -2367,6 +2369,10 @@ class MainActivity : ComponentActivity() {
             current == Screen.Home &&
                 state.screen == Screen.Home &&
                 adapter.rows.any { it.kind == Kind.SHELF }
+        val collectionTypeChanged =
+            current is Screen.Collections &&
+                state.screen is Screen.Collections &&
+                current.type != state.screen.type
         val retainedFocus =
             if (current == state.screen)
                 list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String }
@@ -3653,6 +3659,23 @@ class MainActivity : ComponentActivity() {
                 !enterContent &&
                 list.findFocus()?.let { list.findContainingItemView(it)?.tag } == "tabs"
         adapter.submit(withFavoriteState(rows))
+        if (collectionTypeChanged && !menuOpen) {
+            val tabPosition = rows.indexOfFirst { it.key == "account-collections-tabs" }
+            val selectedType = (state.screen as Screen.Collections).type
+            if (tabPosition >= 0) {
+                grid.scrollToPositionWithOffset(tabPosition, list.dp(12))
+                list.doOnNextLayout {
+                    if (current != state.screen || menuOpen) return@doOnNextLayout
+                    val tabs =
+                        list.findViewHolderForAdapterPosition(tabPosition)?.itemView
+                            as? android.widget.HorizontalScrollView
+                    val line = tabs?.getChildAt(0) as? LinearLayout
+                    line?.getChildAt(CollectionType.entries.indexOf(selectedType))?.requestFocus()
+                }
+                list.requestLayout()
+            }
+            return
+        }
         if (startupVisible) return
         if (state.screen is Screen.Detail && !state.loading && rows.any { it.kind == Kind.HERO }) {
             if (menuOpen || !list.hasWindowFocus()) return
