@@ -68,7 +68,7 @@ class Api {
     }
     suspend fun randomFeatures(section:HomeSection):List<Feature> = when(section){
         HomeSection.GENRES->features("/anime/genres/random?limit=4",false)
-        HomeSection.FRANCHISES->features("/anime/franchises/random?limit=4",true)
+        HomeSection.FRANCHISES->features("/anime/franchises/random?limit=3",true)
         else->error("Этот раздел не поддерживает случайную подборку")
     }
     private suspend fun features(path:String,franchise:Boolean):List<Feature> = JSONArray(request(path)).objects().map { feature ->
@@ -151,6 +151,6 @@ data class TorrentLink(val title:String,val description:String,val magnet:String
 
 fun replaceHomeFeatures(home:HomeData,section:HomeSection,features:List<Feature>):HomeData = when(section){
     HomeSection.GENRES->home.copy(genres=features.take(4))
-    HomeSection.FRANCHISES->home.copy(franchises=features.take(4))
+    HomeSection.FRANCHISES->home.copy(franchises=features.take(3))
     else->error("Раздел не является случайной подборкой")
 }

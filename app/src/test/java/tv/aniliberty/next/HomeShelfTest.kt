@@ -111,4 +111,16 @@ class HomeShelfTest {
         assertSame(old,home.genres)
     }
 
+    @Test fun franchisePreviewHasThreeItemsWhileGenresHaveFour(){
+        val items=(1..9).map{Row("part:$it",Kind.FRANCHISE,"Часть $it")}
+        val cards=discoveryShelfCards("franchises","Франшизы",items,3,refresh={},openAll={})
+        assertEquals(5,cards.size)
+        assertEquals(3,cards.count{it.kind==Kind.FRANCHISE})
+        assertEquals(Kind.REFRESH,cards[3].kind)
+        assertEquals(Kind.MORE,cards[4].kind)
+        val original=HomeData(null,emptyList(),null,emptyList(),emptyList())
+        val replaced=replaceHomeFeatures(original,HomeSection.FRANCHISES,(1..9).map{Feature("$it","Часть $it","",null)})
+        assertEquals(3,replaced.franchises!!.size)
+    }
+
 }
