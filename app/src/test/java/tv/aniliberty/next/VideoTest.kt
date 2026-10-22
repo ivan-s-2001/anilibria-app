@@ -9,6 +9,10 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[30])
 class VideoTest{
+    @Test fun extraInformationContainsOnlyChannelAndDate(){
+        val item=parseHomeVideos("""[{"id":1,"title":"Ролик","views":999,"comments":10,"created_at":"2026-10-21T12:00:00Z","origin":{"title":"Канал"}}]""").single()
+        assertEquals("Канал · 21.10.2026",item.subtitle)
+    }
     @Test fun parsesNativeArrayWithPreviewAndSourceLink(){
         val item=parseHomeVideos("""[{"id":1,"title":"Ролик","url":"https://www.youtube.com/watch?v=abcdefghijk","image":{"optimized":{"preview":"/video.webp"}},"origin":{"title":"AniLiberty"}}]""").single()
         assertEquals("Ролик",item.title)
