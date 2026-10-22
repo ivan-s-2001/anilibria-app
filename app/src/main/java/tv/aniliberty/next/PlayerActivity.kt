@@ -52,7 +52,7 @@ class PlayerActivity : ComponentActivity() {
     private var nextRemaining=10
     private var countdownRunning=false
     private val handler=Handler(Looper.getMainLooper())
-    private val prefs by lazy{getSharedPreferences("viewing",MODE_PRIVATE)}
+    private val prefs by lazy{playbackPreferences(this)}
     private fun dp(value:Int)=(value*resources.displayMetrics.density).toInt()
     private fun time(ms:Long):String{val seconds=ms.coerceAtLeast(0)/1000;return "%d:%02d".format(seconds/60,seconds%60)}
     private val hide=Runnable{if(panel==null && pendingSeek==null && player?.isPlaying==true)hideControls()}
@@ -197,6 +197,7 @@ class PlayerActivity : ComponentActivity() {
         val duration=engine.duration.takeIf{it>0}?:episode.duration*1000
         if(engine.currentPosition==0L && engine.duration<=0 && prefs.getLong("position:${episode.id}",0)>0)return
         ViewingHistory(prefs).save(item,episode,engine.currentPosition,duration)
+        queueAccountProgress(this,episode.id,engine.currentPosition,duration)
         prefs.edit().putLong("position:${episode.id}",engine.currentPosition.coerceAtLeast(0)).putLong("duration:${episode.id}",duration).putString("last:${item.id}",episode.id).apply()
     }
     private fun openPanel(caption:String,caller:View,build:(LinearLayout)->View?){

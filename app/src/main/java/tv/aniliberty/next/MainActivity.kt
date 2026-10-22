@@ -30,8 +30,12 @@ class MainActivity : ComponentActivity() {
     private lateinit var list: RecyclerView
     private lateinit var adapter: PageAdapter
     private lateinit var grid: GridLayoutManager
-    private val prefs by lazy { getSharedPreferences("viewing", MODE_PRIVATE) }
-    private val history by lazy{ViewingHistory(prefs)}
+    private val prefs get()=playbackPreferences(this)
+    private val account by lazy{AccountRepository(this)}
+    private var accountJob:kotlinx.coroutines.Job?=null
+    private var accountLoadedAt=0L
+    private var progressLoadedAt=0L
+    private val history get()=ViewingHistory(prefs)
     private var historyHydrating=false
     private var lastHistoryHydration=0L
     private var resumedOnce=false
@@ -307,13 +311,14 @@ class MainActivity : ComponentActivity() {
             if(current==Screen.Home){if(list.computeVerticalScrollOffset()>0){list.smoothScrollToPosition(0)}else openMenu()}
             else if(!model.back())finish()}})
         lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED){model.state.collect{render(it)}} }
-        if(savedInstanceState==null && prefs.getBoolean("welcomed",false))model.open(Screen.Home,false)
+        if(savedInstanceState==null && getSharedPreferences("viewing",MODE_PRIVATE).getBoolean("welcomed",false))model.open(Screen.Home,false)
     }
     override fun onResume(){
         super.onResume()
         if(resumedOnce && ::adapter.isInitialized){rememberFocus();render(model.state.value)}
         resumedOnce=true
         hydrateHistory()
+        if(account.signedIn)refreshAccount(force=true)
     }
     private fun hydrateHistory(){
         if(historyHydrating || System.currentTimeMillis()-lastHistoryHydration<60000)return
@@ -452,16 +457,148 @@ class MainActivity : ComponentActivity() {
             if(f.ages.isNotEmpty())"Возраст"else ""
         ).filter(String::isNotBlank).joinToString(" · ")
     }
+    private fun login(){
+        AccountPanel(this,lifecycleScope,account){
+            lastHistoryHydration=0L;accountLoadedAt=0L;progressLoadedAt=0L
+            Toast.makeText(this,"Вход выполнен · ${account.session.name}",Toast.LENGTH_SHORT).show()
+            rememberFocus();render(model.state.value);refreshAccount(force=true,after={offerLocalHistory()})
+        }.start()
+    }
+    private fun refreshAccount(force:Boolean=false,after:(()->Unit)?=null){
+        if(!account.signedIn || accountJob?.isActive==true)return
+        if(!force && System.currentTimeMillis()-accountLoadedAt<60000)return
+        accountJob=lifecycleScope.launch{
+            try{
+                account.refresh();accountLoadedAt=System.currentTimeMillis()
+                account.loadProgress();progressLoadedAt=System.currentTimeMillis()
+                rememberFocus();render(model.state.value);after?.invoke()
+            }catch(e:kotlinx.coroutines.CancellationException){throw e}
+            catch(_:Exception){ /* Cached lists remain available; explicit actions offer retry. */ }
+        }
+    }
+    private fun accountAction(done:(()->Unit)?=null,block:suspend()->Unit){
+        if(accountJob?.isActive==true){Toast.makeText(this,"Подождите, идёт синхронизация",Toast.LENGTH_SHORT).show();return}
+        accountJob=lifecycleScope.launch{
+            try{block();rememberFocus();render(model.state.value);done?.invoke()}
+            catch(e:kotlinx.coroutines.CancellationException){throw e}
+            catch(e:Exception){
+                val panel=TvSidePanel(this@MainActivity,"Не удалось сохранить")
+                panel.message(e.message?:"Проверьте подключение")
+                panel.addAction("Повторить",true){panel.dismiss();accountAction(done,block)}
+                if(e is AccountHttpException && e.status in listOf(401,403))panel.addAction("Войти заново"){panel.dismiss();login()}
+                panel.addAction("Закрыть"){panel.dismiss()};panel.show()
+                if(!account.signedIn)render(model.state.value)
+            }
+        }
+    }
     private fun library(){
+        if(!account.signedIn){
+            val panel=TvSidePanel(this,"Моё")
+            panel.message("Избранное, коллекции и прогресс доступны после входа в аккаунт AniLiberty.")
+            panel.addChoice("Войти в аккаунт",icon=R.drawable.ic_library){panel.dismiss();login()}
+            panel.addChoice("Библиотека на этом ТВ",icon=R.drawable.ic_favorite){panel.dismiss();localLibrary()}
+            panel.addAction("Закрыть"){panel.dismiss()};panel.show();return
+        }
+        if(account.lists==null){accountAction(done={library()}){account.refresh()};return}
+        val lists=account.lists!!
+        val panel=TvSidePanel(this,account.session.name)
+        fun open(ids:List<Int>,title:String){panel.dismiss();rememberFocus();model.open(Screen.Library(ids,title))}
+        panel.addChoice("Избранное · ${lists.favorites.size}",icon=R.drawable.ic_favorite){open(lists.favorites.toList(),"Избранное")}
+        CollectionType.entries.forEach{type->val ids=lists.collections.filterValues{it==type}.keys.toList();panel.addChoice("${type.title} · ${ids.size}",icon=R.drawable.ic_library){open(ids,type.title)}}
+        panel.addAction("Занести локальную историю в аккаунт"){panel.dismiss();offerLocalHistory()}
+        panel.addAction("Обновить"){panel.dismiss();accountAction(done={library()}){account.refresh();account.loadProgress()}}
+        panel.addAction("Выйти из аккаунта"){
+            panel.dismiss()
+            TvSidePanel(this,"Выйти из аккаунта?").apply{
+                message("Данные аккаунта останутся на сайте. Приложение переключится на гостевую библиотеку этого ТВ.")
+                addAction("Выйти"){dismiss();accountAction(done={lastHistoryHydration=0;model.open(Screen.Home)}){account.logout()}}
+                addAction("Отмена"){dismiss()};show()
+            }
+        }
+        panel.addAction("Закрыть"){panel.dismiss()};panel.show()
+    }
+    private fun offerLocalHistory(){
+        val local=localTimecodes(getSharedPreferences("viewing",MODE_PRIVATE))
+        if(local.isEmpty())return
+        var plan:List<AccountTimecode> = emptyList()
+        // Code-login's callback can arrive while the account refresh job is completing.
+        list.post{
+            accountAction(done={
+                val panel=TvSidePanel(this,"Занести локальную историю просмотра в ваш аккаунт?")
+                panel.message(if(plan.isEmpty())"Все серии из локальной истории уже есть в аккаунте. Прогресс аккаунта сохранён."else"Можно перенести прогресс ${plan.size} серий с этого ТВ. Уже сохранённый в аккаунте прогресс не изменится. Локальная история останется на ТВ.")
+                if(plan.isNotEmpty())panel.addAction("Перенести",true){panel.dismiss();accountAction{val count=account.importLocalHistory();Toast.makeText(this,"Перенесено серий: $count",Toast.LENGTH_LONG).show()}}
+                panel.addAction(if(plan.isEmpty())"Закрыть"else"Пропустить"){panel.dismiss()};panel.show()
+            }){plan=account.localImportPlan()}
+        }
+    }
+    private fun collections(release:Release){
+        if(!account.signedIn){login();return}
+        if(account.lists==null){accountAction(done={collections(release)}){account.refresh()};return}
+        val current=account.lists!!.collections[release.id]
+        val panel=TvSidePanel(this,"Коллекция")
+        panel.message(release.title)
+        CollectionType.entries.forEach{type->panel.addChoice(type.title,current==type,R.drawable.ic_library){panel.dismiss();accountAction{account.collection(release.id,type)}}}
+        if(current!=null)panel.addChoice("Убрать из коллекции",icon=R.drawable.ic_close){panel.dismiss();accountAction{account.collection(release.id,null)}}
+        panel.addAction("Отмена"){panel.dismiss()};panel.show()
+    }
+    private fun setEpisodeWatched(release:Release,episodes:List<Episode>,watched:Boolean){
+        val edit=prefs.edit()
+        episodes.forEach{e->
+            val duration=(e.duration*1000).coerceAtLeast(1)
+            edit.putLong("position:${e.id}",if(watched)duration else 0).putLong("duration:${e.id}",duration)
+        };edit.apply()
+        episodes.forEachIndexed{index,e->
+            val position=prefs.getLong("position:${e.id}",0);val duration=prefs.getLong("duration:${e.id}",0)
+            queueAccountProgress(this,e.id,position,duration)
+            history.save(release,e,position,duration,System.currentTimeMillis()+index)
+        }
+        if(episodes.isNotEmpty()){if(watched)prefs.edit().putString("last:${release.id}",episodes.last().id).apply()else prefs.edit().remove("last:${release.id}").apply()}
+        rememberFocus();render(model.state.value)
+        if(account.signedIn)accountAction{account.flush();account.loadProgress()}
+    }
+    private fun episodeActions(release:Release,episode:Episode){
+        val completed=prefs.getLong("position:${episode.id}",0)>0 && prefs.getLong("position:${episode.id}",0)>=prefs.getLong("duration:${episode.id}",episode.duration*1000)-1000
+        val panel=TvSidePanel(this,episode.label)
+        if(episode.streams.isNotEmpty())panel.addChoice("Смотреть с начала",icon=R.drawable.ic_play){
+            panel.dismiss();prefs.edit().putLong("position:${episode.id}",0).apply();play(episode)
+        }
+        panel.addChoice(if(completed)"Отметить непросмотренной"else"Отметить просмотренной",icon=R.drawable.ic_episodes){panel.dismiss();setEpisodeWatched(release,listOf(episode),!completed)}
+        panel.addAction("Закрыть"){panel.dismiss()};panel.show()
+    }
+    private fun releaseWatchActions(release:Release){
+        val panel=TvSidePanel(this,"Отметки просмотра")
+        panel.message("Для всех ${release.episodes.size} серий «${release.title}». Коллекция тайтла меняется отдельно.")
+        panel.addChoice("Все серии просмотрены",icon=R.drawable.ic_episodes){panel.dismiss();setEpisodeWatched(release,release.episodes,true)}
+        panel.addChoice("Все серии не просмотрены",icon=R.drawable.ic_refresh){panel.dismiss();setEpisodeWatched(release,release.episodes,false)}
+        panel.addAction("Отмена"){panel.dismiss()};panel.show()
+    }
+    private fun localLibrary(){
         val items=JSONArray(prefs.getString("library","[]"))
         val ids=(0 until items.length()).mapNotNull{items.optJSONObject(it)?.optInt("id")?.takeIf{id->id>0}}
         rememberFocus();model.open(Screen.Library(ids))
     }
     private fun isFavorite(id:Int):Boolean {
+        if(account.signedIn)return account.lists?.favorites?.contains(id)==true
         val items=JSONArray(prefs.getString("library","[]"))
         return (0 until items.length()).any{items.optJSONObject(it)?.optInt("id")==id}
     }
     private fun favorite(release:Release){
+        if(account.signedIn){
+            accountAction{
+                if(account.lists==null)account.refresh()
+                val added=account.lists?.favorites?.contains(release.id)!=true
+                account.favorite(release.id,added)
+                Toast.makeText(this,if(added)"Добавлено в избранное"else"Удалено из избранного",Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+        val panel=TvSidePanel(this,"Избранное AniLiberty")
+        panel.message("Войдите, чтобы сохранять избранное и коллекции в аккаунте. Можно также сохранить тайтл только на этом ТВ.")
+        panel.addChoice("Войти в аккаунт",icon=R.drawable.ic_library){panel.dismiss();login()}
+        panel.addChoice(if(isFavorite(release.id))"Убрать из библиотеки на ТВ"else"Сохранить на этом ТВ",icon=R.drawable.ic_favorite){panel.dismiss();localFavorite(release)}
+        panel.addAction("Отмена"){panel.dismiss()};panel.show()
+    }
+    private fun localFavorite(release:Release){
         val old=JSONArray(prefs.getString("library","[]"));val next=JSONArray();var found=false
         for(i in 0 until old.length()){val item=old.getJSONObject(i);if(item.getInt("id")==release.id)found=true else next.put(item)}
         if(!found)next.put(JSONObject().put("id",release.id).put("title",release.title))
@@ -496,7 +633,7 @@ class MainActivity : ComponentActivity() {
     private fun quickActions(item:Release){
         val resume=prefs.getString("last:${item.id}",null)!=null
         val library=JSONArray(prefs.getString("library","[]"))
-        val added=(0 until library.length()).any{library.getJSONObject(it).getInt("id")==item.id}
+        val added=isFavorite(item.id)
         val labels=arrayOf(if(resume)"Продолжить просмотр"else"Смотреть",if(added)"Убрать из библиотеки"else"В библиотеку","Подробнее")
         fun choose(choice:Int){
             when(choice){
@@ -547,6 +684,8 @@ class MainActivity : ComponentActivity() {
     private fun showDetailMore(release:Release){
         val panel=TvSidePanel(this,"Дополнительно")
         panel.addChoice("Открыть страницу на сайте",icon=R.drawable.ic_arrow_right){panel.dismiss();openLink("https://www.aniliberty.top/anime/releases/release/${release.alias}/episodes")}
+        panel.addChoice("Отметки просмотра серий",icon=R.drawable.ic_episodes){panel.dismiss();releaseWatchActions(release)}
+        panel.addChoice(if(account.signedIn)"Аккаунт · ${account.session.name}"else"Войти в аккаунт",icon=R.drawable.ic_library){panel.dismiss();library()}
         panel.addChoice("Торренты",icon=R.drawable.ic_download){panel.dismiss();showTorrents(release.id)}
         panel.addAction("Закрыть"){panel.dismiss()};panel.show()
     }
@@ -641,7 +780,7 @@ class MainActivity : ComponentActivity() {
         if(state.screen==Screen.Welcome){
             rows+=Row("welcome",Kind.HEADING,"AniLiberty","Так звучит аниме")
             rows+=Row("intro",Kind.TEXT,"Аниме на большом экране","Управление пультом. Просмотр без обязательного входа.")
-            rows+=Row("start",Kind.ACTION,"Начать просмотр",click={prefs.edit().putBoolean("welcomed",true).apply();model.open(Screen.Home,false)})
+            rows+=Row("start",Kind.ACTION,"Начать просмотр",click={getSharedPreferences("viewing",MODE_PRIVATE).edit().putBoolean("welcomed",true).apply();model.open(Screen.Home,false)})
         }else{
             
             if(state.loading && state.screen !is Screen.Catalog && !(state.screen==Screen.Home && state.home!=null))rows+=Row("loading",Kind.TEXT,"Загрузка…")
@@ -711,7 +850,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 is Screen.Library->{
-                    rows+=Row("library-heading",Kind.HEADING,"Моя библиотека",selected=1)
+                    rows+=Row("library-heading",Kind.HEADING,screen.title,selected=1)
                     rows+=state.releases.map{Row("library:${it.id}",Kind.POSTER,release=it,selected=2)}
                     if(state.releases.isEmpty()){
                         rows+=Row("library-empty",Kind.TEXT,"Здесь будут ваши тайтлы","Добавляйте их на странице тайтла или удержанием OK на карточке.")
@@ -743,14 +882,16 @@ class MainActivity : ComponentActivity() {
                 }
                 is Screen.Detail->{
                     val r=state.detail?:return
+                    account.applyProgress(r)
                     val description=android.text.Html.fromHtml(r.description,android.text.Html.FROM_HTML_MODE_LEGACY).toString().trim()
-                    rows+=Row("hero",Kind.HERO,release=r,selected=if(isFavorite(r.id))1 else 0,controls=buildList{
+                    rows+=Row("hero",Kind.HERO,release=r,selected=if(isFavorite(r.id))1 else 0,favoriteTitle=if(account.signedIn){if(isFavorite(r.id))"В избранном"else"В избранное"}else if(isFavorite(r.id))"На этом ТВ"else"В избранное",controls=buildList{
+                        add((account.lists?.collections?.get(r.id)?.title?:"Коллекция") to {collections(r)})
                         if(description.isNotBlank())add("Описание" to {TvSidePanel(this@MainActivity,"Описание").apply{message(description);addAction("Закрыть"){dismiss()};show()};Unit})
                         add("Ещё" to {showDetailMore(r)})
                     })
                     rows+=Row("tabs",Kind.TABS,title=r.episodes.size.toString(),selected=screen.tab)
                     when(screen.tab){
-                        0->{rows+=r.episodes.map{Row("episode:${it.id}",Kind.EPISODE,episode=it)};if(r.episodes.isEmpty())rows+=Row("empty",Kind.TEXT,"Эпизоды пока недоступны")}
+                        0->{rows+=r.episodes.map{Row("episode:${it.id}",Kind.EPISODE,episode=it,longClick={episodeActions(r,it)})};if(r.episodes.isEmpty())rows+=Row("empty",Kind.TEXT,"Эпизоды пока недоступны")}
                         1->{
                             val franchises=state.discovery?.franchises
                             when {

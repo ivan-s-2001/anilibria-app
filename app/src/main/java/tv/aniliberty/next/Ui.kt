@@ -57,7 +57,7 @@ fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int
 }
 
 enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH, CONTINUE, CATALOG_BAR }
-data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList(),val composition:List<String>?=null,val focusLoad:(()->Unit)?=null,val homeStyle:Boolean=false,val queryChanged:((String)->Unit)?=null,val searchDone:(()->Unit)?=null)
+data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList(),val composition:List<String>?=null,val focusLoad:(()->Unit)?=null,val homeStyle:Boolean=false,val queryChanged:((String)->Unit)?=null,val searchDone:(()->Unit)?=null,val favoriteTitle:String?=null)
 
 class PageAdapter(
     private val navigate: (Int) -> Unit,
@@ -440,8 +440,8 @@ class PageAdapter(
                     val label=if(following)"Следующая серия"else if(progress(episode.id).first>0)"Продолжить"else "Смотреть"
                     button(label,R.drawable.ic_play,true,"$label · ${episode.label}"){play(episode)}
                 }
-                button(if(row.selected==1)"В библиотеке"else"В библиотеку",R.drawable.ic_favorite,description=if(row.selected==1)"Убрать из библиотеки"else"Добавить в библиотеку"){favorite(r)}
-                row.controls.forEach{(label,callback)->button(label,if(label=="Описание")R.drawable.ic_comments else R.drawable.ic_settings,click=callback)}
+                button(row.favoriteTitle?:if(row.selected==1)"В библиотеке"else"В библиотеку",R.drawable.ic_favorite,description=row.favoriteTitle?:if(row.selected==1)"Убрать из библиотеки"else"Добавить в библиотеку"){favorite(r)}
+                row.controls.forEach{(label,callback)->button(label,when{label=="Описание"->R.drawable.ic_comments;label=="Коллекция"||CollectionType.entries.any{it.title==label}->R.drawable.ic_library;else->R.drawable.ic_settings},click=callback)}
             }
             Kind.GENRE,Kind.FRANCHISE -> {
                 val box=view as FrameLayout
@@ -720,6 +720,8 @@ class PageAdapter(
                 (box.getChildAt(2)as TextView).apply{label(listOf(episodeTitle,listOf(duration,status).filter{it.isNotBlank()}.joinToString(" · ")).filter{it.isNotBlank()}.joinToString("\n"),16f,WHITE,true);maxLines=4;ellipsize=android.text.TextUtils.TruncateAt.END}
                 (box.getChildAt(3)as android.widget.ProgressBar).progress=if(watched.second>0)(watched.first*1000/watched.second).toInt().coerceIn(0,1000)else 0
                 box.contentDescription=listOf(episodeTitle,duration,status).filter{it.isNotBlank()}.joinToString(". ");box.setOnClickListener{play(e)}
+                box.setOnLongClickListener(row.longClick?.let{callback->View.OnLongClickListener{callback();true}})
+                box.isLongClickable=row.longClick!=null
             }
             Kind.HEADING -> {
                 val box=view as LinearLayout
