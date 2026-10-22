@@ -100,7 +100,10 @@ class PageAdapter(
         val focus=shelf.findFocus()?.let{shelf.findContainingItemView(it)?.tag as?String}
         shelfPositions[key]=ShelfPosition(focus?:shelfPositions[key]?.focusedKey,child.rows.getOrNull(first)?.key,manager.findViewByPosition(first)?.left?:0)
     }
+    private var shelfFocusGeneration=0
+    fun cancelPendingShelfFocus(){shelfFocusGeneration++}
     fun restoreShelf(shelf:RecyclerView, requestFocus:Boolean=true) {
+        val token=if(requestFocus)++shelfFocusGeneration else shelfFocusGeneration
         val key=shelf.getTag(R.id.shelf_key) as?String?:return
         val child=shelf.adapter as?PageAdapter?:return
         val memory=shelfPositions[key]
@@ -113,8 +116,9 @@ class PageAdapter(
         val anchor=child.rows.indexOfFirst{it.key==memory?.anchorKey}.takeIf{it>=0}?:index
         manager.scrollToPositionWithOffset(anchor,memory?.offset?:0)
         if(requestFocus)shelf.post {
+            if(token!=shelfFocusGeneration || shelf.getTag(R.id.shelf_key)!=key || shelf.adapter!==child)return@post
             val target=shelf.findViewHolderForAdapterPosition(index)?.itemView
-            if(target!=null)target.requestFocus()else {manager.scrollToPosition(index);shelf.post{shelf.findViewHolderForAdapterPosition(index)?.itemView?.requestFocus()}}
+            if(target!=null)target.requestFocus()else {manager.scrollToPosition(index);shelf.post{if(token==shelfFocusGeneration && shelf.getTag(R.id.shelf_key)==key && shelf.adapter===child)shelf.findViewHolderForAdapterPosition(index)?.itemView?.requestFocus()}}
         }
     }
     var rows: List<Row> = emptyList(); private set
@@ -125,7 +129,6 @@ class PageAdapter(
         // Snapshot nested lists before the outer adapter is rebound.
         attachedShelves.forEach(::saveShelf)
         val old=rows
-        val useDiff=old.any{it.kind==Kind.HERO || it.kind==Kind.TABS} || value.any{it.kind==Kind.HERO || it.kind==Kind.TABS} || shelfMode || old.any{it.kind==Kind.CATALOG_BAR} || value.any{it.kind==Kind.CATALOG_BAR} || old.any{it.kind==Kind.SHELF || it.kind==Kind.SETTING || it.kind==Kind.ACCOUNT_TILE} || value.any{it.kind==Kind.SHELF || it.kind==Kind.SETTING || it.kind==Kind.ACCOUNT_TILE}
         val diff=androidx.recyclerview.widget.DiffUtil.calculateDiff(object:androidx.recyclerview.widget.DiffUtil.Callback(){
             override fun getOldListSize()=old.size
             override fun getNewListSize()=value.size

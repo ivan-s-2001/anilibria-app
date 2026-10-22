@@ -40,7 +40,7 @@ class RemoteLifecycleTest {
         assertEquals("release:10",list.findFocus()?.tag)
         key(KeyEvent.KEYCODE_DPAD_LEFT);assertEquals("release:9",list.findFocus()?.tag)
         key(KeyEvent.KEYCODE_DPAD_LEFT)
-        assertTrue(activity.currentFocus?.tag?.toString()?.startsWith("menu-route:")==true)
+        assertTrue("Menu focus: ${activity.currentFocus?.tag} / ${activity.currentFocus?.javaClass?.simpleName}; content: ${list.findFocus()?.tag}",activity.currentFocus?.tag?.toString()?.startsWith("menu-route:")==true)
         key(KeyEvent.KEYCODE_DPAD_RIGHT);assertEquals("release:9",list.findFocus()?.tag)
         controller.pause().stop().destroy()
     }

@@ -46,6 +46,7 @@ class MainActivity : ComponentActivity() {
     private val scrollMemory=mutableMapOf<Screen,Pair<String,Int>>()
     private fun screenKey(screen:Screen)=if(screen is Screen.Detail)screen.copy(tab=0)else screen
     private fun focusItem(item:View?) {
+        adapter.cancelPendingShelfFocus()
         when(item){
             is RecyclerView->adapter.restoreShelf(item)
             is android.widget.HorizontalScrollView->{
@@ -217,10 +218,12 @@ class MainActivity : ComponentActivity() {
     }
     private fun openMenu(){
         if(current==Screen.Welcome)return
+        adapter.cancelPendingShelfFocus()
         remoteFocusToken++;detailFocusToken++;detailFocusPending=false
         homeTransition++;homeFocusTarget=null;catalogToolsPending=false;list.stopScroll()
         contentFocus=list.findFocus();rememberFocus();menuOpen=true;buildMenu()
-        (menu.findViewWithTag<View>("menu-route:$selectedSection")?:menu.findViewWithTag<View>("menu-route:0"))?.requestFocus()
+        fun focusMenu(){if(menuOpen)(menu.findViewWithTag<View>("menu-route:$selectedSection")?:menu.findViewWithTag<View>("menu-route:0"))?.requestFocus()}
+        focusMenu();menu.doOnNextLayout{focusMenu()};menu.requestLayout()
     }
     private fun closeMenu(restore:Boolean=true){menuOpen=false;buildMenu();if(restore){if(contentFocus?.isAttachedToWindow==true)contentFocus?.requestFocus()else {
             val key=focusMemory[screenKey(current)];val index=adapter.rows.indexOfFirst{it.key==key}
@@ -253,7 +256,7 @@ class MainActivity : ComponentActivity() {
         val card=grid.findViewByPosition(target)
         val delta=if(heading!=null && card!=null)homeScrollDelta(heading.top,card.bottom,list.paddingTop+dp(6),list.height-list.paddingBottom)else null
         if(delta==0){finish();return true}
-        // Only this transition owns the vertical scroll. Focus changes once it ends.
+        // One scroll owner; attached content receives focus before the animation ends.
         list.stopScroll()
         val listener=object:RecyclerView.OnScrollListener(){
             override fun onScrollStateChanged(view:RecyclerView,state:Int){
@@ -345,62 +348,6 @@ class MainActivity : ComponentActivity() {
         }
         if(pageRemoteKey(event))return true
         if(detailKey(event))return true
-        if((current is Screen.Library || current is Screen.Franchise) && !menuOpen){
-            val position=list.findFocus()?.let{list.findContainingItemView(it)}?.let{list.getChildAdapterPosition(it)}?:-1
-            if(adapter.rows.getOrNull(position)?.kind==Kind.POSTER){
-                val first=adapter.rows.indexOfFirst{it.kind==Kind.POSTER};val column=(position-first)%4
-                if(event.keyCode==KeyEvent.KEYCODE_DPAD_RIGHT && (column==3 || adapter.rows.getOrNull(position+1)?.kind!=Kind.POSTER))return true
-                if(event.keyCode==KeyEvent.KEYCODE_DPAD_LEFT && column==0){if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0)openMenu();return true}
-                if(event.keyCode==KeyEvent.KEYCODE_DPAD_UP && position-first<4)return true
-            }
-        }
-        if(current is Screen.Section && !menuOpen){
-            val position=list.findFocus()?.let{list.findContainingItemView(it)}?.let{list.getChildAdapterPosition(it)}?:-1
-            val kinds=listOf(Kind.POSTER,Kind.GENRE,Kind.FRANCHISE,Kind.FEATURE)
-            if(adapter.rows.getOrNull(position)?.kind in kinds){
-                val columns=if((current as?Screen.Section)?.kind==HomeSection.FRANCHISES)2 else 4
-                val groupHeader=(0 until position).lastOrNull{adapter.rows[it].kind==Kind.HEADING}?:-1
-                val first=(groupHeader+1..position).firstOrNull{adapter.rows[it].kind in kinds}?:position
-                val column=(position-first)%columns
-                if(event.keyCode==KeyEvent.KEYCODE_DPAD_RIGHT && (column==columns-1 || adapter.rows.getOrNull(position+1)?.kind !in kinds))return true
-                if(event.keyCode==KeyEvent.KEYCODE_DPAD_LEFT && column==0){if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0)openMenu();return true}
-                if(event.keyCode==KeyEvent.KEYCODE_DPAD_UP && position-first<columns && adapter.rows.take(groupHeader.coerceAtLeast(0)).none{it.kind in kinds}){
-                    if(event.action==KeyEvent.ACTION_DOWN){val tools=adapter.rows.indexOfFirst{it.key=="section-tools"};grid.scrollToPositionWithOffset(tools,list.dp(12));list.post{focusItem(list.findViewHolderForAdapterPosition(tools)?.itemView)}}
-                    return true
-                }
-                if(event.keyCode==KeyEvent.KEYCODE_DPAD_DOWN && position>=adapter.itemCount-9 && model.state.value.more && model.state.value.moreError==null){
-                    if(event.action==KeyEvent.ACTION_DOWN)model.loadMoreSection()
-                    if(adapter.rows.getOrNull(position+columns)?.kind !in kinds)return true
-                }
-            }
-        }
-        if((current is Screen.Catalog || isAccountList(current)) && !menuOpen){
-            if(catalogToolsPending && event.keyCode in listOf(KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN,KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT))return true
-            val focused=list.findFocus()?.let{list.findContainingItemView(it)}
-            val position=focused?.let{list.getChildAdapterPosition(it)}?:-1
-            if(adapter.rows.getOrNull(position)?.kind==Kind.POSTER){
-                val first=adapter.rows.indexOfFirst{it.kind==Kind.POSTER}
-                val column=(position-first)%4
-                if(event.keyCode==KeyEvent.KEYCODE_DPAD_RIGHT && (column==3 || adapter.rows.getOrNull(position+1)?.kind!=Kind.POSTER))return true
-                if(event.keyCode==KeyEvent.KEYCODE_DPAD_LEFT && column==0){
-                    if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0)openMenu()
-                    return true
-                }
-                if(event.keyCode==KeyEvent.KEYCODE_DPAD_DOWN && isAccountList(current) && accountReleases.more && !accountReleases.loading && accountReleases.error==null && position>=adapter.rows.size-10){
-                    if(event.action==KeyEvent.ACTION_DOWN)loadAccountReleases(current)
-                }
-                if(event.keyCode==KeyEvent.KEYCODE_DPAD_DOWN && current is Screen.Catalog && model.state.value.more && position>=adapter.rows.size-10 && model.state.value.moreError==null){
-                    if(event.action==KeyEvent.ACTION_DOWN)model.loadMoreCatalog()
-                    if(adapter.rows.getOrNull(position+4)?.kind!=Kind.POSTER)return true
-                }
-                if(event.keyCode==KeyEvent.KEYCODE_DPAD_UP && position-first<4){
-                    if(event.action==KeyEvent.ACTION_DOWN){
-                        focusCatalogTools()
-                    }
-                    return true
-                }
-            }
-        }
         if(current==Screen.Home && !menuOpen){
             val focus=list.findFocus()
             val outer=focus?.let{list.findContainingItemView(it)}
