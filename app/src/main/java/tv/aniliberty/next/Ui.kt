@@ -239,6 +239,7 @@ class PageAdapter(
             }
             Kind.CATALOG_BAR -> {
                 val line=(view as HorizontalScrollView).getChildAt(0)as LinearLayout
+                view.layoutParams=view.layoutParams.apply{height=view.dp(60)}
                 if(row.selected==1){
                     val existing=line.getChildAt(0)as?android.widget.EditText
                     if(existing!=null && line.childCount==row.controls.size){
@@ -592,6 +593,7 @@ class PageAdapter(
             }
             Kind.HEADING -> {
                 val box=view as LinearLayout
+                if(row.key=="section-heading" || row.key.startsWith("period:"))box.layoutParams=box.layoutParams.apply{height=view.dp(52)}
                 (box.getChildAt(0)as TextView).label(row.title,if(row.selected==1)24f else 18f,WHITE,true)
                 (box.getChildAt(1)as TextView).apply{label(row.subtitle,12f,MUTED);visibility=if(row.subtitle.isBlank())View.GONE else View.VISIBLE}
                 val title=box.getChildAt(0)as TextView
@@ -606,7 +608,7 @@ class PageAdapter(
                 refresh.layoutParams=LinearLayout.LayoutParams(view.dp(32),view.dp(32)).apply{marginStart=view.dp(12)}
                 refresh.setPadding(view.dp(7),view.dp(7),view.dp(7),view.dp(7))
                 if(row.selected==1)title.includeFontPadding=false
-                refresh.contentDescription="Обновить главную"
+                refresh.contentDescription=if(row.key=="section-heading")"Обновить раздел"else "Обновить главную"
                 refresh.webControlBackground()
                 refresh.setOnClickListener{row.click?.invoke()}
                 box.isFocusable=false;box.isClickable=false

@@ -630,7 +630,7 @@ class MainActivity : ComponentActivity() {
                 is Screen.Section->{
                     val data=state.section?:return
                     val count=data.releases.size+data.features.size+data.videos.size
-                    rows+=Row("section-heading",Kind.HEADING,screen.kind.title,"${count} · ${if(state.more)"Загружено"else "Всего"}",selected=1,click={rememberFocus();model.retry()})
+                    rows+=Row("section-heading",Kind.HEADING,screen.kind.title,selected=1,click={rememberFocus();model.retry()})
                     val query=sectionQueries[screen.kind].orEmpty()
                     rows+=Row("section-tools",Kind.CATALOG_BAR,title=if(catalogSearchEditing)catalogSearchDraft else query,selected=if(catalogSearchEditing)1 else 0,
                         queryChanged=::liveCatalogSearch,searchDone=::finishCatalogSearch,controls=listOf(
