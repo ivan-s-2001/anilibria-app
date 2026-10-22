@@ -543,6 +543,12 @@ class MainActivity : ComponentActivity() {
         if(url==null)return
         try{startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url)))}catch(_:ActivityNotFoundException){Toast.makeText(this,"Нет приложения для открытия ссылки",Toast.LENGTH_LONG).show()}
     }
+    private fun showDetailMore(release:Release){
+        val panel=TvSidePanel(this,"Дополнительно")
+        panel.addChoice("Открыть страницу на сайте",icon=R.drawable.ic_arrow_right){panel.dismiss();openLink("https://www.aniliberty.top/anime/releases/release/${release.alias}/episodes")}
+        panel.addChoice("Торренты",icon=R.drawable.ic_download){panel.dismiss();showTorrents(release.id)}
+        panel.addAction("Закрыть"){panel.dismiss()};panel.show()
+    }
     private fun showTorrents(releaseId:Int){
         val panel=TvSidePanel(this,"Торренты")
         panel.message("Загрузка раздач…")
@@ -736,16 +742,12 @@ class MainActivity : ComponentActivity() {
                 }
                 is Screen.Detail->{
                     val r=state.detail?:return
-                    rows+=Row("hero",Kind.HERO,release=r,selected=if(isFavorite(r.id))1 else 0)
                     val description=android.text.Html.fromHtml(r.description,android.text.Html.FROM_HTML_MODE_LEGACY).toString().trim()
-                    if(description.isNotBlank())rows+=Row("synopsis",Kind.ACTION,description.take(220).let{if(it.length<description.length)"$it…"else it},"Описание",click={TvSidePanel(this,"Описание").apply{message(description);addAction("Закрыть"){dismiss()};show()}})
-                    rows+=Row("more",Kind.ACTION,"Ещё",click={
-                        val panel=TvSidePanel(this,"Дополнительно")
-                        panel.addChoice("Открыть страницу на сайте",icon=R.drawable.ic_arrow_right){panel.dismiss();openLink("https://www.aniliberty.top/anime/releases/release/${r.alias}/episodes")}
-                        panel.addChoice("Торренты",icon=R.drawable.ic_download){panel.dismiss();showTorrents(r.id)}
-                        panel.addAction("Закрыть"){panel.dismiss()};panel.show()
+                    rows+=Row("hero",Kind.HERO,release=r,selected=if(isFavorite(r.id))1 else 0,controls=buildList{
+                        if(description.isNotBlank())add("Описание" to {TvSidePanel(this@MainActivity,"Описание").apply{message(description);addAction("Закрыть"){dismiss()};show()};Unit})
+                        add("Ещё" to {showDetailMore(r)})
                     })
-                    rows+=Row("tabs",Kind.TABS,selected=screen.tab)
+                    rows+=Row("tabs",Kind.TABS,title=r.episodes.size.toString(),selected=screen.tab)
                     when(screen.tab){
                         0->{rows+=r.episodes.map{Row("episode:${it.id}",Kind.EPISODE,episode=it)};if(r.episodes.isEmpty())rows+=Row("empty",Kind.TEXT,"Эпизоды пока недоступны")}
                         1->{

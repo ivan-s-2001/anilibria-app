@@ -355,7 +355,7 @@ class PageAdapter(
             }
             Kind.TABS -> {
                 val line = (view as HorizontalScrollView).getChildAt(0) as LinearLayout; line.removeAllViews()
-                val labels = listOf("Эпизоды", "Связанное", "Рекомендуем", "Работа над релизом")
+                val labels = listOf("Серии${row.title.takeIf{it.isNotBlank()}?.let{" · $it"}.orEmpty()}", "Франшиза", "Похожее", "Команда")
                 val icons = listOf(R.drawable.ic_episodes, R.drawable.ic_related, R.drawable.ic_favorite, R.drawable.ic_team)
                 labels.forEachIndexed { i, text ->
                     val item = action(line,text,icon=icons[i],click={tab(i)})
@@ -373,23 +373,45 @@ class PageAdapter(
                 }
             }
             Kind.HERO -> {
-                val r=row.release!!; val box=view as LinearLayout;box.removeAllViews();box.setPadding(0,view.dp(12),0,view.dp(16))
-                box.addView(ImageView(view.context).apply { scaleType=ImageView.ScaleType.CENTER_CROP;load(r.poster) },LinearLayout.LayoutParams(view.dp(128),view.dp(184)))
-                val info=LinearLayout(view.context).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(28),0,0,0)}
+                val r=row.release!!;val box=view as LinearLayout
+                box.removeAllViews();box.setPadding(0,view.dp(12),0,view.dp(16));box.gravity=Gravity.TOP
+                box.addView(ImageView(view.context).apply{
+                    scaleType=ImageView.ScaleType.FIT_CENTER;load(r.poster)
+                    background=shape(0xFF212121.toInt(),dp(8).toFloat());clipToOutline=true
+                    contentDescription=r.title;isFocusable=false
+                },LinearLayout.LayoutParams(view.dp(156),view.dp(224)))
+                val info=LinearLayout(view.context).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(24),0,0,0)}
                 box.addView(info,LinearLayout.LayoutParams(0,-2,1f))
-                fun text(value:String,size:Float,color:Int=WHITE,bold:Boolean=false,lines:Int=3) {
+                fun text(value:String,size:Float,color:Int=WHITE,bold:Boolean=false,lines:Int=2){
                     if(value.isBlank())return
-                    info.addView(TextView(view.context).apply { label(value,size,color,bold); maxLines=lines;ellipsize=android.text.TextUtils.TruncateAt.END },LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=view.dp(8)})
+                    info.addView(TextView(view.context).apply{
+                        label(value,size,color,bold);maxLines=lines;ellipsize=android.text.TextUtils.TruncateAt.END
+                        includeFontPadding=false;breakStrategy=android.text.Layout.BREAK_STRATEGY_BALANCED
+                    },LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=view.dp(7)})
                 }
-                text(r.title,24f,WHITE,true,2);text(r.english,15f,MUTED,false,1);text(r.metadata,16f);text(r.genres.joinToString(" · "),15f,MUTED,false,2);text(r.ratings.joinToString(" · "){"${it.source} ${"%.1f".format(it.value)}"},14f,MUTED,false,1)
-                val controls=LinearLayout(view.context)
-                info.addView(controls,LinearLayout.LayoutParams(-1,view.dp(48)).apply{topMargin=view.dp(10)})
-                val episode = r.episodes.firstOrNull { it.id == lastEpisode(r.id) } ?: r.episodes.firstOrNull()
-                if(episode!=null && episode.streams.isNotEmpty() && !r.blocked) controls.addView(action(controls,if(progress(episode.id).first>0) "Продолжить" else "Смотреть",true,R.drawable.ic_play){play(episode)},LinearLayout.LayoutParams(-2,-1).apply{marginEnd=view.dp(12)})
-                controls.addView(action(controls,if(row.selected==1)"Убрать из библиотеки"else"В библиотеку",icon=R.drawable.ic_favorite){favorite(r)},LinearLayout.LayoutParams(-2,-1))
-                if(r.blocked)text("Просмотр ограничен правообладателем или регионом",15f,MUTED)
-                else if(episode==null)text("Серии ещё не опубликованы",15f,MUTED)
-                else if(episode.streams.isEmpty())text("Поток для выбранной серии пока недоступен",15f,MUTED)
+                text(r.title,27f,WHITE,true)
+                text(r.english,13f,MUTED,false,1)
+                text(listOf(r.year,r.season,r.type,r.age,r.ongoing?.let{if(it)"Онгоинг"else "Завершён"}.orEmpty()).filter{it.isNotBlank()}.joinToString(" · "),14f,MUTED,false,1)
+                text(r.genres.joinToString(" · "),14f,WHITE,false,2)
+                text(r.ratings.joinToString(" · "){"${it.source} ${"%.1f".format(it.value)}"},13f,MUTED,false,1)
+                val description=android.text.Html.fromHtml(r.description,android.text.Html.FROM_HTML_MODE_LEGACY).toString().trim().replace(Regex("\\s+")," ")
+                text(description,14f,MUTED,false,2)
+                val episode=resumeEpisode(r.episodes,lastEpisode(r.id),progress)
+                val controls=LinearLayout(view.context).apply{gravity=Gravity.CENTER_VERTICAL}
+                info.addView(HorizontalScrollView(view.context).apply{isHorizontalScrollBarEnabled=false;addView(controls)},LinearLayout.LayoutParams(-1,view.dp(48)).apply{topMargin=view.dp(4)})
+                fun button(label:String,icon:Int,primary:Boolean=false,description:String=label,click:()->Unit){
+                    controls.addView(action(controls,label,primary,icon,click).apply{textSize=14f;contentDescription=description},LinearLayout.LayoutParams(-2,view.dp(46)).apply{marginEnd=view.dp(8)})
+                }
+                if(episode!=null && episode.streams.isNotEmpty() && !r.blocked){
+                    val following=r.episodes.any{it.id==lastEpisode(r.id)} && episode.id!=lastEpisode(r.id)
+                    val label=if(following)"Следующая серия"else if(progress(episode.id).first>0)"Продолжить"else "Смотреть"
+                    button(label,R.drawable.ic_play,true,"$label · ${episode.label}"){play(episode)}
+                }
+                button(if(row.selected==1)"В библиотеке"else"В библиотеку",R.drawable.ic_favorite,description=if(row.selected==1)"Убрать из библиотеки"else"Добавить в библиотеку"){favorite(r)}
+                row.controls.forEach{(label,callback)->button(label,if(label=="Описание")R.drawable.ic_comments else R.drawable.ic_settings,click=callback)}
+                if(r.blocked)text("Просмотр ограничен правообладателем или регионом",13f,MUTED)
+                else if(episode==null)text("Серии ещё не опубликованы",13f,MUTED)
+                else if(episode.streams.isEmpty())text("Поток для выбранной серии пока недоступен",13f,MUTED)
             }
             Kind.GENRE,Kind.FRANCHISE -> {
                 val box=view as FrameLayout

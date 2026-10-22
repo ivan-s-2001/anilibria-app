@@ -17,7 +17,7 @@ data class Episode(val id: String, val ordinal: Double, val name: String, val pr
 }
 data class Credit(val role: String, val name: String)
 data class Release(val id: Int, val alias: String, val title: String, val english: String, val poster: String?, val year: String, val season: String, val type: String, val age: String, val genres: List<String>, val description: String, val episodes: List<Episode>, val credits: List<Credit>, val blocked: Boolean, val latestEpisode: Episode? = null, val externalIds: ExternalIds = ExternalIds(), val ratings: List<Rating> = emptyList(), val ongoing:Boolean? = null, val updatedAt:String = "",val totalEpisodes:Int?=null,val releasedEpisodes:Int?=null) {
-    val catalogueEpisodeCount:Int? get() = if(ongoing==true) releasedEpisodes else totalEpisodes
+    val catalogueEpisodeCount:Int? get() = releasedEpisodes
     val metadata: String get() = listOf(year, season, type, age).filter(String::isNotBlank).joinToString(" · ")
 }
 fun number(value: Double): String = java.math.BigDecimal.valueOf(value).stripTrailingZeros().toPlainString()
@@ -142,7 +142,7 @@ class Api {
     suspend fun latest(limit:Int=9): List<Release> = JSONArray(request("/anime/releases/latest?limit=$limit")).objects().map(::parseRelease)
     suspend fun catalog(screen:Screen.Catalog,page:Int=screen.page):CatalogPage {
         val result=parseCatalogPage(request(catalogPath(screen,page)),page)
-        val ids=result.releases.filter{it.ongoing==true}.map{it.id}
+        val ids=result.releases.map{it.id}
         if(ids.isEmpty())return result
         // One batch per catalogue page; planned episodes_total is never a released count.
         val counts=try {
@@ -150,7 +150,7 @@ class Api {
         } catch(cancelled:CancellationException){throw cancelled}
           catch(_:Exception){emptyMap<Int,Int>()}
         return result.copy(releases=result.releases.map{release->
-            if(release.ongoing==true)release.copy(releasedEpisodes=counts[release.id])else release
+            release.copy(releasedEpisodes=counts[release.id])
         })
     }
     private var references:Map<String,List<CatalogChoice>>?=null

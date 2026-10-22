@@ -32,7 +32,9 @@ class CatalogTest{
         val release=parseRelease(org.json.JSONObject("""{"id":1,"is_ongoing":true,"episodes_total":24,"episodes":[{"id":"a","ordinal":1},{"id":"b","ordinal":2},{"id":"special","ordinal":2.5}]}"""))
         assertEquals(3,release.catalogueEpisodeCount)
         assertNull(release.copy(releasedEpisodes=null).catalogueEpisodeCount)
-        assertEquals(24,release.copy(ongoing=false).catalogueEpisodeCount)
+        assertEquals(3,release.copy(ongoing=false).catalogueEpisodeCount)
+        assertEquals(3,release.copy(ongoing=null).catalogueEpisodeCount)
+        assertNull(release.copy(ongoing=false,releasedEpisodes=null).catalogueEpisodeCount)
     }
     @Test fun batchCountsUniqueAvailableEpisodesAndDistinguishesMissingFromEmpty(){
         val counts=parseReleasedEpisodeCounts("""{"data":[{"id":1,"episodes":[{"id":"a"},{"id":"a"},{"id":"b"},{"id":""}]},{"id":2,"episodes":[]},{"id":3}]}""")
