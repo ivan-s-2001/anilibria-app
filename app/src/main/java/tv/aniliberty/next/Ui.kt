@@ -55,7 +55,7 @@ fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int
 }
 
 enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH, CONTINUE, CATALOG_BAR }
-data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList())
+data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList(),val queryChanged:((String)->Unit)?=null,val searchDone:(()->Unit)?=null)
 
 class PageAdapter(
     private val navigate: (Int) -> Unit,
@@ -228,6 +228,37 @@ class PageAdapter(
             }
             Kind.CATALOG_BAR -> {
                 val line=(view as HorizontalScrollView).getChildAt(0)as LinearLayout
+                if(row.selected==1){
+                    val existing=line.getChildAt(0)as?android.widget.EditText
+                    if(existing!=null && line.childCount==1)return
+                    line.removeAllViews()
+                    line.setPadding(0,view.dp(4),0,view.dp(8))
+                    val input=object:android.widget.EditText(view.context){
+                        override fun onKeyPreIme(keyCode:Int,event:KeyEvent):Boolean {
+                            if(keyCode==KeyEvent.KEYCODE_BACK && event.action==KeyEvent.ACTION_UP){row.searchDone?.invoke();return true}
+                            return super.onKeyPreIme(keyCode,event)
+                        }
+                    }.apply{
+                        setText(row.title);hint="Поиск по каталогу…";setSingleLine()
+                        textSize=18f;setTextColor(WHITE);setHintTextColor(MUTED)
+                        setPadding(dp(16),0,dp(16),0);webControlBackground()
+                        imeOptions=android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH or android.view.inputmethod.EditorInfo.IME_FLAG_NO_EXTRACT_UI
+                        inputType=android.text.InputType.TYPE_CLASS_TEXT
+                        addTextChangedListener(object:android.text.TextWatcher{
+                            override fun beforeTextChanged(s:CharSequence?,start:Int,count:Int,after:Int){}
+                            override fun onTextChanged(s:CharSequence?,start:Int,before:Int,count:Int){row.queryChanged?.invoke(s.toString())}
+                            override fun afterTextChanged(s:android.text.Editable?){}
+                        })
+                        setOnEditorActionListener{_,action,_->if(action==android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH){row.searchDone?.invoke();true}else false}
+                        setOnKeyListener{_,key,event->
+                            if(key==KeyEvent.KEYCODE_DPAD_DOWN){if(event.action==KeyEvent.ACTION_DOWN)row.searchDone?.invoke();true}else false
+                        }
+                    }
+                    line.addView(input,LinearLayout.LayoutParams(view.resources.displayMetrics.widthPixels-view.dp(120),view.dp(48)))
+                    input.requestFocus();input.setSelection(input.text.length)
+                    input.post{(view.context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE)as android.view.inputmethod.InputMethodManager).showSoftInput(input,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)}
+                    return
+                }
                 if(line.childCount==row.controls.size && row.controls.indices.all{(line.getChildAt(it)as?TextView)?.text?.toString()==row.controls[it].first}){
                     row.controls.forEachIndexed{index,control->line.getChildAt(index).setOnClickListener{control.second()}}
                     return

@@ -13,6 +13,23 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[30],application=Application::class)
 class HomeShelfTest {
+    @Test fun inlineSearchRetainsEditorAndCursorWhenResultsRebind(){
+        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        var query=""
+        val row=Row("catalogue-tools",Kind.CATALOG_BAR,title="",selected=1,queryChanged={query=it})
+        adapter.submit(listOf(row))
+        val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.CATALOG_BAR.ordinal)
+        adapter.onBindViewHolder(holder,0)
+        val line=(holder.itemView as android.widget.HorizontalScrollView).getChildAt(0)as android.widget.LinearLayout
+        val input=line.getChildAt(0)as android.widget.EditText
+        input.setText("Наруто");input.setSelection(3)
+        assertEquals("Наруто",query)
+        adapter.submit(listOf(row.copy(title=query)))
+        adapter.onBindViewHolder(holder,0)
+        assertSame(input,line.getChildAt(0))
+        assertEquals(3,input.selectionStart)
+        assertEquals(1,line.childCount)
+    }
     @Test fun previewHasNineItemsThenAnExplicitDestination(){
         var opened=false
         val source=(1..20).map{Row("genre:$it",Kind.FEATURE,"Жанр $it")}

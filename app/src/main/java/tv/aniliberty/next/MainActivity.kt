@@ -265,7 +265,7 @@ class MainActivity : ComponentActivity() {
         shell.addView(menu,LinearLayout.LayoutParams(dp(60),-1));shell.addView(list,LinearLayout.LayoutParams(0,-1,1f));buildMenu()
         root=android.widget.FrameLayout(this).apply{addView(shell,android.widget.FrameLayout.LayoutParams(-1,-1))}
         setContentView(root)
-        onBackPressedDispatcher.addCallback(this,object:OnBackPressedCallback(true){override fun handleOnBackPressed(){if(menuOpen){if(current==Screen.Home){finish()}else closeMenu();return}
+        onBackPressedDispatcher.addCallback(this,object:OnBackPressedCallback(true){override fun handleOnBackPressed(){if(catalogSearchEditing){finishCatalogSearch();return};if(menuOpen){if(current==Screen.Home){finish()}else closeMenu();return}
             rememberFocus()
             if(current==Screen.Home){if(list.computeVerticalScrollOffset()>0){list.smoothScrollToPosition(0)}else openMenu()}
             else if(!model.back())finish()}})
@@ -335,21 +335,31 @@ class MainActivity : ComponentActivity() {
         }
         enterCatalogResults=true;model.open(next,false)
     }
+    private var catalogSearchEditing=false
+    private var catalogSearchDraft=""
+    private var catalogSearchJob:kotlinx.coroutines.Job?=null
     private fun catalogSearch(screen:Screen.Catalog){
-        val panel=TvSidePanel(this,"Поиск в каталоге")
-        val input=EditText(this).apply{
-            setText(screen.query);hint="Название аниме";isSingleLine=true
-            setTextColor(WHITE);setHintTextColor(MUTED);textSize=18f
-            setPadding(dp(12),dp(12),dp(12),dp(12))
-            background=shape(0xFF121212.toInt(),dp(8).toFloat(),MUTED,dp(1))
-            imeOptions=EditorInfo.IME_ACTION_SEARCH
+        catalogSearchEditing=true;catalogSearchDraft=screen.query
+        render(model.state.value)
+    }
+    private fun liveCatalogSearch(query:String){
+        catalogSearchDraft=query
+        catalogSearchJob?.cancel()
+        catalogSearchJob=lifecycleScope.launch{
+            kotlinx.coroutines.delay(350)
+            val screen=model.state.value.screen as?Screen.Catalog?:return@launch
+            val next=screen.copy(query=query.trim(),page=1)
+            if(next!=screen)model.open(next,false)
         }
-        panel.body.addView(input,LinearLayout.LayoutParams(-1,dp(56)))
-        fun submit(){applyCatalog(screen.copy(query=input.text.toString().trim()));panel.dismiss()}
-        panel.addAction("Найти",true){submit()}
-        panel.addAction("Отмена"){panel.dismiss()}
-        input.setOnEditorActionListener{_,action,_->if(action==EditorInfo.IME_ACTION_SEARCH){submit();true}else false}
-        panel.show();input.requestFocus()
+    }
+    private fun finishCatalogSearch(){
+        catalogSearchJob?.cancel()
+        catalogSearchEditing=false
+        (getSystemService(INPUT_METHOD_SERVICE)as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(list.windowToken,0)
+        val screen=model.state.value.screen as?Screen.Catalog?:return
+        enterCatalogResults=true
+        val next=screen.copy(query=catalogSearchDraft.trim(),page=1)
+        if(next==screen)render(model.state.value)else model.open(next,false)
     }
     private fun withCatalogReferences(screen:Screen.Catalog,ready:(Map<String,List<CatalogChoice>>)->Unit){
         if(catalogReferences.isNotEmpty()){ready(catalogReferences);return}
@@ -512,9 +522,10 @@ class MainActivity : ComponentActivity() {
             return
         }
         pendingRender=null
+        if(state.screen !is Screen.Catalog){catalogSearchEditing=false;catalogSearchJob?.cancel()}
         (state.screen as?Screen.Detail)?.let{history.restore(it.id)}
         if(current==state.screen && !state.loading && adapter.rows.none{it.key=="loading"})rememberFocus()
-        val sameCatalog=current is Screen.Catalog && current==state.screen && adapter.rows.any{it.kind==Kind.CATALOG_BAR}
+        val sameCatalog=current is Screen.Catalog && (current==state.screen || catalogSearchEditing) && adapter.rows.any{it.kind==Kind.CATALOG_BAR}
         val sameHome=current==Screen.Home && state.screen==Screen.Home && adapter.rows.any{it.kind==Kind.SHELF}
         val retainedFocus = if(current==state.screen) list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String } else null
         current=state.screen
@@ -531,8 +542,8 @@ class MainActivity : ComponentActivity() {
             rows+=Row("start",Kind.ACTION,"Начать просмотр",click={prefs.edit().putBoolean("welcomed",true).apply();model.open(Screen.Home,false)})
         }else{
             
-            if(state.loading && !(state.screen==Screen.Home && state.home!=null))rows+=Row("loading",Kind.TEXT,"Загрузка…")
-            else if(state.error!=null)rows+=Row("retry",Kind.ACTION,"Не удалось загрузить",state.error,click=model::retry)
+            if(state.loading && state.screen !is Screen.Catalog && !(state.screen==Screen.Home && state.home!=null))rows+=Row("loading",Kind.TEXT,"Загрузка…")
+            else if(state.error!=null && state.screen !is Screen.Catalog)rows+=Row("retry",Kind.ACTION,"Не удалось загрузить",state.error,click=model::retry)
             else when(val screen=state.screen){
                 Screen.Home->{
                     val home=state.home?:return
@@ -597,7 +608,7 @@ class MainActivity : ComponentActivity() {
                     val total=state.catalogTotal?.let{"Найдено: $it"}?:"Загружено: ${state.releases.size}"
                     rows+=Row("catalogue-heading",Kind.HEADING,screen.title?:"Каталог",total,selected=1)
                     val sort=catalogReferences["sorting"]?.firstOrNull{it.value==screen.filters.sorting}?.title?:when(screen.filters.sorting){"RATING_DESC"->"По рейтингу";"YEAR_DESC"->"Сначала новые";"YEAR_ASC"->"Сначала старые";else->"Сортировка"}
-                    rows+=Row("catalogue-tools",Kind.CATALOG_BAR,controls=listOf(
+                    rows+=Row("catalogue-tools",Kind.CATALOG_BAR,title=catalogSearchDraft,selected=if(catalogSearchEditing)1 else 0,queryChanged=::liveCatalogSearch,searchDone=::finishCatalogSearch,controls=listOf(
                         (if(screen.query.isBlank())"Поиск по каталогу…"else screen.query.take(40)) to {catalogSearch(screen)},
                         "Фильтры${if(screen.filters.count+(if(screen.genre!=null)1 else 0)>0)" · ${screen.filters.count+(if(screen.genre!=null)1 else 0)}"else ""}" to {catalogFilters(screen)},
                         sort to {catalogSorting(screen)},
@@ -605,7 +616,9 @@ class MainActivity : ComponentActivity() {
                     ))
                     if(screen.filters.count>0 || screen.genre!=null || screen.query.isNotBlank())rows+=Row("catalogue-active",Kind.TEXT,catalogSummary(screen))
                     rows+=state.releases.map{Row("release:${it.id}",Kind.POSTER,release=it,selected=2)}
-                    if(state.releases.isEmpty())rows+=Row("catalogue-empty",Kind.ACTION,"Ничего не найдено","Измените запрос или фильтры",click={catalogFilters(screen)})
+                    if(state.loading)rows+=Row("catalogue-search-loading",Kind.TEXT,"Поиск…")
+                    else if(state.error!=null)rows+=Row("catalogue-search-retry",Kind.ACTION,"Повторить поиск",state.error,click=model::retry)
+                    else if(state.releases.isEmpty())rows+=Row("catalogue-empty",Kind.ACTION,"Ничего не найдено","Измените запрос или фильтры",click={catalogFilters(screen)})
                     if(state.loadingMore)rows+=Row("catalogue-loading-more",Kind.TEXT,"Загрузка…")
                     else if(state.moreError!=null)rows+=Row("catalogue-more-retry",Kind.ACTION,"Повторить загрузку",state.moreError,click=model::loadMoreCatalog)
                 }
@@ -661,6 +674,7 @@ class MainActivity : ComponentActivity() {
         }
         adapter.submit(rows)
         if(current==Screen.Home && menuOpen)return
+        if(catalogSearchEditing && current is Screen.Catalog)return
         if(enterCatalogResults && current is Screen.Catalog && !state.loading){
             enterCatalogResults=false
             val index=rows.indexOfFirst{it.kind==Kind.POSTER}.takeIf{it>=0}?:rows.indexOfFirst{it.kind==Kind.CATALOG_BAR}
