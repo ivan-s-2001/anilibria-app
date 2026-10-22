@@ -13,7 +13,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [30], application = Application::class)
 class WatchedPercentTest {
-    private val context = RuntimeEnvironment.getApplication<Application>()
+    private val context = RuntimeEnvironment.getApplication()
 
     @Before
     fun clear() {
