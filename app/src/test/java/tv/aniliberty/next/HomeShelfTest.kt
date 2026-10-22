@@ -17,14 +17,18 @@ class HomeShelfTest {
         for(kind in listOf(Kind.GENRE,Kind.FEATURE)){
             val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
             adapter.submit(listOf(Row("preview",kind,"Название","Данные")))
-            val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),kind.ordinal)
+            val parent=FrameLayout(RuntimeEnvironment.getApplication())
+            val holder=adapter.onCreateViewHolder(parent,kind.ordinal)
             adapter.onBindViewHolder(holder,0)
             val card=holder.itemView as FrameLayout
+            parent.addView(card)
+            val other=android.widget.TextView(parent.context).apply{isFocusable=true;isFocusableInTouchMode=true}
+            parent.addView(other)
             val image=card.getChildAt(0)as android.widget.ImageView
             assertNull(image.colorFilter)
             card.requestFocus();assertNotNull(image.colorFilter)
             if(kind==Kind.FEATURE)assertEquals(android.view.View.VISIBLE,card.getChildAt(2).visibility)
-            card.clearFocus();assertNull(image.colorFilter)
+            other.requestFocus();assertFalse(card.hasFocus());assertNull(image.colorFilter)
             if(kind==Kind.FEATURE)assertEquals(android.view.View.GONE,card.getChildAt(2).visibility)
         }
     }
