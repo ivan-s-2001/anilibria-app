@@ -1279,7 +1279,7 @@ class PageAdapter(
                 }
                 if (r.ratings.isEmpty() && r.ongoing == null && r.favoriteCount == null)
                     ratings.parent.let { (it as View).visibility = View.GONE }
-                val episode = resumeEpisode(r.episodes, lastEpisode(r.id), progress)
+                val episode = resumeEpisode(r.episodes, lastEpisode(r.id), TvSettings(view.context).watchedPercent, progress)
                 info.addView(
                     View(view.context).apply { tag = "title-bottom-spacer" },
                     LinearLayout.LayoutParams(-1, 0, 1f),
@@ -2259,7 +2259,7 @@ class PageAdapter(
                         }
                     }
                 }
-                val completed = watched.second > 0 && watched.first >= watched.second - 1000
+                val completed = isEpisodeWatched(watched.first, watched.second, TvSettings(box.context).watchedPercent)
                 val episodeTitle =
                     listOf(
                             row.title,

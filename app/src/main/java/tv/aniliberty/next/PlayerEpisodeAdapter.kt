@@ -83,7 +83,7 @@ internal class PlayerEpisodeAdapter(
             when {
                 episode.id == currentId -> "▶ Сейчас воспроизводится"
                 episode.streams.isEmpty() -> "Пока недоступно"
-                duration > 0 && saved >= duration - 1000 -> "✓ Просмотрено"
+                isEpisodeWatched(saved, duration, TvSettings(holder.box.context).watchedPercent) -> "✓ Просмотрено"
                 saved > 0 -> "Продолжить с ${playbackTime(saved)}"
                 else -> "${number(episode.ordinal)} эпизод"
             }

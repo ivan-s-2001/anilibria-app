@@ -15,6 +15,7 @@ data class ContinueEpisode(
     val duration: Long,
     val updatedAt: Long,
     val nextUp: Boolean = false,
+    val watchedPercent: Int = DEFAULT_WATCHED_PERCENT,
 ) {
     val episodeTitle: String
         get() =
@@ -26,7 +27,7 @@ data class ContinueEpisode(
         get() = (duration - position).coerceAtLeast(0)
 
     val completed: Boolean
-        get() = position > 0 && duration > 0 && position >= duration - 1000
+        get() = isEpisodeWatched(position, duration, watchedPercent)
 }
 
 private data class PlaybackRecord(val current: ContinueEpisode, val following: ContinueEpisode?)
@@ -45,6 +46,7 @@ class ViewingHistory(private val prefs: SharedPreferences) {
             item.getLong("duration"),
             item.optLong("updated"),
             item.optBoolean("nextUp"),
+            watchedPercent(prefs),
         )
 
     private fun encode(item: ContinueEpisode) =
@@ -153,14 +155,15 @@ class ViewingHistory(private val prefs: SharedPreferences) {
                 position.coerceAtLeast(0),
                 duration.coerceAtLeast(0),
                 updatedAt,
+                watchedPercent = watchedPercent(prefs),
             )
         val index = release.episodes.indexOfFirst { it.id == episode.id }
         val next =
-            if (entry.completed && index >= 0 && !release.blocked)
+            if (index >= 0 && !release.blocked)
                 release.episodes.drop(index + 1).firstOrNull { e ->
                     val saved = prefs.getLong("position:${e.id}", 0)
                     val length = prefs.getLong("duration:${e.id}", e.duration * 1000)
-                    e.streams.isNotEmpty() && !(saved > 0 && length > 0 && saved >= length - 1000)
+                    e.streams.isNotEmpty() && !isEpisodeWatched(saved, length, watchedPercent(prefs))
                 }
             else null
         val following =
@@ -177,6 +180,7 @@ class ViewingHistory(private val prefs: SharedPreferences) {
                     prefs.getLong("duration:${e.id}", e.duration * 1000),
                     updatedAt,
                     nextUp = saved == 0L,
+                    watchedPercent = watchedPercent(prefs),
                 )
             }
         val updated = PlaybackRecord(entry, following)

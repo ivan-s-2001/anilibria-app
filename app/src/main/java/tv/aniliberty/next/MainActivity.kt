@@ -1861,9 +1861,11 @@ class MainActivity : ComponentActivity() {
 
     private fun episodeActions(release: Release, episode: Episode) {
         val completed =
-            prefs.getLong("position:${episode.id}", 0) > 0 &&
-                prefs.getLong("position:${episode.id}", 0) >=
-                    prefs.getLong("duration:${episode.id}", episode.duration * 1000) - 1000
+            isEpisodeWatched(
+                prefs.getLong("position:${episode.id}", 0),
+                prefs.getLong("duration:${episode.id}", episode.duration * 1000),
+                settings.watchedPercent,
+            )
         val panel = TvSidePanel(this, episode.label)
         if (episode.streams.isNotEmpty())
             panel.addChoice("Смотреть с начала", icon = R.drawable.ic_play) {
@@ -3022,6 +3024,19 @@ class MainActivity : ComponentActivity() {
                             "Следующий эпизод автоматически",
                             "",
                             prefs.getBoolean("auto-next", true),
+                        )
+                        rows += Row(
+                            "setting:watched-percent",
+                            Kind.SETTING,
+                            "Считать серию просмотренной после",
+                            "Доля длительности серии для автоматической отметки",
+                            favoriteTitle = "${settings.watchedPercent}%",
+                            click = {
+                                showWatchedPercent(this) {
+                                    rememberFocus()
+                                    render(model.state.value)
+                                }
+                            },
                         )
                         rows += Row("settings-ads", Kind.HEADING, "Реклама на сайте AniLiberty")
                         if (account.signedIn) {
