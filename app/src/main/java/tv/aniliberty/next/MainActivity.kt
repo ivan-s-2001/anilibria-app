@@ -561,6 +561,9 @@ class MainActivity : ComponentActivity() {
     }
     private fun openSection(kind:HomeSection){rememberFocus();model.open(Screen.Section(kind))}
     private fun releaseCards(items:List<Release>,key:String)=items.distinctBy{it.id}.map{Row("$key:release:${it.id}",Kind.POSTER,release=it,selected=if(key.startsWith("latest",true)||key.startsWith("schedule",true))1 else 0)}
+    private fun watchOrderCards(items:List<Release>,key:String)=items.distinctBy{it.id}.mapIndexed{index,item->
+        Row("$key:${item.id}",Kind.POSTER,release=item,watchOrder=index+1)
+    }
     private fun featureCards(items:List<Feature>,kind:HomeSection)=items.map{feature->
         Row("${kind.name}:${feature.id}",if(kind==HomeSection.GENRES)Kind.GENRE else Kind.FRANCHISE,feature.title,feature.subtitle,image=feature.image,click={
             rememberFocus()
@@ -690,8 +693,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 is Screen.Franchise->{
-                    rows+=Row("franchise-heading",Kind.HEADING,screen.title,"Порядок просмотра")
-                    rows+=state.releases.map{Row("release:${it.id}",Kind.POSTER,release=it,selected=2)}
+                    rows+=Row("franchise-heading",Kind.HEADING,screen.title,"Порядок просмотра · слева направо")
+                    if(state.releases.isNotEmpty())rows+=Row("franchise-order:${screen.id}",Kind.SHELF,selected=7,cards=watchOrderCards(state.releases,"franchise:${screen.id}"))
                     if(state.releases.isEmpty())rows+=Row("empty",Kind.TEXT,"Релизы пока не указаны")
                 }
                 is Screen.Catalog->{
@@ -733,8 +736,8 @@ class MainActivity : ComponentActivity() {
                                 franchises==null -> rows+=Row("related-retry",Kind.ACTION,"Не удалось загрузить франшизу · Повторить",click=model::retryDiscovery)
                                 franchises.isEmpty() -> rows+=Row("related-empty",Kind.TEXT,"Релиз не связан ни с одной франшизой")
                                 else -> franchises.forEach { group ->
-                                    rows+=Row("franchise-heading:${group.id}",Kind.HEADING,group.title,"Порядок просмотра")
-                                    rows+=group.releases.map { part -> Row("franchise-part:${part.id}",Kind.POSTER,release=part) }
+                                    rows+=Row("franchise-heading:${group.id}",Kind.HEADING,group.title,"Порядок просмотра · слева направо")
+                                    rows+=Row("franchise-order:${group.id}",Kind.SHELF,selected=7,cards=watchOrderCards(group.releases,"related:${group.id}"))
                                 }
                             }
                         }
