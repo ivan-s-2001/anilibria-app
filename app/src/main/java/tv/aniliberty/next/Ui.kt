@@ -364,15 +364,17 @@ class PageAdapter(
                 val title=content.getChildAt(0)as TextView
                 val meta=content.getChildAt(1)as TextView
                 val genre=row.kind==Kind.GENRE
+                val franchisePage=row.kind==Kind.FRANCHISE && !shelfMode
+                if(franchisePage)box.layoutParams=box.layoutParams.apply{height=view.dp(180)}
                 box.focusBackground(radiusDp=12);box.clipToOutline=true
                 image.load(row.image);image.scaleType=ImageView.ScaleType.CENTER_CROP
-                if(genre){
+                if(genre || franchisePage){
                     image.layoutParams=FrameLayout.LayoutParams(-1,-1)
                     shade.background=GenreShade();shade.visibility=View.VISIBLE
                     content.layoutParams=FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM)
                     content.setPadding(view.dp(12),view.dp(12),view.dp(12),view.dp(18))
-                    title.label(row.title,if(shelfMode)20f else 17f,WHITE,true);title.gravity=Gravity.CENTER;title.maxLines=2
-                    meta.label(row.subtitle,if(shelfMode)14f else 12f,0xFFBDBDBD.toInt(),true);meta.gravity=Gravity.CENTER;meta.maxLines=1
+                    title.label(row.title,if(shelfMode)20f else 17f,WHITE,true);title.gravity=if(franchisePage)Gravity.START else Gravity.CENTER;title.maxLines=2
+                    meta.label(row.subtitle,if(shelfMode)14f else 12f,0xFFBDBDBD.toInt(),true);meta.gravity=if(franchisePage)Gravity.START else Gravity.CENTER;meta.maxLines=1
                     title.layoutParams=LinearLayout.LayoutParams(-1,-2)
                     meta.layoutParams=LinearLayout.LayoutParams(-1,-2).apply{topMargin=view.dp(5)}
                     content.setBackgroundColor(Color.TRANSPARENT)

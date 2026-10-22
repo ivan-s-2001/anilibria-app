@@ -173,16 +173,17 @@ class MainActivity : ComponentActivity() {
             val position=list.findFocus()?.let{list.findContainingItemView(it)}?.let{list.getChildAdapterPosition(it)}?:-1
             val kinds=listOf(Kind.POSTER,Kind.GENRE,Kind.FRANCHISE,Kind.FEATURE)
             if(adapter.rows.getOrNull(position)?.kind in kinds){
-                val first=adapter.rows.indexOfFirst{it.kind in kinds};val column=(position-first)%4
-                if(event.keyCode==KeyEvent.KEYCODE_DPAD_RIGHT && (column==3 || adapter.rows.getOrNull(position+1)?.kind !in kinds))return true
+                val columns=if((current as?Screen.Section)?.kind==HomeSection.FRANCHISES)3 else 4
+                val first=adapter.rows.indexOfFirst{it.kind in kinds};val column=(position-first)%columns
+                if(event.keyCode==KeyEvent.KEYCODE_DPAD_RIGHT && (column==columns-1 || adapter.rows.getOrNull(position+1)?.kind !in kinds))return true
                 if(event.keyCode==KeyEvent.KEYCODE_DPAD_LEFT && column==0){if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0)openMenu();return true}
-                if(event.keyCode==KeyEvent.KEYCODE_DPAD_UP && position-first<4){
+                if(event.keyCode==KeyEvent.KEYCODE_DPAD_UP && position-first<columns){
                     if(event.action==KeyEvent.ACTION_DOWN){val tools=adapter.rows.indexOfFirst{it.key=="section-tools"};grid.scrollToPositionWithOffset(tools,list.dp(12));list.post{focusItem(list.findViewHolderForAdapterPosition(tools)?.itemView)}}
                     return true
                 }
                 if(event.keyCode==KeyEvent.KEYCODE_DPAD_DOWN && position>=adapter.itemCount-9 && model.state.value.more && model.state.value.moreError==null){
                     if(event.action==KeyEvent.ACTION_DOWN)model.loadMoreSection()
-                    if(adapter.rows.getOrNull(position+4)?.kind !in kinds)return true
+                    if(adapter.rows.getOrNull(position+columns)?.kind !in kinds)return true
                 }
             }
         }
@@ -579,7 +580,7 @@ class MainActivity : ComponentActivity() {
         val section=when(current){Screen.Home->0;is Screen.Catalog,is Screen.Section,is Screen.Franchise->1;else->selectedSection}
         if(section!=selectedSection){selectedSection=section;buildMenu()}
         homeMenuLayout()
-        val spans=if(current is Screen.Catalog || current is Screen.Section)20 else 15
+        val spans=if((current as?Screen.Section)?.kind==HomeSection.FRANCHISES)15 else if(current is Screen.Catalog || current is Screen.Section)20 else 15
         if(grid.spanCount!=spans)grid.spanCount=spans
         menu.visibility=if(current==Screen.Welcome)View.GONE else View.VISIBLE
         val rows=mutableListOf<Row>()
