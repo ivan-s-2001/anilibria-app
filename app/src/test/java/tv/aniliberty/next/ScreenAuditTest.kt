@@ -96,9 +96,15 @@ class ScreenAuditTest {
                             emptyList(),
                         ),
                 )
+        val render =
+            MainActivity::class.java.getDeclaredMethod("render", UiState::class.java).apply {
+                isAccessible = true
+            }
         states.forEach { state ->
             model.state.value = state
             shadowOf(Looper.getMainLooper()).idle()
+            // Audit the requested screen after asynchronous model observers settle.
+            render.invoke(activity, state)
             activity.window.decorView.measure(
                 View.MeasureSpec.makeMeasureSpec(1920, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
@@ -111,6 +117,7 @@ class ScreenAuditTest {
                 View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
             )
             activity.window.decorView.layout(0, 0, 1920, 1080)
+            render.invoke(activity, state)
             val grid = list.layoutManager as androidx.recyclerview.widget.GridLayoutManager
             assertEquals(grid.spanCount, grid.spanSizeLookup.getSpanSize(RecyclerView.NO_POSITION))
             val rows = (list.adapter as PageAdapter).rows
