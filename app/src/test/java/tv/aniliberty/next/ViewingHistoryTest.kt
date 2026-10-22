@@ -44,6 +44,13 @@ class ViewingHistoryTest {
         history.save(release,release.episodes[1],1200000,1200000,12)
         assertTrue(history.items().isEmpty())
     }
+
+    @Test fun openingNextThenLeavingAtZeroKeepsItAsNextUp(){
+        history.save(release,release.episodes[0],1200000,1200000,10)
+        history.save(release,release.episodes[1],0,1200000,11)
+        val item=history.items().single()
+        assertEquals("special",item.episodeId);assertTrue(item.nextUp)
+    }
     @Test fun unavailableNextEpisodeDoesNotProduceWatchTarget(){
         val unavailable=release.copy(episodes=listOf(release.episodes[0],release.episodes[1].copy(streams=emptyList())))
         history.save(unavailable,unavailable.episodes[0],1200000,1200000,10)

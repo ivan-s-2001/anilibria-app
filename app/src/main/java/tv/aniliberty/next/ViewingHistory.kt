@@ -27,6 +27,7 @@ class ViewingHistory(private val prefs:SharedPreferences){
         when{
             record.current.position>0 && !record.current.completed -> record.current
             record.current.completed -> record.following?.takeIf{!it.completed}
+            record.current.position==0L && episodes.any{it.current.completed && it.following?.episodeId==record.current.episodeId} -> record.current.copy(nextUp=true)
             else->null
         }
     }.sortedByDescending{it.updatedAt}
