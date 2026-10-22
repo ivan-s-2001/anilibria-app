@@ -22,8 +22,6 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withPermit
-import org.json.JSONArray
-import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
     private val remoteRepeat = RemoteRepeat()
@@ -1137,7 +1135,7 @@ class MainActivity : ComponentActivity() {
             3 -> library()
             4 -> openAccountList(Screen.Favorites())
             5 -> openAccountList(Screen.Collections())
-            6 -> if (account.signedIn) openAccountHistory() else login()
+            6 -> openAccountHistory()
             7 -> model.open(Screen.Settings)
             8 ->
                 lifecycleScope.launch {
@@ -1188,10 +1186,6 @@ class MainActivity : ComponentActivity() {
     private var scheduleFilterUser: Int? = null
 
     private fun toggleScheduleSource(favorites: Boolean) {
-        if (!account.signedIn) {
-            login()
-            return
-        }
         val user = account.session.userId
         fun apply() {
             if (account.session.userId == user) {
@@ -1398,7 +1392,6 @@ class MainActivity : ComponentActivity() {
                     account.loadProgress()
                     rememberFocus()
                     render(model.state.value)
-                    after?.invoke()
                     startAccountHistorySync()
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
@@ -1406,6 +1399,7 @@ class MainActivity : ComponentActivity() {
                     profileError = e.message ?: "Проверьте соединение"
                 } finally {
                     profileSyncing = false
+                    if (account.signedIn) after?.invoke()
                     if (current == Screen.Profile || current is Screen.AccountSettings)
                         render(model.state.value)
                 }
@@ -1519,7 +1513,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun loadAccountReleases(screen: Screen, reset: Boolean = false) {
-        if (!account.signedIn) return
         val user = account.session.userId
         if (reset || screen != accountReleaseScreen || user != accountReleaseUser) {
             accountReleaseJob?.cancel()
@@ -1731,7 +1724,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun loadAccountHistory(reset: Boolean = false) {
-        if (!account.signedIn || accountHistoryLoading || (!reset && !accountHistoryMore)) return
+        if (accountHistoryLoading || (!reset && !accountHistoryMore)) return
         val user = account.session.userId
         if (reset) {
             accountHistoryItems = emptyList()
@@ -1761,56 +1754,45 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun offerLocalHistory(automatic: Boolean = false) {
-        val local = localTimecodes(getSharedPreferences("viewing", MODE_PRIVATE))
-        if (local.isEmpty()) {
+        val guestLists = account.local.lists()
+        val episodes = localTimecodes(getSharedPreferences("viewing", MODE_PRIVATE))
+        if (
+            episodes.isEmpty() && guestLists.favorites.isEmpty() && guestLists.collections.isEmpty()
+        ) {
             if (!automatic)
                 Toast.makeText(
                         this,
-                        "На этом ТВ нет локальной истории для переноса",
+                        "На этом ТВ нет локальных данных для переноса",
                         Toast.LENGTH_SHORT,
                     )
                     .show()
             return
         }
-        var plan: List<AccountTimecode> = emptyList()
-        // Code-login's callback can arrive while the account refresh job is completing.
+        val user = account.session.userId ?: return
         list.post {
-            accountAction(
-                done = {
-                    val panel =
-                        TvSidePanel(this, "Занести локальную историю просмотра в ваш аккаунт?")
-                    panel.message(
-                        if (plan.isEmpty())
-                            "Все серии из локальной истории уже есть в аккаунте. Прогресс аккаунта сохранён."
-                        else
-                            "Можно перенести прогресс ${plan.size} серий с этого ТВ. Уже сохранённый в аккаунте прогресс не изменится. Локальная история останется на ТВ."
-                    )
-                    if (plan.isNotEmpty())
-                        panel.addAction("Перенести", true) {
-                            panel.dismiss()
-                            accountAction {
-                                val count = account.importLocalHistory()
-                                startAccountHistorySync()
-                                Toast.makeText(this, "Перенесено серий: $count", Toast.LENGTH_LONG)
-                                    .show()
-                            }
-                        }
-                    panel.addAction(if (plan.isEmpty()) "Закрыть" else "Пропустить") {
-                        panel.dismiss()
-                    }
-                    panel.show()
+            if (account.session.userId != user) return@post
+            val panel = TvSidePanel(this, "Перенести данные с ТВ в аккаунт?")
+            panel.message(
+                "Избранное: ${guestLists.favorites.size}. Коллекции: ${guestLists.collections.size}. Прогресс серий: ${episodes.size}.\nУже сохранённые коллекции и прогресс аккаунта не изменятся. Локальные данные останутся на ТВ."
+            )
+            panel.addAction("Перенести", true) {
+                if (accountJob?.isActive == true) return@addAction
+                panel.dismiss()
+                accountAction {
+                    check(account.session.userId == user) { "Аккаунт изменился" }
+                    account.importLocalHistory()
+                    accountReleaseScreen = null
+                    startAccountHistorySync()
+                    Toast.makeText(this, "Данные перенесены", Toast.LENGTH_LONG).show()
                 }
-            ) {
-                plan = account.localImportPlan()
             }
+            panel.addAction("Не переносить") { panel.dismiss() }
+            panel.show()
         }
     }
 
     private fun collections(release: Release) {
-        if (!account.signedIn) {
-            login()
-            return
-        }
+        if (!account.signedIn) account.local.remember(release)
         if (account.lists == null) {
             accountAction(done = { collections(release) }) { account.refresh() }
             return
@@ -1910,75 +1892,24 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun localLibrary() {
-        val items = JSONArray(prefs.getString("library", "[]"))
-        val ids =
-            (0 until items.length()).mapNotNull {
-                items.optJSONObject(it)?.optInt("id")?.takeIf { id -> id > 0 }
-            }
-        rememberFocus()
-        model.open(Screen.Library(ids))
+        openAccountList(Screen.Favorites())
     }
 
-    private fun isFavorite(id: Int): Boolean {
-        if (account.signedIn) return account.lists?.favorites?.contains(id) == true
-        val items = JSONArray(prefs.getString("library", "[]"))
-        return (0 until items.length()).any { items.optJSONObject(it)?.optInt("id") == id }
-    }
+    private fun isFavorite(id: Int): Boolean = account.lists?.favorites?.contains(id) == true
 
     private fun favorite(release: Release) {
-        if (account.signedIn) {
-            accountAction {
-                if (account.lists == null) account.refresh()
-                val added = account.lists?.favorites?.contains(release.id) != true
-                account.favorite(release.id, added)
-                Toast.makeText(
-                        this,
-                        if (added) "Добавлено в избранное" else "Удалено из избранного",
-                        Toast.LENGTH_SHORT,
-                    )
-                    .show()
-            }
-            return
+        if (!account.signedIn) account.local.remember(release)
+        accountAction {
+            if (account.lists == null) account.refresh()
+            val added = !isFavorite(release.id)
+            account.favorite(release.id, added)
+            Toast.makeText(
+                    this,
+                    if (added) "Добавлено в избранное" else "Удалено из избранного",
+                    Toast.LENGTH_SHORT,
+                )
+                .show()
         }
-        val panel = TvSidePanel(this, "Избранное AniLiberty")
-        panel.message(
-            "Войдите, чтобы сохранять избранное и коллекции в аккаунте. Можно также сохранить тайтл только на этом ТВ."
-        )
-        panel.addChoice("Войти в аккаунт", icon = R.drawable.ic_account) {
-            panel.dismiss()
-            login()
-        }
-        panel.addChoice(
-            if (isFavorite(release.id)) "Убрать из библиотеки на ТВ" else "Сохранить на этом ТВ",
-            icon = R.drawable.ic_favorite,
-        ) {
-            panel.dismiss()
-            localFavorite(release)
-        }
-        panel.addAction("Отмена") { panel.dismiss() }
-        panel.show()
-    }
-
-    private fun localFavorite(release: Release) {
-        val old = JSONArray(prefs.getString("library", "[]"))
-        val next = JSONArray()
-        var found = false
-        for (i in 0 until old.length()) {
-            val item = old.getJSONObject(i)
-            if (item.getInt("id") == release.id) found = true else next.put(item)
-        }
-        if (!found) next.put(JSONObject().put("id", release.id).put("title", release.title))
-        prefs.edit().putString("library", next.toString()).apply()
-        Toast.makeText(
-                this,
-                if (found) "Удалено из библиотеки" else "Добавлено в библиотеку",
-                Toast.LENGTH_SHORT,
-            )
-            .show()
-        if (current is Screen.Library) {
-            val ids = (0 until next.length()).map { next.getJSONObject(it).getInt("id") }
-            model.open(Screen.Library(ids), false)
-        } else if (current is Screen.Detail) render(model.state.value)
     }
 
     private fun continueActions(item: ContinueEpisode) {
@@ -2866,7 +2797,11 @@ class MainActivity : ComponentActivity() {
                                 )
                         } else {
                             rows +=
-                                Row("profile-guest", Kind.TEXT, "История сохраняется на этом ТВ")
+                                Row(
+                                    "profile-guest",
+                                    Kind.TEXT,
+                                    "Избранное, коллекции и история сохраняются на этом ТВ",
+                                )
                             rows +=
                                 Row(
                                     "profile-login",
@@ -2881,9 +2816,25 @@ class MainActivity : ComponentActivity() {
                                     "profile-local",
                                     Kind.ACCOUNT_TILE,
                                     "На этом ТВ",
-                                    "Локальная библиотека",
-                                    selected = R.drawable.ic_library,
+                                    "Избранное",
+                                    selected = R.drawable.ic_favorite,
                                     click = { localLibrary() },
+                                )
+                            rows +=
+                                Row(
+                                    "profile-local-collections",
+                                    Kind.ACCOUNT_TILE,
+                                    "Коллекции",
+                                    selected = R.drawable.ic_library,
+                                    click = { openAccountList(Screen.Collections()) },
+                                )
+                            rows +=
+                                Row(
+                                    "profile-local-history",
+                                    Kind.ACCOUNT_TILE,
+                                    "История просмотра",
+                                    selected = R.drawable.ic_previous,
+                                    click = { openAccountHistory() },
                                 )
                             rows +=
                                 Row(
@@ -2960,7 +2911,7 @@ class MainActivity : ComponentActivity() {
                                     if (profileSyncing) "Синхронизация…"
                                     else if (queued > 0) "Ожидают отправки: $queued серий"
                                     else "Всё синхронизировано",
-                                    "Локальная история сохраняется на ТВ и не переносится без вашего выбора.",
+                                    "Избранное, коллекции и история гостя остаются на ТВ. Перенос в аккаунт — только по вашему выбору.",
                                 )
                             profileError?.let {
                                 rows +=
@@ -2979,7 +2930,7 @@ class MainActivity : ComponentActivity() {
                                 Row(
                                     "account-sync-import",
                                     Kind.SETTING,
-                                    "Перенести локальную историю",
+                                    "Перенести данные с ТВ",
                                     "Проверить серии перед отправкой в аккаунт",
                                     favoriteTitle = "›",
                                     click = { offerLocalHistory() },
@@ -3097,15 +3048,7 @@ class MainActivity : ComponentActivity() {
                                         })
                                     else null,
                             )
-                        if (!account.signedIn) {
-                            rows +=
-                                Row(
-                                    "account-list-login",
-                                    Kind.ACTION,
-                                    "Войти в аккаунт",
-                                    click = { login() },
-                                )
-                        } else {
+                        run {
                             if (screen is Screen.Collections) {
                                 rows +=
                                     Row(
@@ -3480,9 +3423,7 @@ class MainActivity : ComponentActivity() {
                                 release = r,
                                 selected = if (isFavorite(r.id)) 1 else 0,
                                 favoriteTitle =
-                                    if (account.signedIn) {
-                                        if (isFavorite(r.id)) "В избранном" else "В избранное"
-                                    } else if (isFavorite(r.id)) "На этом ТВ" else "В избранное",
+                                    if (isFavorite(r.id)) "В избранном" else "В избранное",
                                 controls =
                                     buildList {
                                         add(

@@ -120,6 +120,7 @@ fun playbackPreferences(context: Context): SharedPreferences {
 
 class AccountRepository(private val context: Context, val api: AccountApi = AccountApi()) {
     val session = AccountSession(context)
+    val local = LocalLibrary(context)
     val signedIn: Boolean
         get() = session.userId != null
 
@@ -135,7 +136,7 @@ class AccountRepository(private val context: Context, val api: AccountApi = Acco
             }
             .getOrNull()
 
-    var lists: AccountLists? = cachedLists()
+    var lists: AccountLists? = if (signedIn) cachedLists() else local.lists()
         private set
 
     private fun saveLists() {
@@ -163,9 +164,16 @@ class AccountRepository(private val context: Context, val api: AccountApi = Acco
 
     suspend fun connect(value: String) {
         val profile = api.profile(value)
-        val loaded = api.lists(value)
+        val loaded =
+            try {
+                api.lists(value)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
         session.save(value, profile)
-        lists = loaded
+        lists = loaded ?: cachedLists()
         saveLists()
         remote = emptyMap()
         appliedProgress.clear()
@@ -183,6 +191,11 @@ class AccountRepository(private val context: Context, val api: AccountApi = Acco
     }
 
     suspend fun favorite(id: Int, added: Boolean) {
+        if (!signedIn) {
+            local.favorite(id, added)
+            lists = local.lists()
+            return
+        }
         val value = token()
         api.favorite(value, id, added)
         if (session.token() != value) return
@@ -192,6 +205,11 @@ class AccountRepository(private val context: Context, val api: AccountApi = Acco
     }
 
     suspend fun collection(id: Int, type: CollectionType?) {
+        if (!signedIn) {
+            local.collection(id, type)
+            lists = local.lists()
+            return
+        }
         val value = token()
         api.collection(value, id, type)
         if (session.token() != value) return
@@ -257,10 +275,11 @@ class AccountRepository(private val context: Context, val api: AccountApi = Acco
         }
 
     suspend fun releases(screen: Screen, page: Int): CatalogPage =
-        api.releases(token(), screen, page)
+        if (signedIn) api.releases(token(), screen, page)
+        else local.releases(screen).let { CatalogPage(it, false, it.size) }
 
     suspend fun references(favorites: Boolean): Map<String, List<CatalogChoice>> =
-        api.references(token(), favorites)
+        if (signedIn) api.references(token(), favorites) else local.references(favorites)
 
     suspend fun toggleAdPreference(key: String) {
         val value = token()
@@ -284,7 +303,8 @@ class AccountRepository(private val context: Context, val api: AccountApi = Acco
         api.deleteOtherSessions(token())
     }
 
-    suspend fun history(page: Int = 1): AccountHistoryPage = api.history(token(), page)
+    suspend fun history(page: Int = 1): AccountHistoryPage =
+        if (signedIn) api.history(token(), page) else local.history()
 
     suspend fun recentHistory(): List<AccountHistoryItem> = api.recentHistory(token())
 
@@ -297,9 +317,27 @@ class AccountRepository(private val context: Context, val api: AccountApi = Acco
     }
 
     suspend fun importLocalHistory(): Int {
-        val plan = localImportPlan()
         val value = token()
-        for (batch in plan.chunked(100)) api.updateTimecodes(value, batch)
+        val loaded = api.lists(value)
+        val localLists = local.lists()
+        val plan = localImportPlan()
+        fun checkSession() {
+            check(session.token() == value) { "Аккаунт изменился. Повторите перенос." }
+        }
+        for (id in localLists.favorites - loaded.favorites) {
+            checkSession()
+            api.favorite(value, id, true)
+        }
+        for ((id, type) in localLists.collections.filterKeys { it !in loaded.collections }) {
+            checkSession()
+            api.collection(value, id, type)
+        }
+        for (batch in plan.chunked(100)) {
+            checkSession()
+            api.updateTimecodes(value, batch)
+        }
+        checkSession()
+        refresh()
         loadProgress()
         return plan.size
     }
@@ -315,7 +353,7 @@ class AccountRepository(private val context: Context, val api: AccountApi = Acco
             false
         } finally {
             session.clear()
-            lists = null
+            lists = local.lists()
             remote = emptyMap()
             appliedProgress.clear()
         }

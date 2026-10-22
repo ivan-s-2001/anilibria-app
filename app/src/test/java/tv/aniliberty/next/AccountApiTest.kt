@@ -101,6 +101,17 @@ class AccountApiTest {
     }
 
     @Test
+    fun otpAcceptsFractionalLifetimeFromLiveApi() = runBlocking {
+        val api =
+            AccountApi(
+                AccountTransport { _, _, _, _ ->
+                    """{"otp":{"code":"058701"},"remaining_time":299.70070400000003}"""
+                }
+            )
+        assertEquals(DeviceCode("058701", 300), api.deviceCode("device"))
+    }
+
+    @Test
     fun timecodeWritesUseSecondsAndWatchedFlagWithoutReleasePositionIndex() = runBlocking {
         var sent = ""
         val api =
