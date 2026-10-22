@@ -47,8 +47,8 @@ fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int
     setOnClickListener { click() }
 }
 
-enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH }
-data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList())
+enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH, CONTINUE }
+data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null)
 
 class PageAdapter(
     private val navigate: (Int) -> Unit,
@@ -115,7 +115,7 @@ class PageAdapter(
                 orientation=LinearLayout.VERTICAL;setPadding(0,dp(8),0,dp(4))
                 addView(TextView(context));addView(TextView(context),LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(4)})
             }
-            Kind.POSTER, Kind.SPOTLIGHT, Kind.FEATURE, Kind.GENRE, Kind.FRANCHISE -> FrameLayout(context).apply {
+            Kind.POSTER, Kind.SPOTLIGHT, Kind.FEATURE, Kind.GENRE, Kind.FRANCHISE, Kind.CONTINUE -> FrameLayout(context).apply {
                 isFocusable = true; isClickable = true; focusBackground(radiusDp=12); clipToOutline=true; setPadding(dp(3),dp(3),dp(3),dp(3))
                 addView(ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_CROP },FrameLayout.LayoutParams(-1,-1))
                 addView(View(context).apply { background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,intArrayOf(0xF5121212.toInt(),0x10121212)) },FrameLayout.LayoutParams(-1,-1))
@@ -124,6 +124,7 @@ class PageAdapter(
                     addView(TextView(context).apply{maxLines=2;ellipsize=android.text.TextUtils.TruncateAt.END})
                     addView(TextView(context).apply{maxLines=4;ellipsize=android.text.TextUtils.TruncateAt.END},LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(4)})
                 },FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM))
+                if(Kind.entries[type]==Kind.CONTINUE)addView(android.widget.ProgressBar(context,null,android.R.attr.progressBarStyleHorizontal).apply{max=1000;progressTintList=ColorStateList.valueOf(RED)},FrameLayout.LayoutParams(-1,dp(4),Gravity.TOP).apply{topMargin=cardDp(150)-dp(4)})
             }
             Kind.EPISODE -> FrameLayout(context).apply {
                 isFocusable = true; isClickable = true; focusBackground(); setPadding(dp(3), dp(3), dp(3), dp(3))
@@ -134,7 +135,7 @@ class PageAdapter(
             }
             else -> TextView(context)
         }
-        view.layoutParams = RecyclerView.LayoutParams(if(shelfMode)view.cardDp(when(Kind.entries[type]){Kind.FEATURE->232;Kind.GENRE->172;Kind.FRANCHISE->312;else->144})else -1, when(Kind.entries[type]){Kind.EPISODE->view.dp(160);Kind.GENRE->view.cardDp(236);Kind.FRANCHISE->view.cardDp(190);Kind.POSTER->view.cardDp(270);Kind.MORE->view.cardDp(270);Kind.SHELF->view.dp(286);Kind.SPOTLIGHT->view.dp(200);Kind.FEATURE->view.cardDp(204);else->-2}).apply {
+        view.layoutParams = RecyclerView.LayoutParams(if(shelfMode)view.cardDp(when(Kind.entries[type]){Kind.CONTINUE->272;Kind.FEATURE->232;Kind.GENRE->172;Kind.FRANCHISE->312;else->144})else -1, when(Kind.entries[type]){Kind.CONTINUE->view.cardDp(242);Kind.EPISODE->view.dp(160);Kind.GENRE->view.cardDp(236);Kind.FRANCHISE->view.cardDp(190);Kind.POSTER->view.cardDp(270);Kind.MORE->view.cardDp(270);Kind.SHELF->view.dp(286);Kind.SPOTLIGHT->view.dp(200);Kind.FEATURE->view.cardDp(204);else->-2}).apply {
             val card = Kind.entries[type] in listOf(Kind.POSTER,Kind.EPISODE,Kind.FEATURE)
             setMargins(view.dp(4), view.dp(4),view.dp(4),view.dp(4))
         }
@@ -156,7 +157,7 @@ class PageAdapter(
                 val oldKey=shelf.getTag(R.id.shelf_key) as? String
                 if(oldKey!=row.key){shelf.adapter=PageAdapter(navigate,tab,play,favorite,details,progress,lastEpisode,returnToTabs,day,quickActions,true);shelf.scrollToPosition(0)}
                 shelf.setTag(R.id.shelf_key,row.key)
-                shelf.layoutParams=shelf.layoutParams.apply{height=view.dp((when(row.selected){1->220;2->252;3->206;4->222;else->286}*1.18f).toInt())}
+                shelf.layoutParams=shelf.layoutParams.apply{height=view.dp((when(row.selected){1->220;2->252;3->206;4->222;5->258;else->286}*1.18f).toInt())}
                 val cards=if(row.cards.isNotEmpty())row.cards else row.items.map{Row("${row.key}:release:${it.id}",Kind.POSTER,release=it)}
                 (shelf.adapter as PageAdapter).submit(cards)
                 restoreShelf(shelf,false)
@@ -269,21 +270,22 @@ class PageAdapter(
                 box.setOnClickListener{row.click?.invoke()}
                 box.setOnFocusChangeListener{_,focused->box.animate().scaleX(if(focused)1.025f else 1f).scaleY(if(focused)1.025f else 1f).setDuration(140).start()}
             }
-            Kind.SPOTLIGHT,Kind.FEATURE,Kind.POSTER -> {
+            Kind.SPOTLIGHT,Kind.FEATURE,Kind.POSTER,Kind.CONTINUE -> {
                 val box=view as FrameLayout
                 val content=box.getChildAt(2)as LinearLayout
                 val title=content.getChildAt(0)as TextView
                 val subtitle=content.getChildAt(1)as TextView
                 val release=row.release
+                val continuing=row.kind==Kind.CONTINUE
                 val poster=row.kind==Kind.POSTER
                 val webPoster=poster && row.selected==1
                 val spotlight=row.kind==Kind.SPOTLIGHT
                 val image=box.getChildAt(0)as ImageView
-                image.layoutParams=FrameLayout.LayoutParams(-1,if(poster)view.cardDp(198)else if(spotlight)-1 else view.cardDp(130),Gravity.TOP)
+                image.layoutParams=FrameLayout.LayoutParams(-1,if(poster)view.cardDp(198)else if(spotlight)-1 else view.cardDp(if(continuing)150 else 130),Gravity.TOP)
                 image.scaleType=if(poster)ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_CROP
                 image.background=shape(0xFF212121.toInt(),view.dp(12).toFloat())
                 image.clipToOutline=true
-                image.load(if(poster)release?.poster else row.image)
+                if(continuing && row.image==null){image.scaleType=ImageView.ScaleType.FIT_CENTER;image.setImageResource(R.drawable.ic_aniliberty)}else image.load(if(poster)release?.poster else row.image)
                 box.getChildAt(1).visibility=if(spotlight)View.VISIBLE else View.GONE
                 title.label(release?.title?:row.title,if(spotlight)30f else if(shelfMode)17f else 14f,WHITE,true)
                 title.maxLines=2
@@ -296,8 +298,13 @@ class PageAdapter(
                     content.layoutParams=FrameLayout.LayoutParams((view.resources.displayMetrics.widthPixels*.6f).toInt(),-2,Gravity.BOTTOM or Gravity.START)
                     subtitle.text=listOf(release?.metadata.orEmpty(),"Открыть релиз").filter(String::isNotBlank).joinToString("\n")
                 }else{
-                    content.layoutParams=FrameLayout.LayoutParams(-1,view.cardDp(66),Gravity.BOTTOM)
+                    content.layoutParams=FrameLayout.LayoutParams(-1,view.cardDp(if(continuing)86 else 66),Gravity.BOTTOM)
                     content.setPadding(view.dp(4),view.dp(6),view.dp(4),0)
+                }
+                if(continuing){
+                    val item=row.watching!!
+                    subtitle.maxLines=2
+                    (box.getChildAt(3)as android.widget.ProgressBar).progress=if(item.duration>0)(item.position*1000/item.duration).toInt().coerceIn(0,1000)else 0
                 }
                 content.setBackgroundColor(Color.TRANSPARENT)
                 box.setOnFocusChangeListener{_,focused->

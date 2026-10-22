@@ -117,8 +117,8 @@ class Api {
         val meta = json.optJSONObject("meta")
         return data to (meta != null && meta.optInt("current_page", page) < meta.optInt("last_page", page))
     }
-    suspend fun release(id: Int): Release {
-        synchronized(cache) { cache[id] }?.let { return it }
+    suspend fun release(id: Int, refresh:Boolean=false): Release {
+        if(!refresh)synchronized(cache) { cache[id] }?.let { return it }
         val item = parseRelease(JSONObject(request("/anime/releases/$id?exclude=torrents")))
         synchronized(cache) { if (cache.size >= 24) cache.remove(cache.keys.first()); cache[id] = item }
         return item

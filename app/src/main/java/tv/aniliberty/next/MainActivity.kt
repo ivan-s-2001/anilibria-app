@@ -31,6 +31,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var adapter: PageAdapter
     private lateinit var grid: GridLayoutManager
     private val prefs by lazy { getSharedPreferences("viewing", MODE_PRIVATE) }
+    private val history by lazy{ViewingHistory(prefs)}
+    private var historyHydrating=false
+    private var lastHistoryHydration=0L
+    private var resumedOnce=false
     private val focusMemory = mutableMapOf<Screen, String>()
     private val scrollMemory=mutableMapOf<Screen,Pair<Int,Int>>()
     private fun screenKey(screen:Screen)=if(screen is Screen.Detail)screen.copy(tab=0)else screen
@@ -102,6 +106,7 @@ class MainActivity : ComponentActivity() {
             { id -> prefs.getLong("position:$id",0) to prefs.getLong("duration:$id",0) },
             { id -> prefs.getString("last:$id",null) },::returnToTabs, { index -> enterDay=true;val previous=model.state.value;model.homeDay(index);if(previous==model.state.value)render(model.state.value) },::quickActions)
         grid.spanSizeLookup=object:GridLayoutManager.SpanSizeLookup(){override fun getSpanSize(position:Int)=when(adapter.rows[position].kind){Kind.POSTER,Kind.GENRE->3;Kind.EPISODE,Kind.FEATURE,Kind.FRANCHISE->5;else->15}}
+        list.viewTreeObserver.addOnGlobalFocusChangeListener{old,new->keepHomeHeadingVisible(old,new)}
         list.adapter=adapter
         shell=LinearLayout(this).apply{setBackgroundColor(0xFF121212.toInt())}
         menu=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(12),dp(4),0);setBackgroundColor(0xFF212121.toInt())}
@@ -112,6 +117,55 @@ class MainActivity : ComponentActivity() {
             else if(!model.back())finish()}})
         lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED){model.state.collect{render(it)}} }
         if(savedInstanceState==null && prefs.getBoolean("welcomed",false))model.open(Screen.Home,false)
+    }
+    private fun keepHomeHeadingVisible(old:View?,new:View?){
+        if(current!=Screen.Home || new==null)return
+        val row=list.findContainingItemView(new)?:return
+        val index=list.getChildAdapterPosition(row)
+        if(adapter.rows.getOrNull(index)?.kind!=Kind.SHELF)return
+        val previous=old?.let{list.findContainingItemView(it)}
+        if(previous===row)return
+        val header=homeSectionHeader(adapter.rows,index)?:return
+        val key=adapter.rows[index].key
+        list.postOnAnimation{
+            if(current!=Screen.Home || adapter.rows.getOrNull(index)?.key!=key)return@postOnAnimation
+            val focused=list.findFocus()?.let{list.findContainingItemView(it)}
+            if(focused?.tag!=key)return@postOnAnimation
+            val heading=grid.findViewByPosition(header)
+            if(heading==null || heading.top<list.paddingTop)grid.scrollToPositionWithOffset(header,list.paddingTop+dp(6))
+        }
+    }
+    override fun onResume(){
+        super.onResume()
+        if(resumedOnce && ::adapter.isInitialized){rememberFocus();render(model.state.value)}
+        resumedOnce=true
+        hydrateHistory()
+    }
+    private fun hydrateHistory(){
+        if(historyHydrating || System.currentTimeMillis()-lastHistoryHydration<60000)return
+        historyHydrating=true;lastHistoryHydration=System.currentTimeMillis()
+        lifecycleScope.launch {
+            try{
+                val known=history.latestWatched().associateBy{it.releaseId}
+                val legacy=prefs.all.keys.filter{it.startsWith("last:")}.mapNotNull{it.substringAfter(":").toIntOrNull()}.filter{it !in known}
+                val candidates=(known.values.filter{it.completed}.map{it.releaseId}+legacy).distinct().take(16)
+                for(id in candidates){
+                    try{
+                        val item=model.api.release(id,refresh=true)
+                        val saved=known[id]
+                        val uuid=saved?.episodeId?:prefs.getString("last:$id",null)?:continue
+                        val episode=item.episodes.firstOrNull{it.id==uuid}?:continue
+                        if(history.latestWatched().firstOrNull{it.releaseId==id}!=saved)continue
+                        history.save(item,episode,saved?.position?:prefs.getLong("position:$uuid",0),saved?.duration?:prefs.getLong("duration:$uuid",episode.duration*1000),saved?.updatedAt?:0)
+                    }catch(e:kotlinx.coroutines.CancellationException){throw e}catch(_:Exception){ /* Existing local cards remain usable. */ }
+                }
+                if(current==Screen.Home && candidates.isNotEmpty())render(model.state.value)
+            }finally{historyHydrating=false}
+        }
+    }
+    private fun playContinue(item:ContinueEpisode){
+        rememberFocus()
+        startActivity(Intent(this,PlayerActivity::class.java).putExtra("release",item.releaseId).putExtra("episode",item.episodeId))
     }
     private fun rememberFocus(){
         list.findFocus()?.let{v->list.findContainingItemView(v)?.tag as?String}?.let{focusMemory[screenKey(current)]=it}
@@ -236,6 +290,15 @@ class MainActivity : ComponentActivity() {
                     }
                     rows+=Row("latest-heading",Kind.HEADING,"Новые эпизоды",selected=1)
                     rows+=homeShelf(HomeSection.LATEST,releaseCards(home.latest,"latest"))
+                    val unfinished=history.items()
+                    if(unfinished.isNotEmpty()){
+                        rows+=Row("continue-heading",Kind.HEADING,"Продолжить просмотр",selected=1)
+                        val cards=unfinished.map{item->
+                            val status=when{item.nextUp->"Следующая серия";item.duration>0->"Осталось ${(item.remaining+59999)/60000} мин";else->"Продолжить"}
+                            Row("continue:${item.releaseId}:${item.episodeId}",Kind.CONTINUE,item.releaseTitle,"${item.episodeTitle}\n$status",image=item.preview,watching=item,click={playContinue(item)})
+                        }
+                        rows+=Row("shelf:continue",Kind.SHELF,selected=5,cards=cards)
+                    }
                     rows+=Row("schedule-days",Kind.DAYS,"Расписание релизов",selected=state.homeDay)
                     val schedule=home.schedule?.getOrNull(state.homeDay)
                     if(schedule==null)rows+=Row("schedule-retry",Kind.ACTION,"Не удалось загрузить расписание · Повторить",click=model::retry)
@@ -247,7 +310,7 @@ class MainActivity : ComponentActivity() {
                     rows+=Row("videos-heading",Kind.HEADING,"Видео команды",selected=1)
                     if(home.videos==null)rows+=Row("videos-retry",Kind.ACTION,"Не удалось загрузить видео · Повторить",click=model::retry)
                     else rows+=homeShelf(HomeSection.VIDEOS,videoCards(home.videos),true)
-                    rows+=Row("refresh-home",Kind.ACTION,"Обновить главную",click={rememberFocus();model.retry()})
+                    rows+=Row("refresh-home",Kind.ACTION,"Обновить главную",click={rememberFocus();lastHistoryHydration=0;hydrateHistory();model.retry()})
                     rows+=Row("support",Kind.ACTION,"Поддержать AniLiberty",click={openLink("https://www.aniliberty.top/support")})
                 }
                 is Screen.Section->{
@@ -337,7 +400,7 @@ class MainActivity : ComponentActivity() {
             val key=retainedFocus?:focusMemory[screenKey(state.screen)]
             val index=rows.indexOfFirst{it.key==key}.takeIf{it>=0}
                 ?: if(key!=null && adapter.contentStart>=0) (adapter.contentStart until rows.size).firstOrNull{rows[it].kind!=Kind.HEADING}?:adapter.contentStart
-                else rows.indexOfFirst{it.kind in listOf(Kind.ACTION,Kind.POSTER,Kind.HERO,Kind.SPOTLIGHT,Kind.SHELF,Kind.FEATURE,Kind.GENRE,Kind.FRANCHISE,Kind.MORE)}
+                else rows.indexOfFirst{it.kind in listOf(Kind.ACTION,Kind.POSTER,Kind.HERO,Kind.SPOTLIGHT,Kind.SHELF,Kind.FEATURE,Kind.GENRE,Kind.FRANCHISE,Kind.CONTINUE,Kind.MORE)}
             if(index>=0&&!state.loading){list.doOnNextLayout{
                 val item=list.findViewHolderForAdapterPosition(index)?.itemView
                 focusItem(item)

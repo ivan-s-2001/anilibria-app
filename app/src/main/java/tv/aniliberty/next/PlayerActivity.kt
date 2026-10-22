@@ -135,6 +135,7 @@ class PlayerActivity : ComponentActivity() {
                 val item=Api().release(id);release=item
                 if(item.blocked)error("Просмотр ограничен")
                 val episode=item.episodes.find{it.id==episodeId}?:error("Эпизод не найден")
+                if(episode.streams.isEmpty())error("Нет доступного потока")
                 current=episode
                 if(!stopped)startEpisode(episode,quality,desiredPlay)
             }catch(e:CancellationException){throw e}catch(_:Exception){
@@ -171,6 +172,8 @@ class PlayerActivity : ComponentActivity() {
     private fun save(){
         val engine=player?:return;val episode=current?:return;val item=release?:return
         val duration=engine.duration.takeIf{it>0}?:episode.duration*1000
+        if(engine.currentPosition==0L && engine.duration<=0 && prefs.getLong("position:${episode.id}",0)>0)return
+        ViewingHistory(prefs).save(item,episode,engine.currentPosition,duration)
         prefs.edit().putLong("position:${episode.id}",engine.currentPosition.coerceAtLeast(0)).putLong("duration:${episode.id}",duration).putString("last:${item.id}",episode.id).apply()
     }
     private fun openPanel(caption:String,caller:View,build:(LinearLayout)->View?){

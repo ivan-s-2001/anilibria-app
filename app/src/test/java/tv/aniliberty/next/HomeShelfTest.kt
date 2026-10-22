@@ -137,4 +137,18 @@ class HomeShelfTest {
         line.getChildAt(2).performClick();assertEquals(1,day)
     }
 
+    @Test fun continueCardDisplaysEpisodeAndLaunchesItsExactUuid(){
+        var uuid:String?=null
+        val item=ContinueEpisode(42,"uuid-12.5","Тайтл",12.5,"Особая серия",null,300000,1200000,1)
+        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
+        adapter.submit(listOf(Row("continue:42:uuid-12.5",Kind.CONTINUE,item.releaseTitle,item.episodeTitle,watching=item,click={uuid=item.episodeId})))
+        val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.CONTINUE.ordinal)
+        adapter.onBindViewHolder(holder,0)
+        val card=holder.itemView as FrameLayout
+        assertEquals(250,(card.getChildAt(3)as android.widget.ProgressBar).progress)
+        val caption=card.getChildAt(2)as android.widget.LinearLayout
+        assertTrue((caption.getChildAt(1)as android.widget.TextView).text.contains("12.5"))
+        card.performClick();assertEquals("uuid-12.5",uuid)
+    }
+
 }
