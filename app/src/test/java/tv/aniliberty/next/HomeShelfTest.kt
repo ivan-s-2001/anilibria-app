@@ -145,6 +145,7 @@ class HomeShelfTest {
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.CONTINUE.ordinal)
         adapter.onBindViewHolder(holder,0)
         val card=holder.itemView as FrameLayout
+        assertEquals(card.dp((150*1.18).toInt()),card.layoutParams.height)
         assertEquals(250,(card.getChildAt(3)as android.widget.ProgressBar).progress)
         val caption=card.getChildAt(2)as android.widget.LinearLayout
         val title=caption.getChildAt(0)as android.widget.TextView
