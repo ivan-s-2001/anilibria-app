@@ -502,14 +502,16 @@ class PageAdapter(
                 (box.getChildAt(1)as TextView).apply{label(row.subtitle,12f,MUTED);visibility=if(row.subtitle.isBlank())View.GONE else View.VISIBLE}
                 val title=box.getChildAt(0)as TextView
                 val refresh=(box.getChildAt(2)as?android.widget.ImageButton)?:android.widget.ImageButton(view.context).also{
-                    box.addView(it,LinearLayout.LayoutParams(view.dp(44),view.dp(44)))
+                    box.addView(it,LinearLayout.LayoutParams(view.dp(32),view.dp(32)))
                 }
                 refresh.visibility=if(row.click!=null)View.VISIBLE else View.GONE
                 box.orientation=if(row.click!=null)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
                 box.gravity=Gravity.CENTER_VERTICAL
                 title.layoutParams=LinearLayout.LayoutParams(if(row.click!=null)0 else -1,-2,if(row.click!=null)1f else 0f)
                 refresh.setImageResource(R.drawable.ic_refresh);refresh.setColorFilter(WHITE)
-                refresh.setPadding(view.dp(10),view.dp(10),view.dp(10),view.dp(10))
+                refresh.layoutParams=LinearLayout.LayoutParams(view.dp(32),view.dp(32)).apply{marginStart=view.dp(12)}
+                refresh.setPadding(view.dp(7),view.dp(7),view.dp(7),view.dp(7))
+                if(row.selected==1)title.includeFontPadding=false
                 refresh.contentDescription="Обновить главную"
                 refresh.focusBackground(radiusDp=8)
                 refresh.setOnClickListener{row.click?.invoke()}
