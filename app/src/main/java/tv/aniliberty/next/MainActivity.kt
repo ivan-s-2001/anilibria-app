@@ -2490,7 +2490,7 @@ class MainActivity : ComponentActivity() {
                                         "continue:${item.releaseId}:${item.episodeId}",
                                         Kind.CONTINUE,
                                         item.releaseTitle,
-                                        "${item.episodeTitle}\n$status",
+                                        "Серия ${number(item.ordinal)} · $status",
                                         image = item.preview,
                                         watching = item,
                                         click = { playContinue(item) },
