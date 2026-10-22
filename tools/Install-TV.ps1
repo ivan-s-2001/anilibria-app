@@ -1,4 +1,4 @@
-param([string]$Tv = "192.168.8.133:5555")
+param([Parameter(Mandatory = $true)][string]$Tv)
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path $PSScriptRoot -Parent)
 $adb = "$env:USERPROFILE\Downloads\platform-tools\adb.exe"

@@ -1,32 +1,40 @@
-# Account features on the title page
+# Аккаунт, история и настройки
 
-The TV client uses the existing AniLiberty API v1. No server or API-contract changes.
+TV-клиент использует AniLiberty API v1. Изменений сервера не требуется.
 
-- Login: official OTP endpoints `/accounts/otp/get` and `/accounts/otp/login`. QR opens the website's `/app/auth/otp/linkDevice` page. The user signs in on their phone and enters the six-digit code. Polling stops when the panel closes or the code expires. The token is encrypted with an Android Keystore AES-GCM key; passwords are never entered or stored on TV.
-- Favorites: `/accounts/users/me/favorites/ids`, POST/DELETE `/accounts/users/me/favorites`. Independent from collection status.
-- Collections: `/accounts/users/me/collections/ids`, POST/DELETE `/accounts/users/me/collections`, with the five documented enum values. Selecting a status replaces the release's current collection; removal is explicit.
-- Progress: tuple responses from GET `/accounts/users/me/views/timecodes`; writes contain UUID, seconds and `is_watched`. Long OK on an episode exposes watched/unwatched actions; More exposes bulk marks. Marking a title's collection Watched does not silently mark every episode.
-- Playback writes durable account-specific pending progress. On return to the main activity it is sent in batches, followed by a remote progress refresh. Network errors retain the queue; newer queued values are not removed by an older completed request.
-- Recent history metadata: `/accounts/users/me/views/history?limit=30`. At most twelve distinct releases are hydrated for Continue Watching. This is a recent-history shelf, not a complete account-history browser. Existing local newer playback wins. Metadata errors do not discard usable local cards or block favorite/collection controls.
-- Guest viewing and each account have separate local playback stores. Guest saved titles are not automatically uploaded.
-- After login, when guest history exists, offer “Занести локальную историю просмотра в ваш аккаунт?”. The preview excludes all episode IDs already recorded by the account. The import re-reads remote timecodes, submits only missing episodes in batches of 100, preserves the guest copy, and can be retried from My. Interrupted retries re-read the server, so successful batches are not blindly resent. An independent device can still update the same previously absent ID between GET and POST because the public API has no conditional-write contract.
+## Вход
 
-Validation: contract tests use an injected transport and documented/web-client tuple shapes, including OTP leading zeroes, POST/DELETE array payloads, fractional seconds, unknown collection enums, import conflict precedence and account isolation. GitHub Actions also runs existing UI/layout tests and builds the debug APK. Real authentication and cross-device playback still require testing with a user account on TV.
+На первом экране доступны QR-код, логин и пароль, гостевой просмотр. Те же способы авторизации доступны из профиля.
 
-## Profile page and device login updates
+- QR открывает официальную страницу `/app/auth/otp/linkDevice`. На телефоне пользователь входит в аккаунт и вводит шестизначный код телевизора. Используются `/accounts/otp/get` и `/accounts/otp/login`.
+- Логин и пароль отправляются в `/accounts/users/auth/login`. Пароль не сохраняется приложением; поля формы исключены из сохранения состояния Android.
+- Токен хранится в зашифрованном виде с ключом Android Keystore (AES-GCM).
+- Проверка QR прекращается при закрытии окна или истечении выданного сервером срока. Временные ошибки сети не заменяют действующий код. Повторная загрузка профиля после подтверждения использует уже полученный токен.
 
-“My” now opens a dedicated native profile page. It shows the avatar, display name, login, email and join date, pending progress, manual synchronization, guest-history import and logout/account switching. Favorites, collections and history have separate navigation destinations. Display name and login can be edited natively. Device sessions can be listed and individually revoked (except the current session), or other sessions revoked after confirmation. These settings paths and payloads were verified against the supplied official web application's SettingsAccountSection and SettingsSessionsSection bundles; they are absent from the supplied OpenAPI snapshot. Avatar/email/password settings open the official account settings route using a static QR code on the phone.
+## Списки и прогресс
 
-OTP polling no longer treats a single 404/network error as expiry. The same issued code and QR stay visible throughout the lifetime returned by `/accounts/otp/get`; polling, countdown and profile loading are separate. Once a token is received, retrying profile loading reuses it rather than requesting another OTP. Tests cover 404 → 401 → offline → success and real deadline expiry/cancellation. No artificial extension of server-issued OTP lifetime is applied.
+Избранное и пять статусов коллекций используют отдельные серверные методы. Статус коллекции «Просмотрено» сам по себе не отмечает все серии просмотренными. Отметки отдельных серий доступны по долгому OK; массовые действия — через меню тайтла.
 
-Title navigation uses stable child view IDs plus per-tab focus bookmarks, explicit grid boundaries, and differential updates. Decorative metadata does not take focus. The updated-at line is above year/season/type/age. Real-TV focus, actual authentication and account settings still require user-device verification.
+Прогресс идентифицируется UUID эпизода. В API отправляются секунды и `is_watched`. Очередь сохраняется отдельно для каждого аккаунта; ошибки сети её не удаляют. Ответ на старый запрос не удаляет более свежий локальный прогресс.
 
-## Separate lists and TV settings
+Гостевая история и данные каждого аккаунта разделены. Перенос гостевой истории требует отдельного действия: сначала показывается предложение, затем отправляются только эпизоды, которых ещё нет в аккаунте. Прогресс аккаунта имеет приоритет, гостевая копия сохраняется. При повторной попытке серверные данные читаются заново. Одновременная запись с другого устройства между чтением и отправкой всё ещё возможна: публичный API не предоставляет условную запись.
 
-Favorites and collections now request their authenticated `.../favorites/releases` and `.../collections/releases` endpoints directly, 30 releases per page, with wrapped pagination. Both support server-side search, discrete comma-separated years, genres, types and ages through their own reference endpoints. Only favorites exposes sorting; collections uses the five server statuses. One active result set is retained, not an unbounded cache of account responses. Account identity fences prevent responses from appearing after switching users.
+Избранное и коллекции загружаются по 30 тайтлов с серверной пагинацией, поиском и собственными справочниками фильтров. Сортировка доступна для избранного. Ответы предыдущего аккаунта не подставляются после смены пользователя.
 
-The Settings screen separates device-local preferences (`tv-settings`) from account-wide advertising flags. Three authenticated POST site-setting toggle paths were verified in the website's SettingsSiteSection bundle: toggleIsWithVideoAds, toggleIsWithVideoAdsAlways and toggleIsWithContentAds. Unknown flags are not silently treated as false. Before retrying a requested change the profile is re-read, avoiding blindly repeating a non-idempotent toggle. These preferences do not implement a video-ad delivery pipeline in the native player; video-ad playback remains unimplemented.
+## Профиль и устройства
 
-Opening/ending skip defaults off and uses only finite positive, ordered start/stop seconds within a known media duration. Missing or invalid timing never triggers an estimated skip. Each range skips once per playback activity and episode, so a deliberate seek back can replay it. Auto-next remains enabled by default and reads the existing device preference as its migration default. TV playback is already fullscreen; no ineffective fullscreen switch is displayed. Optional menu buttons are local, and Settings remains reachable from Profile even when its menu shortcut is hidden.
+Профиль содержит данные аккаунта, устройства, синхронизацию и настройки. Имя и логин редактируются в приложении. Почта, аватар и пароль — на официальном сайте через QR. Можно завершить отдельный чужой сеанс или все остальные сеансы после подтверждения.
 
-Profile now uses a two-column tile dashboard: account data, devices, sync and app settings. Identity editing and progress/import controls have separate detail pages with native focusable label/value rows. Account-wide ad flags and local switches use the same row components. Refresh is a heading icon on account lists, history, profile and devices; redundant bottom refresh rows were removed.
+Часть методов настроек и управления устройствами сверена с официальным веб-клиентом; в использованном снимке OpenAPI они отсутствовали. Их совместимость требует проверки на реальном аккаунте.
+
+## Настройки телевизора
+
+Локальные параметры плеера и меню хранятся отдельно от настроек аккаунта. Автопропуск использует только существующую корректную разметку опенинга/эндинга и по умолчанию выключен. Автопереход к следующей серии по умолчанию включён.
+
+Параметры рекламы относятся к сайту AniLiberty. Воспроизведение видеорекламы в нативном плеере не реализовано. Перед повтором изменения серверный профиль читается заново, чтобы не повторить переключение вслепую.
+
+## Проверки и ограничения
+
+Тестами проверяются контракты запросов, начальные нули OTP, дробные секунды, списки, импорт, разделение аккаунтов, навигация и прокрутка длинных описаний. CI запускает тесты, lint и сборки debug/release.
+
+Успешный CI не подтверждает реальный вход, синхронизацию между двумя устройствами, работу всех кнопок конкретного пульта или полноту функций старого клиента. Эти сценарии требуют отдельной ручной проверки. Автоматической миграции данных старого приложения нет.
