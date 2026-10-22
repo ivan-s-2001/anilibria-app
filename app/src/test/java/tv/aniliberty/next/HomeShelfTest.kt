@@ -44,6 +44,26 @@ class HomeShelfTest {
         assertEquals(feature.itemView.layoutParams.width,more.itemView.layoutParams.width)
         assertEquals(feature.itemView.layoutParams.height,more.itemView.layoutParams.height)
     }
+    @Test fun everyShelfEndMatchesCardSizeAndCentersIconAboveCaption(){
+        val context=RuntimeEnvironment.getApplication()
+        val cases=listOf(Triple(0,Kind.POSTER,270),Triple(1,Kind.FEATURE,204),Triple(2,Kind.GENRE,236),Triple(3,Kind.FRANCHISE,190),Triple(4,Kind.POSTER,206),Triple(5,Kind.CONTINUE,150))
+        for((style,kind,height)in cases){
+            val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
+            adapter.submit(listOf(Row("end",Kind.MORE,"Очень длинное название раздела",selected=style,click={})))
+            val holder=adapter.onCreateViewHolder(FrameLayout(context),Kind.MORE.ordinal)
+            adapter.onBindViewHolder(holder,0)
+            val box=holder.itemView as android.widget.LinearLayout
+            assertEquals(box.dp((height*1.18f).toInt()),box.layoutParams.height)
+            val width=when(kind){Kind.FEATURE->232;Kind.GENRE->172;Kind.FRANCHISE->312;Kind.CONTINUE->272;else->144}
+            assertEquals(box.dp((width*1.18f).toInt()),box.layoutParams.width)
+            assertEquals(android.view.Gravity.CENTER,box.gravity)
+            assertEquals(android.widget.LinearLayout.VERTICAL,box.orientation)
+            assertTrue(box.getChildAt(0)is android.widget.ImageView)
+            assertEquals("Открыть всё",(box.getChildAt(1)as android.widget.TextView).text.toString())
+            assertFalse(box.getChildAt(1).isFocusable)
+        }
+    }
+
     @Test fun genrePlacesCaptionInsideImageLikeWeb(){
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
         adapter.submit(listOf(Row("genre:1",Kind.GENRE,"Фэнтези","628 релизов")))

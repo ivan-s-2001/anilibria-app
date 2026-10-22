@@ -106,6 +106,12 @@ class PageAdapter(
                 isHorizontalScrollBarEnabled = false
                 addView(LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL })
             }
+            Kind.MORE,Kind.REFRESH -> LinearLayout(context).apply{
+                orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER
+                setPadding(dp(12),dp(12),dp(12),dp(12))
+                addView(ImageView(context).apply{scaleType=ImageView.ScaleType.FIT_CENTER;isFocusable=false},LinearLayout.LayoutParams(dp(32),dp(32)))
+                addView(TextView(context).apply{gravity=Gravity.CENTER;maxLines=2;includeFontPadding=false;isFocusable=false;ellipsize=android.text.TextUtils.TruncateAt.END},LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(12)})
+            }
             Kind.SHELF -> RecyclerView(context).apply {
                 layoutManager=androidx.recyclerview.widget.LinearLayoutManager(context,RecyclerView.HORIZONTAL,false)
                 clipToPadding=false;itemAnimator=null;setPadding(dp(4),dp(4),dp(4),dp(4))
@@ -163,17 +169,26 @@ class PageAdapter(
                 restoreShelf(shelf,false)
             }
             Kind.MORE,Kind.REFRESH -> {
-                val text=view as TextView
-                text.layoutParams=text.layoutParams.apply{if(shelfMode){width=view.cardDp(when(row.selected){1->232;2->172;3->312;else->144});height=view.cardDp(when(row.selected){1->204;2->236;3->190;4->206;else->270})}}
-                text.label(if(row.kind==Kind.REFRESH)row.title else "Открыть все\n${row.title}",if(shelfMode)18f else 16f,WHITE,true)
-                val arrow=view.context.getDrawable(if(row.kind==Kind.REFRESH)R.drawable.ic_refresh else R.drawable.ic_arrow_right)!!.mutate().apply{setBounds(0,0,view.cardDp(32),view.cardDp(32));setTint(RED)}
-                text.setCompoundDrawables(null,arrow,null,null);text.compoundDrawablePadding=view.dp(12)
-                text.gravity=Gravity.CENTER;text.isFocusable=true;text.isClickable=row.click!=null
-                text.background=StateListDrawable().apply{
+                val box=view as LinearLayout
+                box.layoutParams=box.layoutParams.apply{if(shelfMode){
+                    width=view.cardDp(when(row.selected){1->232;2->172;3->312;5->272;else->144})
+                    height=view.cardDp(when(row.selected){1->204;2->236;3->190;4->206;5->150;else->270})
+                }}
+                val icon=box.getChildAt(0)as ImageView
+                icon.layoutParams=LinearLayout.LayoutParams(view.dp(32),view.dp(32))
+                icon.setImageResource(if(row.kind==Kind.REFRESH)R.drawable.ic_refresh else R.drawable.ic_arrow_right)
+                icon.setColorFilter(RED)
+                val caption=box.getChildAt(1)as TextView
+                caption.label(if(row.kind==Kind.REFRESH)row.title else "Открыть всё",16f,WHITE,true)
+                caption.gravity=Gravity.CENTER;caption.maxLines=2
+                box.gravity=Gravity.CENTER;box.isFocusable=true;box.isClickable=row.click!=null
+                box.background=StateListDrawable().apply{
                     addState(intArrayOf(android.R.attr.state_focused),shape(0xFF292929.toInt(),view.dp(12).toFloat(),WHITE,view.dp(2)))
                     addState(intArrayOf(),shape(0xFF212121.toInt(),view.dp(12).toFloat()))
-                };text.contentDescription=if(row.kind==Kind.REFRESH)row.title else "Открыть раздел ${row.title} полностью"
-                text.setOnClickListener(row.click?.let{callback->View.OnClickListener{callback()}});text.isClickable=row.click!=null
+                }
+                box.contentDescription=if(row.kind==Kind.REFRESH)row.title else "Открыть раздел ${row.title} полностью"
+                box.setOnClickListener(row.click?.let{callback->View.OnClickListener{callback()}})
+                box.isClickable=row.click!=null
             }
             Kind.DAYS -> {
                 val line=(view as HorizontalScrollView).getChildAt(0) as LinearLayout;line.removeAllViews()
