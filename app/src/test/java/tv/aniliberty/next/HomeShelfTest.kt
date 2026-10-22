@@ -16,7 +16,7 @@ class HomeShelfTest {
     @Test fun inlineSearchRetainsEditorAndCursorWhenResultsRebind(){
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
         var query=""
-        val row=Row("catalogue-tools",Kind.CATALOG_BAR,title="",selected=1,queryChanged={query=it})
+        val row=Row("catalogue-tools",Kind.CATALOG_BAR,title="",selected=1,queryChanged={query=it},controls=listOf("Поиск","Фильтры","Сортировка","Сбросить").map{it to {}})
         adapter.submit(listOf(row))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.CATALOG_BAR.ordinal)
         adapter.onBindViewHolder(holder,0)
@@ -28,7 +28,15 @@ class HomeShelfTest {
         adapter.onBindViewHolder(holder,0)
         assertSame(input,line.getChildAt(0))
         assertEquals(3,input.selectionStart)
-        assertEquals(1,line.childCount)
+        assertEquals(4,line.childCount)
+        holder.itemView.measure(android.view.View.MeasureSpec.makeMeasureSpec(900,android.view.View.MeasureSpec.EXACTLY),android.view.View.MeasureSpec.makeMeasureSpec(120,android.view.View.MeasureSpec.AT_MOST))
+        holder.itemView.layout(0,0,900,holder.itemView.measuredHeight)
+        holder.itemView.measure(android.view.View.MeasureSpec.makeMeasureSpec(900,android.view.View.MeasureSpec.EXACTLY),android.view.View.MeasureSpec.makeMeasureSpec(120,android.view.View.MeasureSpec.AT_MOST))
+        holder.itemView.layout(0,0,900,holder.itemView.measuredHeight)
+        assertEquals(0,input.left)
+        assertEquals(900,line.getChildAt(3).right)
+        assertTrue(input.width>0)
+        for(index in 1..3)assertEquals(line.getChildAt(index).height,line.getChildAt(index).width)
     }
     @Test fun previewHasNineItemsThenAnExplicitDestination(){
         var opened=false

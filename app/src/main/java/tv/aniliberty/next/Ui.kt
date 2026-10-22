@@ -127,7 +127,17 @@ class PageAdapter(
     override fun onCreateViewHolder(parent: ViewGroup, type: Int): RecyclerView.ViewHolder {
         val context = parent.context
         val view: View = when (Kind.entries[type]) {
-            Kind.NAV, Kind.TABS, Kind.DAYS, Kind.CATALOG_BAR -> HorizontalScrollView(context).apply {
+            Kind.CATALOG_BAR -> object:HorizontalScrollView(context){
+                override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int){
+                    super.onSizeChanged(w,h,oldw,oldh)
+                    getChildAt(0)?.let{line->line.layoutParams=line.layoutParams.apply{width=(w-paddingLeft-paddingRight).coerceAtLeast(0)}}
+                    scrollTo(0,0)
+                }
+            }.apply{
+                isHorizontalScrollBarEnabled=false;isFillViewport=true
+                addView(LinearLayout(context).apply{gravity=Gravity.CENTER_VERTICAL})
+            }
+            Kind.NAV, Kind.TABS, Kind.DAYS -> HorizontalScrollView(context).apply {
                 isHorizontalScrollBarEnabled = false
                 addView(LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL })
             }
@@ -230,7 +240,12 @@ class PageAdapter(
                 val line=(view as HorizontalScrollView).getChildAt(0)as LinearLayout
                 if(row.selected==1){
                     val existing=line.getChildAt(0)as?android.widget.EditText
-                    if(existing!=null && line.childCount==1)return
+                    if(existing!=null && line.childCount==row.controls.size){
+                        row.controls.drop(1).forEachIndexed{index,control->
+                            line.getChildAt(index+1).apply{contentDescription=control.first;setOnClickListener{control.second()}}
+                        }
+                        return
+                    }
                     line.removeAllViews()
                     line.setPadding(0,view.dp(4),0,view.dp(8))
                     val input=object:android.widget.EditText(view.context){
@@ -254,7 +269,14 @@ class PageAdapter(
                             if(key==KeyEvent.KEYCODE_DPAD_DOWN){if(event.action==KeyEvent.ACTION_DOWN)row.searchDone?.invoke();true}else false
                         }
                     }
-                    line.addView(input,LinearLayout.LayoutParams(view.resources.displayMetrics.widthPixels-view.dp(120),view.dp(48)))
+                    line.addView(input,LinearLayout.LayoutParams(0,view.dp(48),1f).apply{marginEnd=view.dp(8)})
+                    row.controls.drop(1).forEachIndexed{index,(title,callback)->
+                        val icon=when(index){0->R.drawable.ic_filter;1->R.drawable.ic_sort;else->R.drawable.ic_refresh}
+                        line.addView(action(line,"",icon=icon,click=callback).apply{
+                            contentDescription=title;setPadding(dp(14),0,dp(14),0);compoundDrawablePadding=0
+                        },LinearLayout.LayoutParams(view.dp(48),view.dp(48)).apply{if(index<row.controls.size-2)marginEnd=view.dp(8)})
+                    }
+                    view.scrollTo(0,0)
                     input.requestFocus();input.setSelection(input.text.length)
                     input.post{(view.context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE)as android.view.inputmethod.InputMethodManager).showSoftInput(input,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)}
                     return
@@ -271,8 +293,9 @@ class PageAdapter(
                         textSize=14f;setSingleLine();ellipsize=android.text.TextUtils.TruncateAt.END
                         if(index==0)gravity=Gravity.CENTER_VERTICAL or Gravity.START
                         webControlBackground()
-                    },LinearLayout.LayoutParams(if(index==0)view.dp(280)else -2,view.dp(48)).apply{marginEnd=view.dp(8)})
+                    },LinearLayout.LayoutParams(if(index==0)0 else -2,view.dp(48),if(index==0)1f else 0f).apply{if(index<row.controls.lastIndex)marginEnd=view.dp(8)})
                 }
+                view.scrollTo(0,0)
                 if(focused>=0)line.getChildAt(focused)?.requestFocus()
             }
             Kind.DAYS -> {
