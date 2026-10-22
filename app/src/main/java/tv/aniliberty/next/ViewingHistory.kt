@@ -24,6 +24,7 @@ class ViewingHistory(private val prefs:SharedPreferences){
     }.getOrDefault(emptyList())
     fun items():List<ContinueEpisode> = records().groupBy{it.current.releaseId}.values.mapNotNull{episodes->
         val record=episodes.maxByOrNull{it.current.updatedAt}?:return@mapNotNull null
+        if(prefs.contains("continue-hidden:${record.current.releaseId}") && record.current.updatedAt<=prefs.getLong("continue-hidden:${record.current.releaseId}",0))return@mapNotNull null
         when{
             record.current.position>0 && !record.current.completed -> record.current
             record.current.completed -> record.following?.takeIf{!it.completed}
@@ -31,6 +32,7 @@ class ViewingHistory(private val prefs:SharedPreferences){
             else->null
         }
     }.sortedByDescending{it.updatedAt}
+    fun dismiss(releaseId:Int){prefs.edit().putLong("continue-hidden:$releaseId",System.currentTimeMillis()).apply()}
     fun knownReleaseIds():Set<Int> = records().map{it.current.releaseId}.toSet()
     fun latestWatched():List<ContinueEpisode> = records().groupBy{it.current.releaseId}.values.mapNotNull{it.maxByOrNull{r->r.current.updatedAt}?.current}.sortedByDescending{it.updatedAt}
     fun save(release:Release,episode:Episode,position:Long,duration:Long,updatedAt:Long=System.currentTimeMillis()){

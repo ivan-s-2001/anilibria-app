@@ -48,7 +48,7 @@ fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int
 }
 
 enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH, CONTINUE }
-data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null)
+data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null)
 
 class PageAdapter(
     private val navigate: (Int) -> Unit,
@@ -438,8 +438,8 @@ class PageAdapter(
                 }
                 box.contentDescription=listOf(release?.title?:row.title,short).filter(String::isNotBlank).joinToString(". ")
                 box.setOnClickListener{if(row.click!=null)row.click.invoke()else if(release!=null)details(release)}
-                box.setOnLongClickListener(if(release!=null)View.OnLongClickListener{quickActions(release);true}else null)
-                box.isLongClickable=release!=null
+                box.setOnLongClickListener(when{row.longClick!=null->View.OnLongClickListener{row.longClick.invoke();true};release!=null->View.OnLongClickListener{quickActions(release);true};else->null})
+                box.isLongClickable=row.longClick!=null || release!=null
             }
             Kind.EPISODE -> {
                 val box=view as FrameLayout;val e=row.episode!!

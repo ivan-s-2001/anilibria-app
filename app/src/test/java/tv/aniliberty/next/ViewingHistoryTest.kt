@@ -21,6 +21,17 @@ class ViewingHistoryTest {
         {"id":"special","ordinal":12.5,"name":"Особая серия","duration":1200,"preview":{"preview":"/special.webp"},"hls_720":"https://example.org/next.m3u8"}
     ]}"""))
     @Before fun clear(){prefs.edit().clear().commit()}
+    @Test fun dismissedReleaseStaysHiddenAfterMetadataRefreshUntilNewPlayback(){
+        prefs.edit().putLong("position:first",300000).apply()
+        history.save(release,release.episodes[0],300000,1200000,10)
+        history.dismiss(42)
+        assertTrue(history.items().isEmpty())
+        history.save(release,release.episodes[0],300000,1200000,10)
+        assertTrue(history.items().isEmpty())
+        assertEquals(300000L,prefs.getLong("position:first",0))
+        history.save(release,release.episodes[0],310000,1200000,prefs.getLong("continue-hidden:42",0)+1)
+        assertEquals("first",history.items().single().episodeId)
+    }
     @Test fun unfinishedEpisodeKeepsExactUuidAndActualPreview(){
         history.save(release,release.episodes[0],300000,1200000,10)
         val item=history.items().single()

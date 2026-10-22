@@ -296,7 +296,12 @@ class MainActivity : ComponentActivity() {
                         rows+=Row("continue-heading",Kind.HEADING,"Продолжить просмотр",selected=1)
                         val cards=unfinished.map{item->
                             val status=when{item.nextUp->"Следующая серия";item.duration>0->"Осталось ${(item.remaining+59999)/60000} мин";else->"Продолжить"}
-                            Row("continue:${item.releaseId}:${item.episodeId}",Kind.CONTINUE,item.releaseTitle,"${item.episodeTitle}\n$status",image=item.preview,watching=item,click={playContinue(item)})
+                            Row("continue:${item.releaseId}:${item.episodeId}",Kind.CONTINUE,item.releaseTitle,"${item.episodeTitle}\n$status",image=item.preview,watching=item,click={playContinue(item)},longClick={
+                                AlertDialog.Builder(this).setTitle(item.releaseTitle).setItems(arrayOf("Убрать из продолжения")){_,_->
+                                    history.dismiss(item.releaseId)
+                                    render(model.state.value)
+                                }.setNegativeButton("Отмена",null).show()
+                            })
                         }
                         rows+=Row("shelf:continue",Kind.SHELF,selected=5,cards=cards)
                     }
