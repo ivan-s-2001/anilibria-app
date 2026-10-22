@@ -2372,9 +2372,9 @@ class MainActivity : ComponentActivity() {
                 state.screen == Screen.Home &&
                 adapter.rows.any { it.kind == Kind.SHELF }
         val collectionTypeChanged =
-            (current as? Screen.Collections)?.type?.let { previousType ->
-                (state.screen as? Screen.Collections)?.type != previousType
-            } ?: false
+            current is Screen.Collections &&
+                state.screen is Screen.Collections &&
+                (current as Screen.Collections).type != state.screen.type
         val retainedFocus =
             if (current == state.screen)
                 list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String }

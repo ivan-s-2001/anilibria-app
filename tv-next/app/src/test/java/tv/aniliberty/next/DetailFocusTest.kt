@@ -19,6 +19,66 @@ import org.robolectric.annotation.Config
 @Config(sdk = [30])
 class DetailFocusTest {
     @Test
+    fun completedTitleOpensFromEveryCollectionAndOtherScreensRemainAccessible() {
+        val context = RuntimeEnvironment.getApplication()
+        context.getSharedPreferences("account-session", Context.MODE_PRIVATE).edit().clear().commit()
+        val release =
+            parseRelease(
+                JSONObject(
+                    """{"id":42,"name":{"main":"Просмотренный тайтл"},"episodes":[{"id":"completed-ep","ordinal":1,"duration":1200,"hls_720":"https://example.test/a.m3u8"}]}"""
+                )
+            )
+        playbackPreferences(context).edit().clear()
+            .putString("last:42", "completed-ep")
+            .putLong("position:completed-ep", 1200000)
+            .putLong("duration:completed-ep", 1200000)
+            .commit()
+        val controller = Robolectric.buildActivity(MainActivity::class.java)
+            .setup().visible().windowFocusChanged(true)
+        val activity = controller.get()
+        val model = MainActivity::class.java.getDeclaredMethod("getModel")
+            .apply { isAccessible = true }.invoke(activity) as TvModel
+        val render = MainActivity::class.java.getDeclaredMethod("render", UiState::class.java)
+            .apply { isAccessible = true }
+        val list = MainActivity::class.java.getDeclaredField("list")
+            .apply { isAccessible = true }.get(activity) as RecyclerView
+        shadowOf(Looper.getMainLooper()).idle()
+        fun show(state: UiState) {
+            model.state.value = state
+            shadowOf(Looper.getMainLooper()).idle()
+            render.invoke(activity, state)
+            val root = activity.window.decorView
+            root.measure(
+                View.MeasureSpec.makeMeasureSpec(1920, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+            )
+            root.layout(0, 0, 1920, 1080)
+            shadowOf(Looper.getMainLooper()).idle()
+        }
+        try {
+            CollectionType.entries.forEach { type ->
+                show(UiState(Screen.Collections(type)))
+                show(UiState(Screen.Detail(42), loading = true))
+                show(UiState(Screen.Detail(42), detail = release))
+                assertNotNull(list.findViewWithTag<View>("hero"))
+                assertTrue((list.adapter as PageAdapter).rows.any { it.episode?.id == "completed-ep" })
+                // Also cover leaving a collection for another screen, not only title details.
+                show(UiState(Screen.Collections(type)))
+                show(UiState(Screen.Settings))
+            }
+            show(UiState(Screen.Collections(CollectionType.WATCHING)))
+            show(UiState(Screen.Collections(CollectionType.WATCHED)))
+            val tab = list.findViewWithTag<View>("account-collections-tabs")
+            assertNotNull(tab)
+            assertEquals("Просмотрено", (tab.findFocus() as android.widget.TextView).text.toString())
+            show(UiState(Screen.Detail(42), detail = release))
+            assertNotNull(list.findViewWithTag<View>("hero"))
+        } finally {
+            controller.pause().stop().destroy()
+        }
+    }
+
+    @Test
     fun threeColumnEpisodesClampShortLastRowAndNeverWrapAtHorizontalEdges() {
         val rows =
             listOf(Row("hero", Kind.HERO), Row("tabs", Kind.TABS)) +
