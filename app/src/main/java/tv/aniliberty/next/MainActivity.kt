@@ -123,6 +123,7 @@ class MainActivity : ComponentActivity() {
             ?:(adapter.contentStart.coerceAtLeast(0) until adapter.rows.size).firstOrNull{adapter.rows[it].kind!=Kind.HEADING}
         if(position!=null)focusDetail(position,bookmark?.child)
     }
+    @android.annotation.SuppressLint("RestrictedApi") // Activity delegates TV key events through its inherited dispatcher.
     private fun detailKey(event:KeyEvent):Boolean {
         val screen=current as?Screen.Detail?:return false
         if(menuOpen || event.keyCode !in listOf(KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT,KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN))return false
@@ -227,7 +228,7 @@ class MainActivity : ComponentActivity() {
         remoteClick.cancel();shelfMoveToken++;pendingShelf=null;remotePendingKey=null
         adapter.cancelPendingShelfFocus()
         remoteFocusToken++;detailFocusToken++;detailFocusPending=false
-        homeTransition++;homeFocusTarget=null;catalogToolsPending=false;list.stopScroll()
+        homeTransition++;homeFocusTarget=null;list.stopScroll()
         contentFocus=list.findFocus();rememberFocus();menuOpen=true;buildMenu()
         fun focusMenu(){if(menuOpen)(menu.findViewWithTag<View>("menu-route:$selectedSection")?:menu.findViewWithTag<View>("menu-route:0"))?.requestFocus()}
         focusMenu();menu.doOnNextLayout{menu.post{focusMenu()}};menu.requestLayout()
@@ -279,30 +280,6 @@ class MainActivity : ComponentActivity() {
             override fun calculateTimeForDeceleration(dx:Int)=180
         }.apply{targetPosition=header})
         return true
-    }
-    private var catalogToolsPending=false
-    private fun focusCatalogTools(){
-        if(catalogToolsPending)return
-        val screen=current
-        val target=adapter.rows.indexOfFirst{it.kind==Kind.CATALOG_BAR}
-        if(target<0)return
-        val tools=list.findViewHolderForAdapterPosition(target)?.itemView
-        if(tools!=null && tools.top>=list.paddingTop){focusItem(tools);return}
-        catalogToolsPending=true
-        list.stopScroll()
-        val listener=object:RecyclerView.OnScrollListener(){
-            override fun onScrollStateChanged(view:RecyclerView,state:Int){
-                if(state!=RecyclerView.SCROLL_STATE_IDLE)return
-                list.removeOnScrollListener(this)
-                val active=catalogToolsPending;catalogToolsPending=false
-                if(active && current==screen && !menuOpen)focusItem(list.findViewHolderForAdapterPosition(target)?.itemView)
-            }
-        }
-        list.addOnScrollListener(listener)
-        grid.startSmoothScroll(object:androidx.recyclerview.widget.LinearSmoothScroller(this){
-            override fun getVerticalSnapPreference()=SNAP_TO_START
-            override fun calculateTimeForDeceleration(dx:Int)=160
-        }.apply{targetPosition=target})
     }
     private fun shelfRemoteKey(event:KeyEvent):Boolean {
         if(menuOpen || event.keyCode !in listOf(KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT))return false
@@ -375,6 +352,7 @@ class MainActivity : ComponentActivity() {
         }
         return true
     }
+    @android.annotation.SuppressLint("RestrictedApi") // Required for remote key dispatch through ComponentActivity.
     override fun dispatchKeyEvent(event:KeyEvent):Boolean {
         if(::startup.isInitialized && startup.visibility==View.VISIBLE)return super.dispatchKeyEvent(event)
         if(list.findFocus() !is EditText && remoteRepeat.discard(event))return true
@@ -442,7 +420,7 @@ class MainActivity : ComponentActivity() {
             override fun onRequestChildFocus(parent:RecyclerView,state:RecyclerView.State,child:View,focused:View?):Boolean=
                 current==Screen.Home || current is Screen.Detail || super.onRequestChildFocus(parent,state,child,focused)
         };list.layoutManager=grid
-        adapter=PageAdapter(::navigate,::selectTab,::play,::favorite,{rememberFocus();model.open(Screen.Detail(it.id))},
+        adapter=PageAdapter(::selectTab,::play,::favorite,{rememberFocus();model.open(Screen.Detail(it.id))},
             { id -> prefs.getLong("position:$id",0) to prefs.getLong("duration:$id",0) },
             { id -> prefs.getString("last:$id",null) },::returnToTabs, { index -> enterDay=true;val previous=model.state.value;model.homeDay(index);if(previous==model.state.value)render(model.state.value) },::quickActions,enterTab=::enterSelectedTab)
         grid.spanSizeLookup=object:GridLayoutManager.SpanSizeLookup(){override fun getSpanSize(position:Int)=when(adapter.rows.getOrNull(position)?.kind){Kind.ACCOUNT_TILE->10;Kind.POSTER->if(isAccountList(current) || current is Screen.Catalog || current is Screen.Section || current is Screen.Library || current is Screen.Franchise)5 else 3;Kind.GENRE->if(current is Screen.Section)5 else 3;Kind.FRANCHISE->if((current as?Screen.Section)?.kind==HomeSection.FRANCHISES)10 else 5;Kind.EPISODE,Kind.FEATURE->5;else->grid.spanCount}}
@@ -671,7 +649,7 @@ class MainActivity : ComponentActivity() {
         val panel=AccountPanel(this,lifecycleScope,account){
             accountJob?.cancel();accountJob=null;profileSyncing=false
             accountHistoryJob?.cancel();accountHistoryLoadJob?.cancel();accountHistoryItems=emptyList();accountSessions=emptyList();accountHistoryPage=0;profileError=null;lastHistoryHydration=0L;accountLoadedAt=0L
-            Toast.makeText(this,"Вход выполнен · ${account.session.name}",Toast.LENGTH_SHORT).show()
+            Toast.makeText(this,"Вход выполнен",Toast.LENGTH_SHORT).show()
             if(previousUser!=null && previousUser!=account.session.userId)model.resetNavigation(Screen.Profile)
             if(fromWelcome){
                 getSharedPreferences("viewing",MODE_PRIVATE).edit().putBoolean("welcomed",true).apply()
@@ -746,7 +724,6 @@ class MainActivity : ComponentActivity() {
         rememberFocus();model.open(Screen.Profile)
         if(account.signedIn)refreshAccount(force=true)
     }
-    private fun accountList(type:CollectionType?)=openAccountList(if(type==null)Screen.Favorites()else Screen.Collections(type))
     private var accountReleases:AccountReleaseState=AccountReleaseState()
     private var accountReleaseScreen:Screen?=null
     private var accountReleaseUser:Int?=null
@@ -816,7 +793,7 @@ class MainActivity : ComponentActivity() {
     private fun accountSettingsOnPhone(){
         val url="https://www.aniliberty.top/app/settings/account"
         val panel=TvSidePanel(this,"Настройки аккаунта")
-        panel.message("Изменение аватара, почты и пароля доступно на официальном сайте. Откройте QR-код на телефоне и войдите в свой аккаунт.")
+        panel.message("Отсканируйте QR-код для изменения данных аккаунта.")
         val matrix=com.google.zxing.qrcode.QRCodeWriter().encode(url,com.google.zxing.BarcodeFormat.QR_CODE,256,256)
         val image=android.graphics.Bitmap.createBitmap(256,256,android.graphics.Bitmap.Config.ARGB_8888)
         image.setPixels(IntArray(256*256){i->if(matrix[i%256,i/256])android.graphics.Color.BLACK else android.graphics.Color.WHITE},0,256,0,0,256,256)
@@ -951,7 +928,7 @@ class MainActivity : ComponentActivity() {
     }
     private fun continueActions(item:ContinueEpisode){
         val panel=TvSidePanel(this,item.releaseTitle)
-        panel.message(listOf(item.episodeTitle,if(item.nextUp)"Следующая серия"else "Прогресс просмотра сохранён").joinToString("\n"))
+        panel.message(listOf(item.episodeTitle,if(item.nextUp)"Следующая серия"else "").joinToString("\n"))
         panel.addChoice(if(item.nextUp)"Смотреть следующую серию"else "Продолжить",icon=R.drawable.ic_play){
             panel.dismiss();playContinue(item)
         }
@@ -999,7 +976,7 @@ class MainActivity : ComponentActivity() {
     private fun play(episode:Episode){
         val release=model.state.value.detail?:return
         if(release.blocked){Toast.makeText(this,"Просмотр этого тайтла ограничен",Toast.LENGTH_LONG).show();return}
-        if(episode.streams.isEmpty()){Toast.makeText(this,"Для этой серии нет доступного HLS-потока",Toast.LENGTH_LONG).show();return}
+        if(episode.streams.isEmpty()){Toast.makeText(this,"Серия пока недоступна",Toast.LENGTH_LONG).show();return}
         rememberFocus()
         startActivity(Intent(this,PlayerActivity::class.java).putExtra("release",release.id).putExtra("episode",episode.id))
     }
@@ -1169,7 +1146,7 @@ class MainActivity : ComponentActivity() {
                             }
                             add("Сбросить" to {sectionQueries.remove(screen.kind);catalogSearchDraft="";catalogSearchEditing=false;if(screen.kind==HomeSection.SCHEDULE){scheduleFavorites=false;scheduleCollections=false};render(model.state.value)})
                         })
-                    if(query.isNotBlank() && data.more)rows+=Row("section-search-scope",Kind.TEXT,"Поиск по загруженным · остальные появляются при прокрутке")
+                    if(query.isNotBlank() && data.more)rows+=Row("section-search-scope",Kind.TEXT,"Поиск в загруженной части списка")
                     if(screen.kind==HomeSection.SCHEDULE){
                         rows+=Row("schedule-week-days",Kind.ACCOUNT_TABS,selected=scheduleDay,controls=(listOf("Вся неделя")+listOf("Пн","Вт","Ср","Чт","Пт","Сб","Вс")).mapIndexed{i,label->label to {scheduleDay=i;rememberFocus();render(model.state.value)}})
                     }
@@ -1216,8 +1193,8 @@ class MainActivity : ComponentActivity() {
                             TvSidePanel(this,"Аккаунт").apply{addAction("Сменить аккаунт"){dismiss();login()};addAction("Выйти"){dismiss();confirmLogout()};addAction("Отмена"){dismiss()};show()}
                         })
                     }else{
-                        rows+=Row("profile-guest",Kind.TEXT,"История сохраняется на этом ТВ","Войдите для доступа к избранному, коллекциям и прогрессу аккаунта.")
-                        rows+=Row("profile-login",Kind.SETTING,"Войти по QR-коду","Продолжить с аккаунтом AniLiberty",favoriteTitle="›",click={login()})
+                        rows+=Row("profile-guest",Kind.TEXT,"История сохраняется на этом ТВ")
+                        rows+=Row("profile-login",Kind.SETTING,"Войти в аккаунт","",favoriteTitle="›",click={login()})
                         rows+=Row("profile-local",Kind.ACCOUNT_TILE,"На этом ТВ","Локальная библиотека",selected=R.drawable.ic_library,click={localLibrary()})
                         rows+=Row("profile-settings",Kind.ACCOUNT_TILE,"Настройки","Плеер и меню",selected=R.drawable.ic_settings,click={model.open(Screen.Settings)})
                     }
@@ -1227,16 +1204,16 @@ class MainActivity : ComponentActivity() {
                     rows+=Row("account-settings-heading",Kind.HEADING,if(screen.section=="identity")"Данные аккаунта"else"Синхронизация",selected=1)
                     if(!account.signedIn)rows+=Row("account-settings-login",Kind.SETTING,"Войти в аккаунт",favoriteTitle="›",click={login()})
                     else if(screen.section=="identity"){
-                        rows+=Row("account-nickname",Kind.SETTING,"Имя","Отображается в профиле",favoriteTitle=profile?.name.orEmpty(),click={editAccountIdentity(true)})
-                        rows+=Row("account-login",Kind.SETTING,"Логин","Для входа в аккаунт",favoriteTitle=profile?.login.orEmpty(),click={editAccountIdentity(false)})
+                        rows+=Row("account-nickname",Kind.SETTING,"Имя",favoriteTitle=profile?.name.orEmpty(),click={editAccountIdentity(true)})
+                        rows+=Row("account-login",Kind.SETTING,"Логин",favoriteTitle=profile?.login.orEmpty(),click={editAccountIdentity(false)})
                         rows+=Row("account-security-heading",Kind.HEADING,"Безопасность")
                         rows+=Row("account-email",Kind.SETTING,"Почта",profile?.email.orEmpty(),favoriteTitle="На телефоне ↗",click={accountSettingsOnPhone()})
                         rows+=Row("account-avatar",Kind.SETTING,"Аватар и пароль","Изменить на официальном сайте",favoriteTitle="На телефоне ↗",click={accountSettingsOnPhone()})
                     }else{
                         val queued=pending(prefs).size
-                        rows+=Row("account-sync-status",Kind.TEXT,if(profileSyncing)"Синхронизация…"else if(queued>0)"Ожидают отправки: $queued серий"else"Нет неотправленного прогресса","Локальная история сохраняется на ТВ и не переносится без вашего выбора.")
+                        rows+=Row("account-sync-status",Kind.TEXT,if(profileSyncing)"Синхронизация…"else if(queued>0)"Ожидают отправки: $queued серий"else"Всё синхронизировано","Локальная история сохраняется на ТВ и не переносится без вашего выбора.")
                         profileError?.let{rows+=Row("account-sync-error",Kind.TEXT,"Ошибка соединения",it)}
-                        rows+=Row("account-sync-now",Kind.SETTING,"Синхронизировать","Получить актуальные данные аккаунта",favoriteTitle="↻",click={refreshAccount(force=true)})
+                        rows+=Row("account-sync-now",Kind.SETTING,"Синхронизировать","",favoriteTitle="↻",click={refreshAccount(force=true)})
                         rows+=Row("account-sync-import",Kind.SETTING,"Перенести локальную историю","Проверить серии перед отправкой в аккаунт",favoriteTitle="›",click={offerLocalHistory()})
                     }
                 }
@@ -1246,11 +1223,11 @@ class MainActivity : ComponentActivity() {
                         rows+=Row("setting:$key",Kind.SETTING,title,description,favoriteTitle=if(settings.enabled(key,default))"Вкл. ●"else"Выкл. ○",click={settings.toggle(key,default);rememberFocus();buildMenu();render(model.state.value)})
                     }
                     rows+=Row("settings-player",Kind.HEADING,"Воспроизведение")
-                    localToggle("skip-opening","Автопропуск опенингов","Только для эпизодов с разметкой опенинга",false)
-                    localToggle("skip-ending","Автопропуск эндингов","Только для эпизодов с разметкой эндинга",false)
-                    localToggle("auto-next","Следующий эпизод автоматически","После окончания текущего эпизода",prefs.getBoolean("auto-next",true))
+                    localToggle("skip-opening","Автопропуск опенингов","",false)
+                    localToggle("skip-ending","Автопропуск эндингов","",false)
+                    localToggle("auto-next","Следующий эпизод автоматически","",prefs.getBoolean("auto-next",true))
                     rows+=Row("settings-ads",Kind.HEADING,"Реклама в аккаунте")
-                    rows+=Row("settings-ads-info",Kind.TEXT,"Общие настройки AniLiberty","Сохраняются в аккаунте и действуют в сервисах проекта. Видеореклама в этом ТВ-плеере пока не подключена.")
+                    rows+=Row("settings-ads-info",Kind.TEXT,"Настройки рекламы на сайте AniLiberty")
                     if(account.signedIn){
                         val profile=account.session.profile()
                         listOf(Triple("video","Показывать видеорекламу",profile?.videoAds),Triple("always","Реклама перед каждым эпизодом",profile?.videoAdsAlways),Triple("content","Показывать контентную рекламу",profile?.contentAds)).forEach{(key,title,value)->
@@ -1258,11 +1235,11 @@ class MainActivity : ComponentActivity() {
                         }
                     }else rows+=Row("settings-ads-login",Kind.ACTION,"Войти для настройки рекламы",click={login()})
                     rows+=Row("settings-menu",Kind.HEADING,"Кнопки бокового меню")
-                    localToggle("menu-random","Случайный релиз","Показывать кнопку в меню",false)
-                    localToggle("menu-search","Поиск","Показывать кнопку в меню")
-                    localToggle("menu-favorites","Избранное","Показывать кнопку в меню")
-                    localToggle("menu-collections","Коллекции","Показывать кнопку в меню")
-                    localToggle("menu-settings","Настройки","Всегда доступны также из профиля")
+                    localToggle("menu-random","Случайный релиз","",false)
+                    localToggle("menu-search","Поиск","")
+                    localToggle("menu-favorites","Избранное","")
+                    localToggle("menu-collections","Коллекции","")
+                    localToggle("menu-settings","Настройки","")
                 }
                 is Screen.Favorites,is Screen.Collections->{
                     val title=if(screen is Screen.Favorites)"Избранное"else"Коллекции"

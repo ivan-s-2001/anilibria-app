@@ -14,7 +14,7 @@ import org.robolectric.annotation.Config
 @Config(sdk=[30],application=Application::class)
 class HomeShelfTest {
     @Test fun titleHeaderUsesNumericAgeAndStatusAfterNamesWithoutSynopsis(){
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{})
         val release=parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Название","english":"Title"},"year":2026,"updated_at":"2026-10-22T03:15:00Z","added_in_users_favorites":25600,"age_rating":{"description":"18+"},"is_ongoing":true,"description":"СКРЫТОЕ КРАТКОЕ ОПИСАНИЕ","shikimori":{"rating":8.5},"mal":{"rating":8.1}}"""))
         adapter.submit(listOf(Row("hero",Kind.HERO,release=release)))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.HERO.ordinal)
@@ -51,7 +51,7 @@ class HomeShelfTest {
     }
     @Test fun detailTabsKeepFocusOnSelectionAndEnterContentOnlyOnDown(){
         var selected=-1;var entered=-1
-        val adapter=PageAdapter({},{selected=it},{},{},{},{0L to 0L},{null},{},enterTab={entered=it})
+        val adapter=PageAdapter({selected=it},{},{},{},{0L to 0L},{null},{},enterTab={entered=it})
         adapter.submit(listOf(Row("tabs",Kind.TABS,title="12")))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.TABS.ordinal)
         adapter.onBindViewHolder(holder,0)
@@ -67,7 +67,7 @@ class HomeShelfTest {
         assertEquals(1,entered)
     }
     @Test fun posterFavoriteCounterAppearsOnFocusAndSurvivesReuseInCatalogue(){
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{})
         val release=parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Тайтл"},"added_in_users_favorites":25600,"episodes":[{"id":"ep","ordinal":1}],"latest_episode":{"id":"ep","ordinal":434}}"""))
         adapter.submit(listOf(Row("poster",Kind.POSTER,release=release,selected=1)))
         val parent=FrameLayout(RuntimeEnvironment.getApplication())
@@ -86,7 +86,7 @@ class HomeShelfTest {
         other.requestFocus();assertEquals(android.view.View.GONE,favorites.visibility)
     }
     @Test fun videoCardAlwaysKeepsSixteenByNine(){
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{})
         adapter.submit(listOf(Row("video",Kind.FEATURE,"Ролик")))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.FEATURE.ordinal)
         adapter.onBindViewHolder(holder,0)
@@ -95,7 +95,7 @@ class HomeShelfTest {
     }
     @Test fun genreAndVideoDarkenOnlyWhileFocusedAndVideoRevealsInfo(){
         for(kind in listOf(Kind.GENRE,Kind.FEATURE)){
-            val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
+            val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{},shelfMode=true)
             adapter.submit(listOf(Row("preview",kind,"Название","Данные")))
             val parent=FrameLayout(RuntimeEnvironment.getApplication())
             val holder=adapter.onCreateViewHolder(parent,kind.ordinal)
@@ -113,7 +113,7 @@ class HomeShelfTest {
         }
     }
     @Test fun franchiseCompositionHasOneNumberedLinePerPartOnFocus(){
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{},shelfMode=true)
         val parts=(1..3).map{parseRelease(org.json.JSONObject().put("id",it).put("name",org.json.JSONObject().put("main","Часть $it")))}
         adapter.submit(listOf(Row("franchise",Kind.FRANCHISE,"Франшиза","3 части",composition=parts.map{it.title})))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.FRANCHISE.ordinal)
@@ -131,7 +131,7 @@ class HomeShelfTest {
         for(index in 0..2){val line=lines.getChildAt(index)as android.widget.TextView;assertEquals("${index+1}. Часть ${index+1}",line.text.toString());assertEquals(1,line.maxLines)}
     }
     @Test fun franchiseDirectoryKeepsHomeAspectWhenColumnWidthChanges(){
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{})
         adapter.submit(listOf(Row("franchise",Kind.FRANCHISE,"Франшиза",homeStyle=true)))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.FRANCHISE.ordinal)
         adapter.onBindViewHolder(holder,0)
@@ -143,7 +143,7 @@ class HomeShelfTest {
         }
     }
     @Test fun inlineSearchRetainsEditorAndCursorWhenResultsRebind(){
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{})
         var query=""
         val row=Row("catalogue-tools",Kind.CATALOG_BAR,title="",selected=1,queryChanged={query=it},controls=listOf("Поиск","Фильтры","Сортировка","Сбросить").map{it to {}})
         adapter.submit(listOf(row))
@@ -174,7 +174,7 @@ class HomeShelfTest {
         assertEquals(10,cards.size)
         assertEquals((1..9).map{"genre:$it"},cards.dropLast(1).map{it.key})
         assertEquals(Kind.MORE,cards.last().kind)
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{},shelfMode=true)
         adapter.submit(cards)
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.MORE.ordinal)
         adapter.onBindViewHolder(holder,9)
@@ -190,7 +190,7 @@ class HomeShelfTest {
     }
     @Test fun shelfEndUsesSameCompactSizeBesideWideCards(){
         val cards=shelfCards("genres","Жанры",listOf(Row("genre:1",Kind.FEATURE,"Детектив")),true){ }
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{},shelfMode=true)
         adapter.submit(cards)
         val parent=FrameLayout(RuntimeEnvironment.getApplication())
         val feature=adapter.onCreateViewHolder(parent,Kind.FEATURE.ordinal);adapter.onBindViewHolder(feature,0)
@@ -202,7 +202,7 @@ class HomeShelfTest {
         val context=RuntimeEnvironment.getApplication()
         val cases=listOf(Triple(0,Kind.POSTER,270),Triple(1,Kind.FEATURE,204),Triple(2,Kind.GENRE,236),Triple(3,Kind.FRANCHISE,190),Triple(4,Kind.POSTER,206),Triple(5,Kind.CONTINUE,150))
         for((style,kind,height)in cases){
-            val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
+            val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{},shelfMode=true)
             adapter.submit(listOf(Row("end",Kind.MORE,"Очень длинное название раздела",selected=style,click={})))
             val holder=adapter.onCreateViewHolder(FrameLayout(context),Kind.MORE.ordinal)
             adapter.onBindViewHolder(holder,0)
@@ -219,7 +219,7 @@ class HomeShelfTest {
     }
 
     @Test fun shelfUpdatesKeepStableItemIdsWithoutFullListReset(){
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{},shelfMode=true)
         val a=Row("a",Kind.MORE,"Все",click={})
         val b=Row("b",Kind.REFRESH,"Обновить",click={})
         adapter.submit(listOf(a,b))
@@ -234,7 +234,7 @@ class HomeShelfTest {
 
     @Test fun shelfActionVectorSurvivesRecyclingAndRefreshRebinding(){
         for(kind in listOf(Kind.MORE,Kind.REFRESH)){
-            val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
+            val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{},shelfMode=true)
             val row=Row("action",kind,"Обновить",selected=2,click={})
             adapter.submit(listOf(row))
             val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),kind.ordinal)
@@ -252,7 +252,7 @@ class HomeShelfTest {
     }
 
     @Test fun genrePlacesCaptionInsideImageLikeWeb(){
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{},shelfMode=true)
         adapter.submit(listOf(Row("genre:1",Kind.GENRE,"Фэнтези","628 релизов")))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.GENRE.ordinal)
         adapter.onBindViewHolder(holder,0)
@@ -264,7 +264,7 @@ class HomeShelfTest {
         assertEquals(android.view.View.VISIBLE,card.getChildAt(1).visibility)
     }
     @Test fun franchiseUsesSeparateSideInformationPanel(){
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{},shelfMode=true)
         adapter.submit(listOf(Row("franchise:1",Kind.FRANCHISE,"Франшиза","2020–2026 · 3 части")))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.FRANCHISE.ordinal)
         adapter.onBindViewHolder(holder,0)
@@ -277,7 +277,7 @@ class HomeShelfTest {
     }
 
     @Test fun latestShowsWebInformationOverlayOnlyOnFocus(){
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{},shelfMode=true)
         val release=parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Название"},"year":2026,"is_ongoing":true}"""))
         adapter.submit(listOf(Row("latest:1",Kind.POSTER,release=release,selected=1)))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.POSTER.ordinal)
@@ -295,7 +295,7 @@ class HomeShelfTest {
     }
 
     @Test fun catalogueShowsTitleAndMetadataOnlyOnFocus(){
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{})
         val release=parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Название"},"year":2026,"is_ongoing":true}"""))
         adapter.submit(listOf(Row("catalogue:1",Kind.POSTER,release=release)))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.POSTER.ordinal)
@@ -356,7 +356,7 @@ class HomeShelfTest {
 
     @Test fun scheduleHeadingAndDayChoicesShareOneHorizontalRow(){
         var day=-1
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},day={day=it})
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{},day={day=it})
         adapter.submit(listOf(Row("schedule-days",Kind.DAYS,"Расписание релизов",selected=1)))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.DAYS.ordinal)
         adapter.onBindViewHolder(holder,0)
@@ -371,7 +371,7 @@ class HomeShelfTest {
     @Test fun continueCardDisplaysEpisodeAndLaunchesItsExactUuid(){
         var uuid:String?=null
         val item=ContinueEpisode(42,"uuid-12.5","Тайтл",12.5,"Особая серия",null,300000,1200000,1)
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{},shelfMode=true)
         adapter.submit(listOf(Row("continue:42:uuid-12.5",Kind.CONTINUE,item.releaseTitle,item.episodeTitle,watching=item,click={uuid=item.episodeId})))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.CONTINUE.ordinal)
         adapter.onBindViewHolder(holder,0)

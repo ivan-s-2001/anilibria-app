@@ -48,9 +48,10 @@ class PlayerChrome(context:Context):LinearLayout(context){
     }
     fun update(position:Long,duration:Long,preview:Boolean,playing:Boolean){
         elapsed.text=playbackTime(position)
-        remaining.text=if(duration>0)"−${playbackTime((duration-position).coerceAtLeast(0))}   /   ${playbackTime(duration)}"else"Длительность уточняется"
+        remaining.text=if(duration>0)"−${playbackTime((duration-position).coerceAtLeast(0))}   /   ${playbackTime(duration)}"else""
         seek.isEnabled=duration>0
         seek.progress=if(duration>0)(position.coerceIn(0,duration)*1000/duration).toInt()else 0
-        hint.text=when{preview->"OK — перейти   ·   Назад — отменить   ·   удерживайте ← → для быстрой перемотки";!playing->"Пауза   ·   OK — продолжить   ·   ↑ таймлайн";else->"← → выбор действия   ·   ↑ таймлайн   ·   Назад — скрыть"}
+        hint.visibility=if(preview || !playing)View.VISIBLE else View.GONE
+        hint.text=when{preview->"OK — перейти · Назад — отменить";!playing->"Пауза";else->""}
     }
 }

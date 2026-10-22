@@ -17,7 +17,7 @@ import org.robolectric.annotation.Config
 class FocusTest {
     @Test fun tabsEnterContentOnOkOrDownButNotOnFocus() {
         var selected=-1
-        val adapter=PageAdapter({}, {selected=it},{},{},{},{0L to 0L},{null},{})
+        val adapter=PageAdapter( {selected=it},{},{},{},{0L to 0L},{null},{})
         adapter.submit(listOf(Row("tabs",Kind.TABS)))
         val parent=FrameLayout(RuntimeEnvironment.getApplication())
         val holder=adapter.onCreateViewHolder(parent,Kind.TABS.ordinal)
@@ -33,7 +33,7 @@ class FocusTest {
         assertEquals(3,selected)
     }
     @Test fun posterKeepsReadableCaptionAndGeometryWhenFocused() {
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{})
         val release=parseRelease(org.json.JSONObject("""{"id":10,"name":{"main":"Тайтл"},"year":2026,"latest_episode":{"id":"episode-3","ordinal":3}}"""))
         adapter.submit(listOf(Row("release:10",Kind.POSTER,release=release)))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.POSTER.ordinal)
@@ -52,7 +52,7 @@ class FocusTest {
     }
     @Test fun longOkOpensActionsForTheExactRelease() {
         var selected:Int?=null
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},quickActions={selected=it.id})
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{},quickActions={selected=it.id})
         val release=parseRelease(org.json.JSONObject().put("id",22))
         adapter.submit(listOf(Row("release:22",Kind.POSTER,release=release)))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.POSTER.ordinal)
@@ -62,7 +62,7 @@ class FocusTest {
     }
     @Test fun shelfUsesExactReleaseAndKeepsHorizontalLayout() {
         var opened:Int?=null
-        val adapter=PageAdapter({},{},{},{},{opened=it.id},{0L to 0L},{null},{})
+        val adapter=PageAdapter({},{},{},{opened=it.id},{0L to 0L},{null},{})
         val release=parseRelease(org.json.JSONObject().put("id",87))
         adapter.submit(listOf(Row("latest",Kind.SHELF,items=listOf(release))))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.SHELF.ordinal)
@@ -77,7 +77,7 @@ class FocusTest {
         assertTrue(card.itemView.layoutParams.width>0)
     }
     @Test fun headingsDoNotConsumeRemoteFocus() {
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{})
         adapter.submit(listOf(Row("heading",Kind.HEADING,"Новые эпизоды")))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.HEADING.ordinal)
         adapter.onBindViewHolder(holder,0)
@@ -85,7 +85,7 @@ class FocusTest {
         assertFalse(holder.itemView.isClickable)
     }
     @Test fun homeDayButtonsKeepExactViewAndFocusAcrossRefresh(){
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{})
         val row=Row("schedule-days",Kind.DAYS,"Расписание релизов",selected=1)
         adapter.submit(listOf(row))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.DAYS.ordinal)

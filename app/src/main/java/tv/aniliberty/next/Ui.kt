@@ -56,11 +56,10 @@ fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int
     setOnClickListener { click() }
 }
 
-enum class Kind { SETTING, ACCOUNT_TILE, ACCOUNT_TABS, PROFILE, NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH, CONTINUE, CATALOG_BAR }
+enum class Kind { SETTING, ACCOUNT_TILE, ACCOUNT_TABS, PROFILE, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH, CONTINUE, CATALOG_BAR }
 data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList(),val composition:List<String>?=null,val focusLoad:(()->Unit)?=null,val homeStyle:Boolean=false,val queryChanged:((String)->Unit)?=null,val searchDone:(()->Unit)?=null,val favoriteTitle:String?=null,val episodeProgress:Pair<Long,Long>?=null,val profile:AccountProfile?=null,val activeControls:Set<Int> = emptySet())
 
 class PageAdapter(
-    private val navigate: (Int) -> Unit,
     private val tab: (Int) -> Unit,
     private val play: (Episode) -> Unit,
     private val favorite: (Release) -> Unit,
@@ -135,6 +134,7 @@ class PageAdapter(
             override fun areItemsTheSame(a:Int,b:Int)=old[a].key==value[b].key && old[a].kind==value[b].kind
             override fun areContentsTheSame(a:Int,b:Int)=old[a]==value[b]
         },false)
+        stableKeys.keys.retainAll(value.mapTo(HashSet()){it.key})
         rows = value; tabStart = rows.indexOfFirst { it.kind == Kind.TABS }; contentStart = if (tabStart >= 0) tabStart + 1 else -1
         diff.dispatchUpdatesTo(this)
     }
@@ -153,7 +153,7 @@ class PageAdapter(
                 isHorizontalScrollBarEnabled=false;isFillViewport=true
                 addView(LinearLayout(context).apply{gravity=Gravity.CENTER_VERTICAL})
             }
-            Kind.NAV, Kind.TABS, Kind.DAYS, Kind.ACCOUNT_TABS -> HorizontalScrollView(context).apply {
+            Kind.TABS, Kind.DAYS, Kind.ACCOUNT_TABS -> HorizontalScrollView(context).apply {
                 isHorizontalScrollBarEnabled = false
                 addView(LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL })
             }
@@ -234,7 +234,7 @@ class PageAdapter(
         val firstContent = if(contentStart>=0) (contentStart until rows.size).firstOrNull{rows[it].kind!=Kind.HEADING} else null
         val firstRowCount = when(firstContent?.let{rows[it].kind}){Kind.POSTER->5;Kind.EPISODE->3;else->1}
         view.setOnKeyListener { _, key, event ->
-            if (firstContent != null && position in firstContent until (firstContent+firstRowCount) && key == KeyEvent.KEYCODE_DPAD_UP) {
+            if (firstContent != null && holder.bindingAdapterPosition in firstContent until (firstContent+firstRowCount) && key == KeyEvent.KEYCODE_DPAD_UP) {
                 if (event.action == KeyEvent.ACTION_UP) returnToTabs(); true
             } else false
         }
@@ -247,7 +247,7 @@ class PageAdapter(
             Kind.SHELF -> {
                 val shelf=view as RecyclerView
                 val oldKey=shelf.getTag(R.id.shelf_key) as? String
-                if(oldKey!=row.key){shelf.adapter=PageAdapter(navigate,tab,play,favorite,details,progress,lastEpisode,returnToTabs,day,quickActions,true,enterTab);shelf.scrollToPosition(0)}
+                if(oldKey!=row.key){shelf.adapter=PageAdapter(tab,play,favorite,details,progress,lastEpisode,returnToTabs,day,quickActions,true,enterTab);shelf.scrollToPosition(0)}
                 shelf.setTag(R.id.shelf_key,row.key)
                 shelf.layoutParams=shelf.layoutParams.apply{height=view.dp((when(row.selected){1->220;2->252;3->206;4->222;5->166;else->286}*1.18f).toInt())}
                 val cards=if(row.cards.isNotEmpty())row.cards else row.items.map{Row("${row.key}:release:${it.id}",Kind.POSTER,release=it)}
@@ -365,18 +365,6 @@ class PageAdapter(
                 }
                 (0..2).forEach{index->(line.getChildAt(index+offset)as TextView).apply{setTextColor(if(index==row.selected)RED else WHITE);setOnClickListener{day(index)}}}
             }
-            Kind.NAV -> {
-                val line = (view as HorizontalScrollView).getChildAt(0) as LinearLayout; line.removeAllViews()
-                line.addView(TextView(view.context).apply { label("AniLiberty",20f,WHITE,true); setPadding(0,0,dp(28),0) })
-                listOf("Главная", "Каталог", "Поиск", "Моя библиотека").forEachIndexed { i, text ->
-                    line.addView(action(line,text,click={navigate(i)}).apply {
-                        background=StateListDrawable().apply {
-                            addState(intArrayOf(android.R.attr.state_focused),shape(0xFF292929.toInt(),dp(4).toFloat()))
-                            addState(intArrayOf(),shape(Color.TRANSPARENT))
-                        }
-                    }, LinearLayout.LayoutParams(-2,view.dp(40)).apply { marginEnd=view.dp(8) })
-                }
-            }
             Kind.ACCOUNT_TABS -> {
                 val line=(view as HorizontalScrollView).getChildAt(0)as LinearLayout
                 if(line.childCount!=row.controls.size){
@@ -433,7 +421,7 @@ class PageAdapter(
                     if(value.isBlank())return
                     info.addView(TextView(view.context).apply{
                         label(value,size,color,bold);maxLines=lines;ellipsize=android.text.TextUtils.TruncateAt.END
-                        includeFontPadding=false;breakStrategy=android.text.Layout.BREAK_STRATEGY_BALANCED
+                        includeFontPadding=false
                     },LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=view.dp(7)})
                 }
                 text(r.title,27f,WHITE,true)
@@ -581,7 +569,6 @@ class PageAdapter(
                 box.getChildAt(1).visibility=if(spotlight)View.VISIBLE else View.GONE
                 title.label(release?.title?:row.title,if(spotlight)30f else if(homeCard)17f else 14f,WHITE,true)
                 title.maxLines=2
-                title.breakStrategy=android.text.Layout.BREAK_STRATEGY_BALANCED
                 title.hyphenationFrequency=android.text.Layout.HYPHENATION_FREQUENCY_NONE
                 if(poster || continuing)androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(title,12,if(row.selected==2)20 else if(homeCard)17 else 14,1,android.util.TypedValue.COMPLEX_UNIT_SP)
                 val short=if(release!=null)listOf(release.year,release.type,release.latestEpisode?.let{"Эп. ${number(it.ordinal)}"}.orEmpty()).filter(String::isNotBlank).joinToString(" · ")else row.subtitle
@@ -834,14 +821,14 @@ class PageAdapter(
             }
             Kind.TEXT,Kind.ACTION -> {
                 val t=view as TextView
-                t.label(listOf(row.title,row.subtitle).filter(String::isNotBlank).joinToString("\n"),if(row.kind==Kind.HEADING)22f else 16f,if(row.kind==Kind.TEXT)MUTED else WHITE,row.kind==Kind.HEADING)
+                t.label(listOf(row.title,row.subtitle).filter(String::isNotBlank).joinToString("\n"),16f,if(row.kind==Kind.TEXT)MUTED else WHITE)
                 t.setPadding(0,view.dp(8),0,view.dp(8));t.isFocusable=row.click!=null || (contentStart>=0 && position>=contentStart);t.isClickable=row.click!=null
                 t.background=null
                 if(t.isFocusable)t.webControlBackground()
                 if(row.click!=null){t.webControlBackground();t.setPadding(view.dp(12),view.dp(10),view.dp(12),view.dp(10))}
                 t.setOnClickListener(row.click?.let{callback->View.OnClickListener{callback()}})
                 t.isClickable = row.click != null
-                if(position==contentStart) t.setOnKeyListener{_,key,event->if(key==KeyEvent.KEYCODE_DPAD_UP){if(event.action==KeyEvent.ACTION_UP)returnToTabs();true}else false}
+                if(position==contentStart) t.setOnKeyListener{_,key,event->if(holder.bindingAdapterPosition==contentStart && key==KeyEvent.KEYCODE_DPAD_UP){if(event.action==KeyEvent.ACTION_UP)returnToTabs();true}else false}
             }
         }
     }

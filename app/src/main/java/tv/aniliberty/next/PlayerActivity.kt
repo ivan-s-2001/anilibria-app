@@ -27,6 +27,7 @@ import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlayerActivity : ComponentActivity() {
     private lateinit var root:FrameLayout
     private lateinit var video:PlayerView
@@ -371,6 +372,7 @@ class PlayerActivity : ComponentActivity() {
         root.addView(offer,FrameLayout.LayoutParams(dp(340),-2,Gravity.END or Gravity.BOTTOM).apply{setMargins(dp(20),dp(20),dp(20),dp(20))})
         hideControls();now.requestFocus();countdownRunning=auto;if(auto)handler.postDelayed(countdown,1000)
     }
+    @android.annotation.SuppressLint("RestrictedApi", "GestureBackNavigation") // Back is delegated to the registered OnBackPressedCallback.
     override fun dispatchKeyEvent(event:KeyEvent):Boolean{
         if(remoteRepeat.discard(event))return true
         if(event.action==KeyEvent.ACTION_UP && event.keyCode==revealKey){revealKey=-1;return true}

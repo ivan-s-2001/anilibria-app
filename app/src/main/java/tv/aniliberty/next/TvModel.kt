@@ -34,7 +34,6 @@ class TvModel : ViewModel() {
     private val catalogCache=linkedMapOf<Screen.Catalog,UiState>()
     private var navigationGeneration=0
     private val featureJobs=mutableMapOf<HomeSection,Job>()
-    private var homeLoadedAt = 0L
     private var selectedHomeDay = 1
     fun open(screen: Screen, remember: Boolean = true) {
         if (remember && state.value.screen != Screen.Welcome && screen != state.value.screen) stack.add(state.value.screen)
@@ -55,7 +54,7 @@ class TvModel : ViewModel() {
         job = viewModelScope.launch {
             try {
                 state.value = when (screen) {
-                    Screen.Home -> api.home().let { home -> homeCache = home; homeLoadedAt = android.os.SystemClock.elapsedRealtime(); UiState(screen, home = home, homeDay = selectedHomeDay) }
+                    Screen.Home -> api.home().let { home -> homeCache = home; UiState(screen, home = home, homeDay = selectedHomeDay) }
                     is Screen.Catalog -> api.catalog(screen).let { result ->
                         UiState(screen,releases=result.releases,more=result.more,catalogPage=screen.page,catalogTotal=result.total).also{
                             if(catalogCache.size>=8)catalogCache.remove(catalogCache.keys.first())

@@ -31,7 +31,7 @@ class ScheduleTest {
         assertEquals("3.5 эп.",scheduleEpisodeLabel(release))
     }
     @Test fun favoritesAndEpisodeStayVisibleWithoutFocusAndDoNotLeakOnRebind(){
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{})
         val release=parseScheduleWeek(body).first()
         adapter.submit(listOf(Row("schedule:42",Kind.POSTER,release=release,selected=3)))
         val holder=adapter.onCreateViewHolder(android.widget.FrameLayout(org.robolectric.RuntimeEnvironment.getApplication()),Kind.POSTER.ordinal)
@@ -63,7 +63,7 @@ class ScheduleTest {
     }
 
     @Test fun sourceButtonsKeepFocusAndCanBothBeActive(){
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        val adapter=PageAdapter({},{},{},{},{0L to 0L},{null},{})
         val controls=listOf("Поиск" to {},"Избранное" to {},"Коллекции" to {},"Сбросить" to {})
         val row=Row("section-tools",Kind.CATALOG_BAR,controls=controls)
         adapter.submit(listOf(row))

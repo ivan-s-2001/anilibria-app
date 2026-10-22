@@ -21,7 +21,6 @@ class AccountPanel(context:Context,private val scope:CoroutineScope,private val 
     private val link="https://www.aniliberty.top/app/auth/otp/linkDevice"
     init{setOnDismissListener{task?.cancel()}}
     fun start(){
-        message("Выберите удобный способ входа")
         addChoice("Войти по QR-коду"){requestCode()}
         addChoice("Войти по логину и паролю"){passwordForm()}
         addAction("Закрыть"){dismiss()}
@@ -92,7 +91,7 @@ class AccountPanel(context:Context,private val scope:CoroutineScope,private val 
             try{
                 val device=account.session.deviceId
                 val code=account.api.deviceCode(device)
-                message("На телефоне войдите в свой аккаунт на сайте AniLiberty и откройте страницу привязки устройства.")
+                message("Отсканируйте QR-код и введите код на телефоне.")
                 body.addView(TextView(context).apply{label(code.code,36f,WHITE,true);gravity=Gravity.CENTER;letterSpacing=.12f;setPadding(0,dp(12),0,dp(12));contentDescription="Код устройства: ${code.code.toCharArray().joinToString(" ")}"})
                 val matrix=QRCodeWriter().encode(link,BarcodeFormat.QR_CODE,256,256)
                 val bitmap=Bitmap.createBitmap(256,256,Bitmap.Config.ARGB_8888)

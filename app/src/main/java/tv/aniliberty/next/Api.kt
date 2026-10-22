@@ -3,12 +3,8 @@ package tv.aniliberty.next
 import kotlinx.coroutines.async
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URI
 import java.net.URLEncoder
 
 /** Domain identifiers are v1 identifiers. Episode UUIDs are never derived from positions. */
@@ -55,20 +51,13 @@ internal fun parseReleasedEpisodeCounts(body:String):Map<Int,Int> =
         if(id>0 && episodes!=null)id to publishedEpisodeCount(episodes)else null
     }.toMap()
 
-class Api {
+private suspend fun <T> optional(block: suspend () -> T): T? = try { block() } catch(e: CancellationException) { throw e } catch (_: Exception) { null }
+
+class Api(private val transport:AccountTransport=AccountHttpTransport()) {
     private val cache = linkedMapOf<Int, Release>()
     private val discoveryCache = linkedMapOf<Int, Pair<Long,Discovery>>()
-    private suspend fun request(path: String): String = withContext(Dispatchers.IO) {
-        val connection = URI("https://aniliberty.top/api/v1$path").toURL().openConnection() as HttpURLConnection
-        try {
-            connection.connectTimeout = 12000; connection.readTimeout = 20000
-            connection.setRequestProperty("Accept", "application/json")
-            if (connection.responseCode !in 200..299) error("Сервис ответил: ${connection.responseCode}")
-            connection.inputStream.bufferedReader().use { it.readText() }
-        } finally { connection.disconnect() }
-    }
+    private suspend fun request(path:String):String=transport.request(path,"GET",null,null)
     suspend fun home(): HomeData = supervisorScope {
-        suspend fun <T> optional(block: suspend () -> T): T? = try { block() } catch(e: CancellationException) { throw e } catch (_: Exception) { null }
         val promotions = async { optional { JSONObject(request("/media/promotions")).optJSONArray("data").objects().filter { !it.optBoolean("is_ad") && it.optJSONObject("release") != null }.map { Promotion(it.text("id"), it.optJSONObject("image")?.image(), parseRelease(it.getJSONObject("release"))) } } }
         val latest = async { latest() }
         val schedule = async { optional { val json = JSONObject(request("/anime/schedule/now")); listOf("yesterday", "today", "tomorrow").map { day -> parseScheduleEntries(json.optJSONArray(day)?:JSONArray()) } } }
@@ -122,7 +111,6 @@ class Api {
     suspend fun discovery(releaseId: Int,force:Boolean=false): Discovery {
         synchronized(discoveryCache) { if(force)null else discoveryCache[releaseId] }?.takeIf { android.os.SystemClock.elapsedRealtime()-it.first < 86400000 }?.let { return it.second }
         val result = supervisorScope {
-            suspend fun <T> optional(block: suspend () -> T): T? = try { block() } catch(e: CancellationException) { throw e } catch (_: Exception) { null }
             val groups = async { optional { parseFranchiseGroups(JSONArray(request("/anime/franchises/release/$releaseId"))) } }
             val recommendations = async { optional { uniqueRecommendations(releaseId,JSONArray(request("/anime/releases/recommended?release_id=$releaseId&limit=12")).objects().map(::parseRelease)) } }
             val related=groups.await()
@@ -135,9 +123,12 @@ class Api {
         return result
     }
     suspend fun franchise(id: String): List<Release> = JSONObject(request("/anime/franchises/${URLEncoder.encode(id,"UTF-8")}")).optJSONArray("franchise_releases").objects().sortedBy { it.optInt("sort_order") }.mapNotNull { it.optJSONObject("release")?.let(::parseRelease) }
-    suspend fun libraryReleases(ids:List<Int>):List<Release> = ids.distinct().chunked(30).flatMap{batch->
-        JSONObject(request("/anime/releases/list?ids=${batch.joinToString(",")}&limit=30&exclude=episodes,torrents,members,sponsors")).optJSONArray("data").objects().map(::parseRelease)
-    }.sortedBy{ids.indexOf(it.id)}
+    suspend fun libraryReleases(ids:List<Int>):List<Release> {
+        val order=ids.distinct().withIndex().associate{it.value to it.index}
+        return order.keys.chunked(30).flatMap{batch->
+            JSONObject(request("/anime/releases/list?ids=${batch.joinToString(",")}&limit=30&exclude=episodes,torrents,members,sponsors")).optJSONArray("data").objects().map(::parseRelease)
+        }.sortedBy{order[it.id]?:Int.MAX_VALUE}
+    }
     suspend fun latest(limit:Int=9): List<Release> = JSONArray(request("/anime/releases/latest?limit=$limit")).objects().map(::parseRelease)
     suspend fun catalog(screen:Screen.Catalog,page:Int=screen.page):CatalogPage {
         val result=parseCatalogPage(request(catalogPath(screen,page)),page)
