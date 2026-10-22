@@ -13,6 +13,7 @@ sealed interface Screen {
     data class Favorites(val query:String="",val filter:AccountFilter=AccountFilter()):Screen
     data class Collections(val type:CollectionType=CollectionType.WATCHING,val query:String="",val filter:AccountFilter=AccountFilter()):Screen
     data object Settings:Screen
+    data class AccountSettings(val section:String):Screen
     data object Profile : Screen
     data object AccountSessions : Screen
     data object AccountHistory : Screen

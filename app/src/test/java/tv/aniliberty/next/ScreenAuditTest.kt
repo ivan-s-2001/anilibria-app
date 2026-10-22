@@ -28,6 +28,8 @@ class ScreenAuditTest {
             UiState(Screen.Catalog(),releases=listOf(release)),
             UiState(Screen.Profile),
             UiState(Screen.Settings),
+            UiState(Screen.AccountSettings("identity")),
+            UiState(Screen.AccountSettings("sync")),
             UiState(Screen.Favorites()),
             UiState(Screen.Collections()),
             UiState(Screen.AccountHistory),
@@ -49,6 +51,7 @@ class ScreenAuditTest {
             assertTrue(rows.isNotEmpty())
             if(state.screen==Screen.Profile){
                 assertTrue(rows.any{it.key=="profile-settings"})
+                assertFalse(rows.any{it.title=="Обновить список"})
                 assertFalse(rows.any{it.key=="profile-favorites" || it.key.startsWith("profile-collection:")})
             }
             if(state.screen==Screen.Settings){

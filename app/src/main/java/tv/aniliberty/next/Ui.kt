@@ -56,7 +56,7 @@ fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int
     setOnClickListener { click() }
 }
 
-enum class Kind { ACCOUNT_TABS, PROFILE, NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH, CONTINUE, CATALOG_BAR }
+enum class Kind { SETTING, ACCOUNT_TILE, ACCOUNT_TABS, PROFILE, NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH, CONTINUE, CATALOG_BAR }
 data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList(),val composition:List<String>?=null,val focusLoad:(()->Unit)?=null,val homeStyle:Boolean=false,val queryChanged:((String)->Unit)?=null,val searchDone:(()->Unit)?=null,val favoriteTitle:String?=null,val episodeProgress:Pair<Long,Long>?=null,val profile:AccountProfile?=null)
 
 class PageAdapter(
@@ -124,7 +124,7 @@ class PageAdapter(
         // Snapshot nested lists before the outer adapter is rebound.
         attachedShelves.forEach(::saveShelf)
         val old=rows
-        val useDiff=old.any{it.kind==Kind.HERO || it.kind==Kind.TABS} || value.any{it.kind==Kind.HERO || it.kind==Kind.TABS} || shelfMode || old.any{it.kind==Kind.CATALOG_BAR} || value.any{it.kind==Kind.CATALOG_BAR} || old.any{it.kind==Kind.SHELF} || value.any{it.kind==Kind.SHELF}
+        val useDiff=old.any{it.kind==Kind.HERO || it.kind==Kind.TABS} || value.any{it.kind==Kind.HERO || it.kind==Kind.TABS} || shelfMode || old.any{it.kind==Kind.CATALOG_BAR} || value.any{it.kind==Kind.CATALOG_BAR} || old.any{it.kind==Kind.SHELF || it.kind==Kind.SETTING || it.kind==Kind.ACCOUNT_TILE} || value.any{it.kind==Kind.SHELF || it.kind==Kind.SETTING || it.kind==Kind.ACCOUNT_TILE}
         val diff=if(useDiff)androidx.recyclerview.widget.DiffUtil.calculateDiff(object:androidx.recyclerview.widget.DiffUtil.Callback(){
             override fun getOldListSize()=old.size
             override fun getNewListSize()=value.size
@@ -167,6 +167,12 @@ class PageAdapter(
                 descendantFocusability=ViewGroup.FOCUS_AFTER_DESCENDANTS
                 overScrollMode=View.OVER_SCROLL_NEVER
                 clipToPadding=false;itemAnimator=null;setPadding(dp(4),dp(4),dp(4),dp(4))
+            }
+            Kind.SETTING,Kind.ACCOUNT_TILE -> LinearLayout(context).apply{
+                orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL
+                addView(ImageView(context).apply{isFocusable=false;scaleType=ImageView.ScaleType.FIT_CENTER},LinearLayout.LayoutParams(dp(28),dp(28)).apply{marginEnd=dp(18)})
+                addView(LinearLayout(context).apply{orientation=LinearLayout.VERTICAL;addView(TextView(context));addView(TextView(context),LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(5)})},LinearLayout.LayoutParams(0,-2,1f))
+                addView(TextView(context).apply{gravity=Gravity.END;maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END},LinearLayout.LayoutParams(-2,-2).apply{marginStart=dp(20)})
             }
             Kind.PROFILE -> LinearLayout(context).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(0,dp(16),0,dp(20));addView(ImageView(context),LinearLayout.LayoutParams(dp(88),dp(88)));addView(TextView(context),LinearLayout.LayoutParams(0,-2,1f).apply{marginStart=dp(20)})}
             Kind.HERO -> LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
@@ -770,6 +776,20 @@ class PageAdapter(
                 box.setOnLongClickListener(row.longClick?.let{callback->View.OnLongClickListener{callback();true}})
                 box.isLongClickable=row.longClick!=null
             }
+            Kind.SETTING,Kind.ACCOUNT_TILE -> {
+                val box=view as LinearLayout
+                box.layoutParams=box.layoutParams.apply{height=view.dp(if(row.kind==Kind.ACCOUNT_TILE)108 else 76)}
+                box.setPadding(view.dp(20),view.dp(12),view.dp(20),view.dp(12))
+                box.isFocusable=row.click!=null;box.isClickable=row.click!=null;box.webControlBackground()
+                val icon=box.getChildAt(0)as ImageView
+                icon.visibility=if(row.kind==Kind.ACCOUNT_TILE)View.VISIBLE else View.GONE
+                if(row.kind==Kind.ACCOUNT_TILE){icon.setImageResource(row.selected);icon.setColorFilter(WHITE)}
+                val labels=box.getChildAt(1)as LinearLayout
+                (labels.getChildAt(0)as TextView).apply{label(row.title,17f,WHITE,true);maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END}
+                (labels.getChildAt(1)as TextView).apply{label(row.subtitle,13f,MUTED);maxLines=2;visibility=if(row.subtitle.isBlank())View.GONE else View.VISIBLE}
+                (box.getChildAt(2)as TextView).apply{label(row.favoriteTitle?:"›",15f,MUTED);maxWidth=view.dp(240)}
+                box.setOnClickListener{row.click?.invoke()}
+            }
             Kind.HEADING -> {
                 val box=view as LinearLayout
                 box.layoutParams=box.layoutParams.apply{height=if(row.key=="section-heading" || row.key.startsWith("period:") || row.key=="library-heading")view.dp(52)else -2}
@@ -787,7 +807,7 @@ class PageAdapter(
                 refresh.layoutParams=LinearLayout.LayoutParams(view.dp(32),view.dp(32)).apply{marginStart=view.dp(12)}
                 refresh.setPadding(view.dp(7),view.dp(7),view.dp(7),view.dp(7))
                 if(row.selected==1)title.includeFontPadding=false
-                refresh.contentDescription=if(row.key=="section-heading")"Обновить раздел"else "Обновить главную"
+                refresh.contentDescription="Обновить: ${row.title}"
                 refresh.webControlBackground()
                 refresh.setOnClickListener{row.click?.invoke()}
                 box.isFocusable=false;box.isClickable=false
