@@ -10,7 +10,7 @@ import java.net.URI
 enum class CollectionType(val title:String){
     PLANNED("В планах"),WATCHING("Смотрю"),WATCHED("Просмотрено"),POSTPONED("Отложено"),ABANDONED("Брошено")
 }
-data class AccountProfile(val id:Int,val name:String,val login:String="",val email:String="",val avatar:String?=null,val createdAt:String="",val banned:Boolean=false)
+data class AccountProfile(val id:Int,val name:String,val login:String="",val email:String="",val avatar:String?=null,val createdAt:String="",val banned:Boolean=false,val videoAds:Boolean?=null,val videoAdsAlways:Boolean?=null,val contentAds:Boolean?=null)
 data class AccountLists(val favorites:Set<Int>,val collections:Map<Int,CollectionType>)
 data class AccountTimecode(val episodeId:String,val seconds:Double,val watched:Boolean)
 data class AccountHistoryItem(val releaseId:Int,val episodeId:String,val updatedAt:Long)
@@ -73,6 +73,17 @@ class AccountApi(private val transport:AccountTransport=AccountHttpTransport()){
         val body=JSONArray();values.forEach{v->body.put(JSONObject().put("release_episode_id",v.episodeId).put("time",v.seconds.coerceAtLeast(0.0)).put("is_watched",v.watched))}
         transport.request("/accounts/users/me/views/timecodes","POST",body.toString(),token)
     }
+    suspend fun releases(token:String,screen:Screen,page:Int):CatalogPage = parseCatalogPage(transport.request(accountReleasePath(screen,page),"GET",null,token),page)
+    suspend fun references(token:String,favorites:Boolean):Map<String,List<CatalogChoice>> {
+        val section=if(favorites)"favorites"else"collections"
+        val keys=listOf("genres","types","years","age-ratings")+if(favorites)listOf("sorting")else emptyList()
+        return keys.associateWith{key->parseCatalogChoices(transport.request("/accounts/users/me/$section/references/$key","GET",null,token),key=="years")}
+    }
+    suspend fun toggleAdPreference(token:String,key:String):AccountProfile {
+        val method=when(key){"video"->"toggleIsWithVideoAds";"always"->"toggleIsWithVideoAdsAlways";"content"->"toggleIsWithContentAds";else->error("Неизвестная настройка")}
+        val response=transport.request("/accounts/users/me/settings/site/$method","POST",null,token)
+        return if(response.isNotBlank())parseAccountProfile(JSONObject(response))else profile(token)
+    }
     suspend fun updateIdentity(token:String,nickname:Boolean,value:String):AccountProfile {
         val field=if(nickname)"Nickname"else"Login"
         val body=JSONObject().put(if(nickname)"new_nickname"else"new_login",value)
@@ -117,7 +128,7 @@ internal fun parseAccountHistory(body:String):List<AccountHistoryItem>{
     }.sortedByDescending{it.updatedAt}
 }
 
-internal fun parseAccountProfile(json:JSONObject)=AccountProfile(json.getInt("id"),json.optString("nickname").ifBlank{json.optString("login").ifBlank{"Аккаунт AniLiberty"}},json.optString("login"),json.optString("email"),json.optJSONObject("avatar")?.let{imageUrl(it.optJSONObject("optimized")?.optString("preview"))?:imageUrl(it.optString("preview"))},json.optString("created_at"),json.optBoolean("is_banned"))
+internal fun parseAccountProfile(json:JSONObject)=AccountProfile(json.getInt("id"),json.optString("nickname").ifBlank{json.optString("login").ifBlank{"Аккаунт AniLiberty"}},json.optString("login"),json.optString("email"),json.optJSONObject("avatar")?.let{imageUrl(it.optJSONObject("optimized")?.optString("preview"))?:imageUrl(it.optString("preview"))},json.optString("created_at"),json.optBoolean("is_banned"),json.accountBoolean("is_with_video_ads"),json.accountBoolean("is_with_video_ads_always"),json.accountBoolean("is_with_content_ads"))
 data class AccountViewedEpisode(val release:Release,val episode:Episode,val time:AccountTimecode,val updatedAt:String)
 data class AccountHistoryPage(val items:List<AccountViewedEpisode>,val more:Boolean)
 internal fun parseAccountHistoryPage(body:String,page:Int):AccountHistoryPage {
@@ -148,3 +159,5 @@ internal fun parseAccountSessions(body:String):List<AccountDeviceSession>{
         AccountDeviceSession(id,title,description,item.optBoolean("is_current"))
     }.sortedByDescending{it.current}
 }
+
+private fun JSONObject.accountBoolean(key:String):Boolean?=if(has(key)&&!isNull(key))getBoolean(key)else null

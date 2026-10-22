@@ -56,7 +56,7 @@ fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int
     setOnClickListener { click() }
 }
 
-enum class Kind { PROFILE, NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH, CONTINUE, CATALOG_BAR }
+enum class Kind { ACCOUNT_TABS, PROFILE, NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH, CONTINUE, CATALOG_BAR }
 data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList(),val composition:List<String>?=null,val focusLoad:(()->Unit)?=null,val homeStyle:Boolean=false,val queryChanged:((String)->Unit)?=null,val searchDone:(()->Unit)?=null,val favoriteTitle:String?=null,val episodeProgress:Pair<Long,Long>?=null,val profile:AccountProfile?=null)
 
 class PageAdapter(
@@ -149,7 +149,7 @@ class PageAdapter(
                 isHorizontalScrollBarEnabled=false;isFillViewport=true
                 addView(LinearLayout(context).apply{gravity=Gravity.CENTER_VERTICAL})
             }
-            Kind.NAV, Kind.TABS, Kind.DAYS -> HorizontalScrollView(context).apply {
+            Kind.NAV, Kind.TABS, Kind.DAYS, Kind.ACCOUNT_TABS -> HorizontalScrollView(context).apply {
                 isHorizontalScrollBarEnabled = false
                 addView(LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL })
             }
@@ -316,7 +316,7 @@ class PageAdapter(
                     }
                     line.addView(input,LinearLayout.LayoutParams(0,view.dp(48),1f).apply{marginEnd=view.dp(8)})
                     row.controls.drop(1).forEachIndexed{index,(title,callback)->
-                        val icon=when(index){0->if(row.controls.size==2)R.drawable.ic_refresh else R.drawable.ic_filter;1->R.drawable.ic_sort;else->R.drawable.ic_refresh}
+                        val icon=when(index){0->if(row.controls.size==2)R.drawable.ic_refresh else R.drawable.ic_filter;1->if(title=="Сбросить")R.drawable.ic_refresh else R.drawable.ic_sort;else->R.drawable.ic_refresh}
                         line.addView(action(line,"",icon=icon,click=callback).apply{
                             contentDescription=title;setPadding(dp(14),0,dp(14),0);compoundDrawablePadding=0
                         },LinearLayout.LayoutParams(view.dp(48),view.dp(48)).apply{if(index<row.controls.size-2)marginEnd=view.dp(8)})
@@ -361,6 +361,14 @@ class PageAdapter(
                         }
                     }, LinearLayout.LayoutParams(-2,view.dp(40)).apply { marginEnd=view.dp(8) })
                 }
+            }
+            Kind.ACCOUNT_TABS -> {
+                val line=(view as HorizontalScrollView).getChildAt(0)as LinearLayout
+                if(line.childCount!=row.controls.size){
+                    line.removeAllViews()
+                    row.controls.forEach{(title,callback)->line.addView(action(line,title,click=callback),LinearLayout.LayoutParams(-2,view.dp(44)).apply{marginEnd=view.dp(8)})}
+                }
+                row.controls.forEachIndexed{i,(title,callback)->(line.getChildAt(i)as TextView).apply{text=title;setTextColor(if(i==row.selected)RED else WHITE);setOnClickListener{callback()}}}
             }
             Kind.TABS -> {
                 view.isFocusable=false

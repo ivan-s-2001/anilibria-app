@@ -10,6 +10,9 @@ import kotlinx.coroutines.launch
 sealed interface Screen {
     data object Welcome : Screen
     data object Home : Screen
+    data class Favorites(val query:String="",val filter:AccountFilter=AccountFilter()):Screen
+    data class Collections(val type:CollectionType=CollectionType.WATCHING,val query:String="",val filter:AccountFilter=AccountFilter()):Screen
+    data object Settings:Screen
     data object Profile : Screen
     data object AccountSessions : Screen
     data object AccountHistory : Screen

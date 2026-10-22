@@ -43,6 +43,7 @@ class AccountSession(context:Context){
     }
     fun saveProfile(profile:AccountProfile){
         val json=JSONObject().put("id",profile.id).put("nickname",profile.name).put("login",profile.login).put("email",profile.email).put("created_at",profile.createdAt).put("is_banned",profile.banned)
+        profile.videoAds?.let{json.put("is_with_video_ads",it)};profile.videoAdsAlways?.let{json.put("is_with_video_ads_always",it)};profile.contentAds?.let{json.put("is_with_content_ads",it)}
         profile.avatar?.let{json.put("avatar",JSONObject().put("preview",it))}
         prefs.edit().putString("profile",json.toString()).putString("name",profile.name).apply()
     }
@@ -125,6 +126,9 @@ class AccountRepository(private val context:Context,val api:AccountApi=AccountAp
             }
         }
     }
+    suspend fun releases(screen:Screen,page:Int):CatalogPage=api.releases(token(),screen,page)
+    suspend fun references(favorites:Boolean):Map<String,List<CatalogChoice>> = api.references(token(),favorites)
+    suspend fun toggleAdPreference(key:String){val value=token();val profile=api.toggleAdPreference(value,key);if(session.token()==value)session.saveProfile(profile)}
     suspend fun updateIdentity(nickname:Boolean,value:String){
         val token=token();val profile=api.updateIdentity(token,nickname,value)
         if(session.token()==token)session.saveProfile(profile)

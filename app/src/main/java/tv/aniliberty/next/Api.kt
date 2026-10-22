@@ -12,7 +12,7 @@ import java.net.URI
 import java.net.URLEncoder
 
 /** Domain identifiers are v1 identifiers. Episode UUIDs are never derived from positions. */
-data class Episode(val id: String, val ordinal: Double, val name: String, val preview: String?, val duration: Long, val streams: List<Pair<String, String>>, val order: Double, val updatedAt:String = "") {
+data class Episode(val id: String, val ordinal: Double, val name: String, val preview: String?, val duration: Long, val streams: List<Pair<String, String>>, val order: Double, val updatedAt:String = "",val opening:EpisodeSkip?=null,val ending:EpisodeSkip?=null) {
     val label: String get() = name.ifBlank { "Эпизод ${number(ordinal)}" }
 }
 data class Credit(val role: String, val name: String)
@@ -35,7 +35,7 @@ fun parseRelease(json: JSONObject): Release {
         if (id.isBlank() || !ordinal.isFinite()) null else Episode(id, ordinal, e.text("name"), e.optJSONObject("preview")?.image(), e.optLong("duration", 0).coerceAtLeast(0),
             listOf("1080p" to "hls_1080", "720p" to "hls_720", "480p" to "hls_480").mapNotNull { (quality, key) ->
                 e.text(key).takeIf { it.startsWith("https://") }?.let { quality to it }
-            }, e.optDouble("sort_order", ordinal),e.text("updated_at"))
+            }, e.optDouble("sort_order", ordinal),e.text("updated_at"),e.optJSONObject("opening")?.let{EpisodeSkip(it.optDouble("start",Double.NaN),it.optDouble("stop",Double.NaN))},e.optJSONObject("ending")?.let{EpisodeSkip(it.optDouble("start",Double.NaN),it.optDouble("stop",Double.NaN))})
     }.sortedWith(compareBy<Episode> { it.order }.thenBy { it.ordinal })
     return Release(json.getInt("id"), json.text("alias"), json.optJSONObject("name")?.text("main").orEmpty(), json.optJSONObject("name")?.text("english").orEmpty(), json.optJSONObject("poster")?.image(), json.text("year"), json.display("season"), json.display("type"), json.display("age_rating"), json.optJSONArray("genres").objects().map { it.text("name") }, json.text("description"), episodes,
         json.optJSONArray("members").objects().map { Credit(it.display("role"), it.text("nickname")) },
@@ -162,6 +162,7 @@ class Api {
         references=result
         return result
     }
+    suspend fun randomRelease():Release = JSONArray(request("/anime/releases/random?limit=1")).getJSONObject(0).let(::parseRelease)
     suspend fun release(id: Int, refresh:Boolean=false): Release {
         if(!refresh)synchronized(cache) { cache[id] }?.let { return it }
         val item = parseRelease(JSONObject(request("/anime/releases/$id?exclude=torrents")))

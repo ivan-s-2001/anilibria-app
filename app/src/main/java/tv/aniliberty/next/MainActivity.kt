@@ -31,6 +31,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var adapter: PageAdapter
     private lateinit var grid: GridLayoutManager
     private val prefs get()=playbackPreferences(this)
+    private val settings by lazy{TvSettings(this)}
     private val account by lazy{AccountRepository(this)}
     private var accountJob:kotlinx.coroutines.Job?=null
     private var accountLoadedAt=0L
@@ -176,23 +177,28 @@ class MainActivity : ComponentActivity() {
             addView(android.widget.ImageView(this@MainActivity).apply{setImageResource(R.drawable.ic_aniliberty);contentDescription="AniLiberty"},LinearLayout.LayoutParams(dp(36),dp(36)).apply{marginStart=dp(8);marginEnd=dp(10)})
             if(menuOpen)addView(android.widget.TextView(this@MainActivity).apply{label("AniLiberty",18f,WHITE,true)})
         },LinearLayout.LayoutParams(-1,dp(56)))
-        val titles=listOf("Поиск","Главная","Релизы","Моё")
-        val icons=listOf(R.drawable.ic_search,R.drawable.ic_home,R.drawable.ic_catalog,R.drawable.ic_library)
-        titles.forEachIndexed { index,title ->
-            val route=listOf(2,0,1,3)[index]
-            menu.addView(action(menu,if(menuOpen)title else "",icon=icons[index]){
+        val routes=buildList {
+            if(settings.enabled("menu-search"))add(Triple(2,"Поиск",R.drawable.ic_search))
+            add(Triple(0,"Главная",R.drawable.ic_home));add(Triple(1,"Релизы",R.drawable.ic_catalog))
+            if(settings.enabled("menu-favorites"))add(Triple(4,"Избранное",R.drawable.ic_favorite))
+            if(settings.enabled("menu-collections"))add(Triple(5,"Коллекции",R.drawable.ic_library))
+            add(Triple(6,"История",R.drawable.ic_previous));add(Triple(3,"Профиль",R.drawable.ic_library))
+            if(settings.enabled("menu-random",false))add(Triple(8,"Случайный релиз",R.drawable.ic_refresh))
+            if(settings.enabled("menu-settings"))add(Triple(7,"Настройки",R.drawable.ic_settings))
+        }
+        val buttons=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
+        menu.addView(android.widget.ScrollView(this).apply{isFillViewport=false;isFocusable=false;addView(buttons)},LinearLayout.LayoutParams(-1,0,1f))
+        routes.forEach { (route,title,icon) ->
+            buttons.addView(action(buttons,if(menuOpen)title else "",icon=icon){
                 selectedSection=route;closeMenu(false);navigate(route)
             }.apply {
-                contentDescription=title
-                if(route==selectedSection){
-                    setTextColor(WHITE)
-                    val marker=android.graphics.drawable.GradientDrawable().apply{setColor(RED)}
-                    background=android.graphics.drawable.LayerDrawable(arrayOf(background!!,marker)).apply{setLayerWidth(1,dp(2));setLayerGravity(1,android.view.Gravity.START)}
-                }
+                tag="menu-route:$route";contentDescription=title
+                if(route==selectedSection)setTextColor(WHITE)
                 setOnKeyListener{_,key,event->if(key==KeyEvent.KEYCODE_DPAD_RIGHT){if(event.action==KeyEvent.ACTION_UP)closeMenu();true}else false}
             },LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(6)})
         }
     }
+
     private fun homeMenuLayout(){
         if(current!=Screen.Welcome && menu.parent===shell){
             shell.removeView(menu);shell.setPadding(dp(60),0,0,0)
@@ -206,7 +212,7 @@ class MainActivity : ComponentActivity() {
         if(current==Screen.Welcome)return
         homeTransition++;homeFocusTarget=null;catalogToolsPending=false;list.stopScroll()
         contentFocus=list.findFocus();rememberFocus();menuOpen=true;buildMenu()
-        menu.getChildAt(listOf(2,0,1,3).indexOf(selectedSection).coerceAtLeast(0)+1)?.requestFocus()
+        (menu.findViewWithTag<View>("menu-route:$selectedSection")?:menu.findViewWithTag<View>("menu-route:0"))?.requestFocus()
     }
     private fun closeMenu(restore:Boolean=true){menuOpen=false;buildMenu();if(restore){if(contentFocus?.isAttachedToWindow==true)contentFocus?.requestFocus()else list.requestFocus()}}
     private var homeFocusTarget:Int?=null
@@ -306,7 +312,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        if(current is Screen.Catalog && !menuOpen){
+        if((current is Screen.Catalog || isAccountList(current)) && !menuOpen){
             if(catalogToolsPending && event.keyCode in listOf(KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN,KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT))return true
             val focused=list.findFocus()?.let{list.findContainingItemView(it)}
             val position=focused?.let{list.getChildAdapterPosition(it)}?:-1
@@ -318,7 +324,10 @@ class MainActivity : ComponentActivity() {
                     if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0)openMenu()
                     return true
                 }
-                if(event.keyCode==KeyEvent.KEYCODE_DPAD_DOWN && model.state.value.more && position>=adapter.rows.size-10 && model.state.value.moreError==null){
+                if(event.keyCode==KeyEvent.KEYCODE_DPAD_DOWN && isAccountList(current) && accountReleases.more && !accountReleases.loading && accountReleases.error==null && position>=adapter.rows.size-10){
+                    if(event.action==KeyEvent.ACTION_DOWN)loadAccountReleases(current)
+                }
+                if(event.keyCode==KeyEvent.KEYCODE_DPAD_DOWN && current is Screen.Catalog && model.state.value.more && position>=adapter.rows.size-10 && model.state.value.moreError==null){
                     if(event.action==KeyEvent.ACTION_DOWN)model.loadMoreCatalog()
                     if(adapter.rows.getOrNull(position+4)?.kind!=Kind.POSTER)return true
                 }
@@ -379,10 +388,11 @@ class MainActivity : ComponentActivity() {
         adapter=PageAdapter(::navigate,::selectTab,::play,::favorite,{rememberFocus();model.open(Screen.Detail(it.id))},
             { id -> prefs.getLong("position:$id",0) to prefs.getLong("duration:$id",0) },
             { id -> prefs.getString("last:$id",null) },::returnToTabs, { index -> enterDay=true;val previous=model.state.value;model.homeDay(index);if(previous==model.state.value)render(model.state.value) },::quickActions,enterTab=::enterSelectedTab)
-        grid.spanSizeLookup=object:GridLayoutManager.SpanSizeLookup(){override fun getSpanSize(position:Int)=when(adapter.rows.getOrNull(position)?.kind){Kind.POSTER->if(current is Screen.Catalog || current is Screen.Section || current is Screen.Library || current is Screen.Franchise)5 else 3;Kind.GENRE->if(current is Screen.Section)5 else 3;Kind.FRANCHISE->if((current as?Screen.Section)?.kind==HomeSection.FRANCHISES)10 else 5;Kind.EPISODE,Kind.FEATURE->5;else->grid.spanCount}}
+        grid.spanSizeLookup=object:GridLayoutManager.SpanSizeLookup(){override fun getSpanSize(position:Int)=when(adapter.rows.getOrNull(position)?.kind){Kind.POSTER->if(isAccountList(current) || current is Screen.Catalog || current is Screen.Section || current is Screen.Library || current is Screen.Franchise)5 else 3;Kind.GENRE->if(current is Screen.Section)5 else 3;Kind.FRANCHISE->if((current as?Screen.Section)?.kind==HomeSection.FRANCHISES)10 else 5;Kind.EPISODE,Kind.FEATURE->5;else->grid.spanCount}}
         list.addOnScrollListener(object:RecyclerView.OnScrollListener(){
             override fun onScrolled(view:RecyclerView,dx:Int,dy:Int){
                 val state=model.state.value
+                if(isAccountList(current) && dy>0 && grid.findLastVisibleItemPosition()>=adapter.itemCount-6 && !accountReleases.loading && accountReleases.error==null)loadAccountReleases(current)
                 if(current==Screen.AccountHistory && dy>0 && grid.findLastVisibleItemPosition()>=adapter.itemCount-6 && accountHistoryError==null)loadAccountHistory()
                 if(state.moreError==null && dy>0 && grid.findLastVisibleItemPosition()>=adapter.itemCount-9){
                     if(state.screen is Screen.Catalog)model.loadMoreCatalog()
@@ -469,7 +479,7 @@ class MainActivity : ComponentActivity() {
     }
     private fun navigate(index:Int){
         rememberFocus()
-        when(index){0->model.open(Screen.Home);1->model.open(Screen.Catalog());2->search();3->library()}
+        when(index){0->model.open(Screen.Home);1->model.open(Screen.Catalog());2->search();3->library();4->openAccountList(Screen.Favorites());5->openAccountList(Screen.Collections());6->if(account.signedIn)openAccountHistory()else login();7->model.open(Screen.Settings);8->lifecycleScope.launch{try{val r=model.api.randomRelease();model.open(Screen.Detail(r.id))}catch(_:Exception){Toast.makeText(this@MainActivity,"Не удалось выбрать релиз",Toast.LENGTH_SHORT).show()}}}
     }
     private fun search(){
         val screen=(model.state.value.screen as?Screen.Catalog)?:Screen.Catalog()
@@ -507,6 +517,7 @@ class MainActivity : ComponentActivity() {
             kotlinx.coroutines.delay(350)
             val active=model.state.value.screen
             if(active is Screen.Section){sectionQueries[active.kind]=query;render(model.state.value);return@launch}
+            if(isAccountList(active)){val next=withAccountQuery(active,query.trim());if(next!=active)model.open(next,false);return@launch}
             val screen=active as?Screen.Catalog?:return@launch
             val next=screen.copy(query=query.trim(),page=1)
             if(next!=screen)model.open(next,false)
@@ -518,6 +529,7 @@ class MainActivity : ComponentActivity() {
         (getSystemService(INPUT_METHOD_SERVICE)as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(list.windowToken,0)
         val active=model.state.value.screen
         if(active is Screen.Section){sectionQueries[active.kind]=catalogSearchDraft;enterCatalogResults=true;render(model.state.value);return}
+        if(isAccountList(active)){enterCatalogResults=true;val next=withAccountQuery(active,catalogSearchDraft.trim());if(next==active)render(model.state.value)else model.open(next,false);return}
         val screen=active as?Screen.Catalog?:return
         enterCatalogResults=true
         val next=screen.copy(query=catalogSearchDraft.trim(),page=1)
@@ -624,7 +636,7 @@ class MainActivity : ComponentActivity() {
     private fun accountAction(done:(()->Unit)?=null,block:suspend()->Unit){
         if(accountJob?.isActive==true){Toast.makeText(this,"Подождите, идёт синхронизация",Toast.LENGTH_SHORT).show();return}
         accountJob=lifecycleScope.launch{
-            try{block();rememberFocus();render(model.state.value);done?.invoke()}
+            try{block();if(!isAccountList(current))accountReleaseScreen=null;rememberFocus();render(model.state.value);done?.invoke()}
             catch(e:kotlinx.coroutines.CancellationException){throw e}
             catch(e:Exception){
                 val panel=TvSidePanel(this@MainActivity,"Не удалось сохранить")
@@ -648,11 +660,41 @@ class MainActivity : ComponentActivity() {
         rememberFocus();model.open(Screen.Profile)
         if(account.signedIn)refreshAccount(force=true)
     }
-    private fun accountList(type:CollectionType?){
-        if(account.lists==null){accountAction(done={accountList(type)}){account.refresh()};return}
-        val lists=account.lists!!
-        val ids=if(type==null)lists.favorites.toList()else lists.collections.filterValues{it==type}.keys.toList()
-        rememberFocus();model.open(Screen.Library(ids,type?.title?:"Избранное"))
+    private fun accountList(type:CollectionType?)=openAccountList(if(type==null)Screen.Favorites()else Screen.Collections(type))
+    private var accountReleases:AccountReleaseState=AccountReleaseState()
+    private var accountReleaseScreen:Screen?=null
+    private var accountReleaseUser:Int?=null
+    private var accountReleaseJob:kotlinx.coroutines.Job?=null
+    private fun openAccountList(screen:Screen){rememberFocus();model.open(screen)}
+    private fun loadAccountReleases(screen:Screen,reset:Boolean=false){
+        if(!account.signedIn)return
+        val user=account.session.userId
+        if(reset || screen!=accountReleaseScreen || user!=accountReleaseUser){
+            accountReleaseJob?.cancel();accountReleaseScreen=screen;accountReleaseUser=user;accountReleases=AccountReleaseState()
+        }else if(accountReleases.loading || (accountReleases.page>0 && !accountReleases.more))return
+        val page=accountReleases.page+1
+        accountReleases=accountReleases.copy(loading=true,error=null)
+        accountReleaseJob=lifecycleScope.launch{
+            try{
+                val result=account.releases(screen,page)
+                if(accountReleaseScreen==screen && account.session.userId==user){
+                    accountReleases=AccountReleaseState((accountReleases.items+result.releases).distinctBy{it.id},page,result.more,result.total)
+                }
+            }catch(e:kotlinx.coroutines.CancellationException){throw e}
+            catch(e:Exception){if(accountReleaseScreen==screen && account.session.userId==user)accountReleases=accountReleases.copy(loading=false,error=e.message?:"Не удалось загрузить список")}
+            finally{if(current==screen)render(model.state.value)}
+        }
+    }
+    private fun accountFilters(screen:Screen,sort:Boolean=false){
+        accountAction{
+            val refs=account.references(screen is Screen.Favorites)
+            if(current==screen){
+                if(sort){TvSidePanel(this@MainActivity,"Сортировка избранного").apply{
+                    refs["sorting"].orEmpty().forEach{choice->addChoice(choice.title,choice.value==accountListFilter(screen).sorting){dismiss();model.open(withAccountFilter(screen,accountListFilter(screen).copy(sorting=choice.value)),false)}}
+                    addAction("Отмена"){dismiss()};show()
+                }}else AccountFilterPanel(this@MainActivity,accountListFilter(screen),refs){model.open(withAccountFilter(screen,it),false)}.show()
+            }
+        }
     }
     private var accountSessions:List<AccountDeviceSession> = emptyList()
     private var accountSessionsLoading=false
@@ -963,21 +1005,21 @@ class MainActivity : ComponentActivity() {
             return
         }
         pendingRender=null
-        if(state.screen !is Screen.Catalog && state.screen !is Screen.Section){catalogSearchEditing=false;catalogSearchJob?.cancel()}
+        if(state.screen !is Screen.Catalog && state.screen !is Screen.Section && !isAccountList(state.screen)){catalogSearchEditing=false;catalogSearchJob?.cancel()}
         (state.screen as?Screen.Detail)?.let{history.restore(it.id)}
         if(current==state.screen && !state.loading && adapter.rows.none{it.key=="loading"})rememberFocus()
         val sameDetail=(current as?Screen.Detail)?.id==(state.screen as?Screen.Detail)?.id && current is Screen.Detail && adapter.rows.any{it.kind==Kind.HERO}
-        val sameCatalog=current is Screen.Catalog && (current==state.screen || catalogSearchEditing) && adapter.rows.any{it.kind==Kind.CATALOG_BAR}
+        val sameCatalog=(current is Screen.Catalog || isAccountList(current)) && (current==state.screen || catalogSearchEditing) && adapter.rows.any{it.kind==Kind.CATALOG_BAR}
         val sameSection=current is Screen.Section && current==state.screen && adapter.rows.any{it.key=="section-heading"}
-        val sameProfile=(current==Screen.Profile || current==Screen.AccountSessions) && current==state.screen && adapter.rows.any{it.kind==Kind.ACTION}
+        val sameProfile=(current==Screen.Profile || current==Screen.AccountSessions || current==Screen.Settings) && current==state.screen && adapter.rows.any{it.kind==Kind.ACTION}
         val sameAccountHistory=current==Screen.AccountHistory && state.screen==Screen.AccountHistory && adapter.rows.any{it.key=="account-history-refresh"}
         val sameHome=current==Screen.Home && state.screen==Screen.Home && adapter.rows.any{it.kind==Kind.SHELF}
         val retainedFocus = if(current==state.screen) list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String } else null
         current=state.screen
-        val section=when(current){Screen.Profile,Screen.AccountHistory,Screen.AccountSessions->3;Screen.Home->0;is Screen.Catalog,is Screen.Section,is Screen.Franchise->1;is Screen.Library->3;else->selectedSection}
+        val section=when(current){Screen.Profile,Screen.AccountSessions->3;Screen.AccountHistory->6;Screen.Settings->7;is Screen.Favorites->4;is Screen.Collections->5;Screen.Home->0;is Screen.Catalog,is Screen.Section,is Screen.Franchise->1;is Screen.Library->3;else->selectedSection}
         if(section!=selectedSection){selectedSection=section;buildMenu()}
         homeMenuLayout()
-        val spans=if(current is Screen.Catalog || current is Screen.Section || current is Screen.Library || current is Screen.Franchise)20 else 15
+        val spans=if(isAccountList(current) || current is Screen.Catalog || current is Screen.Section || current is Screen.Library || current is Screen.Franchise)20 else 15
         if(grid.spanCount!=spans)grid.spanCount=spans
         menu.visibility=if(current==Screen.Welcome)View.GONE else View.VISIBLE
         val rows=mutableListOf<Row>()
@@ -1056,14 +1098,11 @@ class MainActivity : ComponentActivity() {
                 Screen.Profile->{
                     rows+=Row("profile-heading",Kind.HEADING,"Профиль",selected=1)
                     rows+=Row("profile-identity",Kind.PROFILE,profile=account.session.profile())
+                    rows+=Row("profile-settings",Kind.ACTION,"Настройки приложения",click={model.open(Screen.Settings)})
                     if(account.signedIn){
                         if(profileSyncing)rows+=Row("profile-sync",Kind.TEXT,"Синхронизация…")
                         profileError?.let{rows+=Row("profile-error",Kind.TEXT,"Не удалось обновить аккаунт",it)}
                         if(account.session.profile()?.banned==true)rows+=Row("profile-ban",Kind.TEXT,"Аккаунт ограничен","Подробности доступны в профиле на сайте.")
-                        val lists=account.lists
-                        rows+=Row("profile-favorites",Kind.ACTION,"Избранное${lists?.let{" · ${it.favorites.size}"}.orEmpty()}",click={accountList(null)})
-                        CollectionType.entries.forEach{type->rows+=Row("profile-collection:${type.name}",Kind.ACTION,type.title+(lists?.let{" · ${it.collections.values.count{v->v==type}}"}.orEmpty()),click={accountList(type)})}
-                        rows+=Row("profile-history",Kind.ACTION,"История просмотра",click={openAccountHistory()})
                         rows+=Row("profile-import",Kind.ACTION,"Занести локальную историю в аккаунт",click={offerLocalHistory()})
                         val queued=pending(prefs).size
                         if(queued>0)rows+=Row("profile-pending",Kind.TEXT,"Ожидают синхронизации: $queued серий","Прогресс сохранён на этом ТВ.")
@@ -1078,6 +1117,58 @@ class MainActivity : ComponentActivity() {
                         rows+=Row("profile-guest",Kind.TEXT,"История сохраняется на этом ТВ","Войдите для доступа к избранному, коллекциям и прогрессу аккаунта.")
                         rows+=Row("profile-login",Kind.ACTION,"Войти по QR-коду",click={login()})
                         rows+=Row("profile-local",Kind.ACTION,"Библиотека на этом ТВ",click={localLibrary()})
+                    }
+                }
+                Screen.Settings->{
+                    rows+=Row("settings-heading",Kind.HEADING,"Настройки",selected=1)
+                    fun localToggle(key:String,title:String,description:String,default:Boolean=true){
+                        rows+=Row("setting:$key",Kind.ACTION,title+if(settings.enabled(key,default))" · Вкл."else" · Выкл.",description,click={settings.toggle(key,default);rememberFocus();buildMenu();render(model.state.value)})
+                    }
+                    rows+=Row("settings-player",Kind.HEADING,"Воспроизведение")
+                    localToggle("skip-opening","Автопропуск опенингов","Только для эпизодов с разметкой опенинга",false)
+                    localToggle("skip-ending","Автопропуск эндингов","Только для эпизодов с разметкой эндинга",false)
+                    localToggle("auto-next","Следующий эпизод автоматически","После окончания текущего эпизода",prefs.getBoolean("auto-next",true))
+                    rows+=Row("settings-ads",Kind.HEADING,"Реклама в аккаунте")
+                    rows+=Row("settings-ads-info",Kind.TEXT,"Общие настройки AniLiberty","Сохраняются в аккаунте и действуют в сервисах проекта. Видеореклама в этом ТВ-плеере пока не подключена.")
+                    if(account.signedIn){
+                        val profile=account.session.profile()
+                        listOf(Triple("video","Показывать видеорекламу",profile?.videoAds),Triple("always","Реклама перед каждым эпизодом",profile?.videoAdsAlways),Triple("content","Показывать контентную рекламу",profile?.contentAds)).forEach{(key,title,value)->
+                            rows+=Row("setting-ad:$key",Kind.ACTION,title+when(value){true->" · Вкл.";false->" · Выкл.";null->" · Обновить"},click={accountAction{account.refresh();if(value!=null){val fresh=account.session.profile();val actual=when(key){"video"->fresh?.videoAds;"always"->fresh?.videoAdsAlways;else->fresh?.contentAds};if(actual==value)account.toggleAdPreference(key)}}})
+                        }
+                    }else rows+=Row("settings-ads-login",Kind.ACTION,"Войти для настройки рекламы",click={login()})
+                    rows+=Row("settings-menu",Kind.HEADING,"Кнопки бокового меню")
+                    localToggle("menu-random","Случайный релиз","Показывать кнопку в меню",false)
+                    localToggle("menu-search","Поиск","Показывать кнопку в меню")
+                    localToggle("menu-favorites","Избранное","Показывать кнопку в меню")
+                    localToggle("menu-collections","Коллекции","Показывать кнопку в меню")
+                    localToggle("menu-settings","Настройки","Всегда доступны также из профиля")
+                }
+                is Screen.Favorites,is Screen.Collections->{
+                    val title=if(screen is Screen.Favorites)"Избранное"else"Коллекции"
+                    rows+=Row("account-list-heading",Kind.HEADING,title,selected=1)
+                    if(!account.signedIn){
+                        rows+=Row("account-list-login",Kind.ACTION,"Войти по QR-коду","Список хранится в вашем аккаунте AniLiberty",click={login()})
+                    }else{
+                        if(screen is Screen.Collections){
+                            rows+=Row("account-collections-tabs",Kind.ACCOUNT_TABS,selected=CollectionType.entries.indexOf(screen.type),controls=CollectionType.entries.map{type->type.title to {model.open(screen.copy(type=type),false)}})
+                        }
+                        rows+=Row("account-list-tools",Kind.CATALOG_BAR,title=catalogSearchDraft,selected=if(catalogSearchEditing)1 else 0,queryChanged=::liveCatalogSearch,searchDone=::finishCatalogSearch,controls=buildList{
+                            add((accountListQuery(screen).ifBlank{"Поиск…"}) to {catalogSearchDraft=accountListQuery(screen);catalogSearchEditing=true;render(model.state.value)})
+                            add("Фильтры" to {accountFilters(screen)})
+                            if(screen is Screen.Favorites)add("Сортировка" to {accountFilters(screen,true)})
+                            add("Сбросить" to {model.open(if(screen is Screen.Collections)Screen.Collections(screen.type)else Screen.Favorites(),false)})
+                        })
+                        if(accountReleaseScreen!=screen || accountReleaseUser!=account.session.userId){
+                            list.post{if(current==screen)loadAccountReleases(screen,true)}
+                            rows+=Row("account-list-loading",Kind.TEXT,"Загрузка…")
+                        }else{
+                            rows+=accountReleases.items.map{Row("release:${it.id}",Kind.POSTER,release=it,selected=2)}
+                            if(accountReleases.loading)rows+=Row("account-list-loading",Kind.TEXT,"Загрузка…")
+                            else if(accountReleases.error!=null)rows+=Row("account-list-error",Kind.ACTION,"Повторить загрузку",accountReleases.error.orEmpty(),click={loadAccountReleases(screen)})
+                            else if(accountReleases.items.isEmpty())rows+=Row("account-list-empty",Kind.TEXT,"Список пуст")
+                            else if(accountReleases.more)rows+=Row("account-list-more",Kind.ACTION,"Загрузить ещё",click={loadAccountReleases(screen)})
+                            rows+=Row("account-list-refresh",Kind.ACTION,"Обновить список",click={loadAccountReleases(screen,true);render(model.state.value)})
+                        }
                     }
                 }
                 Screen.AccountSessions->{
@@ -1219,8 +1310,8 @@ class MainActivity : ComponentActivity() {
         }
         if(keepDetailTabFocus)return
         if(menuOpen)return
-        if(catalogSearchEditing && (current is Screen.Catalog || current is Screen.Section))return
-        if(enterCatalogResults && (current is Screen.Catalog || current is Screen.Section) && !state.loading){
+        if(catalogSearchEditing && (current is Screen.Catalog || current is Screen.Section || isAccountList(current)))return
+        if(enterCatalogResults && (current is Screen.Catalog || current is Screen.Section || isAccountList(current)) && !state.loading){
             enterCatalogResults=false
             val index=rows.indexOfFirst{it.kind in listOf(Kind.POSTER,Kind.GENRE,Kind.FRANCHISE,Kind.FEATURE,Kind.SHELF)}.takeIf{it>=0}?:rows.indexOfFirst{it.kind==Kind.CATALOG_BAR}
             if(index>=0){

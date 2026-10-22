@@ -52,6 +52,8 @@ class PlayerActivity : ComponentActivity() {
     private var nextRemaining=10
     private var countdownRunning=false
     private val handler=Handler(Looper.getMainLooper())
+    private val settings by lazy{TvSettings(this)}
+    private val skippedRanges=mutableSetOf<String>()
     private val prefs by lazy{playbackPreferences(this)}
     private fun dp(value:Int)=(value*resources.displayMetrics.density).toInt()
     private fun time(ms:Long):String{val seconds=ms.coerceAtLeast(0)/1000;return "%d:%02d".format(seconds/60,seconds%60)}
@@ -62,6 +64,15 @@ class PlayerActivity : ComponentActivity() {
             if(engine!=null){
                 val duration=engine.duration.coerceAtLeast(0)
                 val position=pendingSeek?:engine.currentPosition
+                if(engine.isPlaying && pendingSeek==null && panel==null){
+                    val episode=current
+                    listOf("opening" to episode?.opening,"ending" to episode?.ending).forEach{(key,range)->
+                        val identity="${episode?.id}:$key"
+                        if(settings.enabled("skip-$key",false) && identity !in skippedRanges){
+                            skipTarget(range,position,duration)?.let{target->skippedRanges.add(identity);engine.seekTo(target);Toast.makeText(this@PlayerActivity,if(key=="opening")"Опенинг пропущен"else"Эндинг пропущен",Toast.LENGTH_SHORT).show()}
+                        }
+                    }
+                }
                 seek.progress=if(duration>0)(position*1000/duration).toInt().coerceIn(0,1000)else 0
                 clock.text="${time(position)} / ${time(duration)}"+if(pendingSeek!=null)" · OK — перейти · Назад — отменить"else ""
                 pause.text=if(engine.isPlaying)"Пауза"else"Продолжить"
@@ -117,8 +128,8 @@ class PlayerActivity : ComponentActivity() {
         nextButton=action(buttons,"Следующий",icon=R.drawable.ic_next){nextEpisode(release?.episodes.orEmpty(),current?.id)?.let{startEpisode(it)}};buttons.addView(nextButton)
         episodesButton=action(buttons,"Эпизоды",icon=R.drawable.ic_episodes){episodes()};buttons.addView(episodesButton)
         qualityButton=action(buttons,"Качество",icon=R.drawable.ic_settings){qualities()};buttons.addView(qualityButton)
-        autoNextButton=action(buttons,if(prefs.getBoolean("auto-next",true))"Автопереход: вкл"else "Автопереход: выкл"){
-            val enabled=!prefs.getBoolean("auto-next",true);prefs.edit().putBoolean("auto-next",enabled).apply()
+        autoNextButton=action(buttons,if(settings.enabled("auto-next",prefs.getBoolean("auto-next",true)))"Автопереход: вкл"else "Автопереход: выкл"){
+            val enabled=!settings.enabled("auto-next",prefs.getBoolean("auto-next",true));settings.toggle("auto-next",prefs.getBoolean("auto-next",true))
             autoNextButton.text=if(enabled)"Автопереход: вкл"else "Автопереход: выкл"
             if(!enabled)cancelNext()
             Toast.makeText(this,if(enabled)"Автопереход включён"else"Автопереход отключён",Toast.LENGTH_SHORT).show()
@@ -247,7 +258,7 @@ class PlayerActivity : ComponentActivity() {
         if(episode.streams.isEmpty()){showControls();Toast.makeText(this,"Следующая серия пока недоступна",Toast.LENGTH_LONG).show();return}
         val offer=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(16),dp(20),dp(16));setBackgroundColor(0xFF212121.toInt())}
         nextOffer=offer;nextRemaining=10
-        val auto=prefs.getBoolean("auto-next",true)
+        val auto=settings.enabled("auto-next",prefs.getBoolean("auto-next",true))
         offer.addView(TextView(this).apply{label(if(auto)"Следующий эпизод через 10 с"else"Следующий эпизод",18f,WHITE,true)})
         offer.addView(TextView(this).apply{label(episode.label,16f,MUTED)})
         val now=action(offer,"Смотреть сейчас",true){cancelNext();startEpisode(episode)};offer.addView(now)
