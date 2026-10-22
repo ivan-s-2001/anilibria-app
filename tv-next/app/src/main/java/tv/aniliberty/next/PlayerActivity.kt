@@ -21,11 +21,15 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.ima.ImaAdsLoader
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlayerActivity : ComponentActivity() {
@@ -56,6 +60,13 @@ class PlayerActivity : ComponentActivity() {
     private var panelChild = false
     private var panelCaller: View? = null
     private var player: ExoPlayer? = null
+    private val supportAds by lazy { SupportAds(this) }
+    private var adsLoader: ImaAdsLoader? = null
+    private var campaignRequest: kotlinx.coroutines.Deferred<VastCampaign?>? = null
+    private var adStartJob: kotlinx.coroutines.Job? = null
+    private val adAttempts = mutableSetOf<String>()
+    private var adGeneration = 0
+    private lateinit var adLabel: TextView
     private var release: Release? = null
     private var current: Episode? = null
     private var quality = 0
@@ -89,7 +100,12 @@ class PlayerActivity : ComponentActivity() {
                 if (engine != null) {
                     val duration = engine.duration.coerceAtLeast(0)
                     val position = pendingSeek ?: engine.currentPosition
-                    if (engine.isPlaying && pendingSeek == null && panel == null) {
+                    if (
+                        engine.isPlaying &&
+                            !engine.isPlayingAd &&
+                            pendingSeek == null &&
+                            panel == null
+                    ) {
                         val episode = current
                         listOf("opening" to episode?.opening, "ending" to episode?.ending)
                             .forEach { (key, range) ->
@@ -138,9 +154,30 @@ class PlayerActivity : ComponentActivity() {
         super.onCreate(state)
         quality = state?.getInt("quality") ?: 0
         desiredPlay = state?.getBoolean("playing") ?: true
+        adAttempts.addAll(state?.getStringArrayList("ad-attempts").orEmpty())
+        if (supportAds.shouldRequest())
+            campaignRequest =
+                lifecycleScope.async {
+                    try {
+                        supportAds.campaign()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
         root = FrameLayout(this).apply { setBackgroundColor(android.graphics.Color.BLACK) }
         video = PlayerView(this).apply { useController = false }
         root.addView(video, FrameLayout.LayoutParams(-1, -1))
+        adLabel =
+            TextView(this).apply {
+                label("Реклама", 12f, WHITE)
+                setPadding(dp(12), dp(8), dp(12), dp(8))
+                setBackgroundColor(0xAA000000.toInt())
+                isFocusable = false
+                visibility = View.GONE
+            }
+        root.addView(adLabel, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START))
         buffering =
             android.widget.ProgressBar(this).apply {
                 isFocusable = false
@@ -310,6 +347,7 @@ class PlayerActivity : ComponentActivity() {
 
     private fun manualSkipRange(): SkipSegment? {
         val engine = player ?: return null
+        if (engine.isPlayingAd) return null
         val episode = current ?: return null
         return listOf("opening" to episode.opening, "ending" to episode.ending)
             .firstNotNullOfOrNull { (key, range) ->
@@ -345,6 +383,12 @@ class PlayerActivity : ComponentActivity() {
     private fun updateChrome() {
         if (!::chrome.isInitialized) return
         val engine = player
+        if (engine?.isPlayingAd == true) {
+            controls.visibility = View.GONE
+            skipPrompt.visibility = View.GONE
+            seekPreview.visibility = View.GONE
+            return
+        }
         val duration = engine?.duration?.coerceAtLeast(0) ?: 0
         val position = pendingSeek ?: engine?.currentPosition ?: 0
         chrome.update(position, duration, pendingSeek != null, engine?.isPlaying == true)
@@ -409,6 +453,7 @@ class PlayerActivity : ComponentActivity() {
     }
 
     private fun showControls(focus: View? = null) {
+        if (player?.isPlayingAd == true) return
         controls.visibility = View.VISIBLE
         skipPrompt.visibility = View.GONE
         (focus ?: pause).requestFocus()
@@ -441,6 +486,36 @@ class PlayerActivity : ComponentActivity() {
         play: Boolean = true,
         positionOverride: Long? = null,
     ) {
+        adStartJob?.cancel()
+        val generation = ++adGeneration
+        if (!supportAds.shouldRequest() || !adAttempts.add(episode.id)) {
+            startEpisodeContent(episode, requestedQuality, play, positionOverride)
+            return
+        }
+        save()
+        adsLoader?.setPlayer(null)
+        video.player = null
+        player?.release()
+        player = null
+        current = episode
+        quality = requestedQuality
+        desiredPlay = play
+        buffering.visibility = View.VISIBLE
+        adStartJob =
+            lifecycleScope.launch {
+                val campaign = withTimeoutOrNull(2500) { campaignRequest?.await() }
+                if (!stopped && generation == adGeneration)
+                    startEpisodeContent(episode, requestedQuality, play, positionOverride, campaign)
+            }
+    }
+
+    private fun startEpisodeContent(
+        episode: Episode,
+        requestedQuality: Int = 0,
+        play: Boolean = true,
+        positionOverride: Long? = null,
+        campaign: VastCampaign? = null,
+    ) {
         val selected = requestedQuality.takeIf { it in episode.streams.indices } ?: 0
         val stream =
             episode.streams.getOrNull(selected)
@@ -453,11 +528,29 @@ class PlayerActivity : ComponentActivity() {
         buffering.visibility = View.VISIBLE
         save()
         cancelNext()
+        adsLoader?.setPlayer(null)
         player?.release()
+        adsLoader?.release()
+        adsLoader = null
         current = episode
         quality = selected
         desiredPlay = play
-        val engine = ExoPlayer.Builder(this).build()
+        val ad = campaign?.takeIf { supportAds.enabled }
+        val loader =
+            ad?.let {
+                ImaAdsLoader.Builder(this)
+                    .setVastLoadTimeoutMs(3000)
+                    .setMediaLoadTimeoutMs(5000)
+                    .setAdPreloadTimeoutMs(5000)
+                    .setFocusSkipButtonWhenAvailable(true)
+                    .build()
+            }
+        adsLoader = loader
+        val sources = DefaultMediaSourceFactory(this)
+        if (loader != null) sources.setLocalAdInsertionComponents({ loader }, video)
+        val engine = ExoPlayer.Builder(this).setMediaSourceFactory(sources).build()
+        loader?.setPlayer(engine)
+        var adShown = false
         player = engine
         video.player = engine
         title.text = release?.title.orEmpty()
@@ -478,6 +571,33 @@ class PlayerActivity : ComponentActivity() {
         engine.addListener(
             object : Player.Listener {
                 override fun onEvents(player: Player, events: Player.Events) {
+                    if (this@PlayerActivity.player === engine) {
+                        adLabel.visibility = if (engine.isPlayingAd) View.VISIBLE else View.GONE
+                        if (engine.isPlayingAd) {
+                            adLabel.text =
+                                listOf(
+                                        "Реклама",
+                                        ad?.advertiser.orEmpty(),
+                                        ad?.erid
+                                            ?.takeIf { it.isNotBlank() }
+                                            ?.let { "erid: $it" }
+                                            .orEmpty(),
+                                    )
+                                    .filter { it.isNotBlank() }
+                                    .joinToString(" · ")
+                            controls.visibility = View.GONE
+                            skipPrompt.visibility = View.GONE
+                            seekPreview.visibility = View.GONE
+                            pendingSeek = null
+                            remoteClick.cancel()
+                            if (engine.isPlaying && !adShown) {
+                                adShown = true
+                                supportAds.shown()
+                            }
+                        }
+                        val speed = if (engine.isPlayingAd) 1f else options.getFloat("speed", 1f)
+                        if (engine.playbackParameters.speed != speed) engine.setPlaybackSpeed(speed)
+                    }
                     if (this@PlayerActivity.player === engine)
                         video.keepScreenOn =
                             engine.playWhenReady &&
@@ -487,6 +607,10 @@ class PlayerActivity : ComponentActivity() {
 
                 override fun onPlayerError(error: PlaybackException) {
                     if (player !== engine || stopped) return
+                    if (engine.isPlayingAd) {
+                        startEpisodeContent(episode, quality, desiredPlay, engine.contentPosition)
+                        return
+                    }
                     save()
                     cancelNext()
                     showControls()
@@ -510,7 +634,14 @@ class PlayerActivity : ComponentActivity() {
                 }
             }
         )
-        engine.setMediaItem(MediaItem.fromUri(stream.second))
+        val media = MediaItem.Builder().setUri(stream.second)
+        if (ad != null)
+            media.setAdsConfiguration(
+                MediaItem.AdsConfiguration.Builder(android.net.Uri.parse(ad.url))
+                    .setAdsId(episode.id)
+                    .build()
+            )
+        engine.setMediaItem(media.build())
         engine.prepare()
         val saved = prefs.getLong("position:${episode.id}", 0)
         val duration = prefs.getLong("duration:${episode.id}", 0)
@@ -523,6 +654,7 @@ class PlayerActivity : ComponentActivity() {
 
     private fun save() {
         val engine = player ?: return
+        if (engine.isPlayingAd) return
         val episode = current ?: return
         val item = release ?: return
         val duration = engine.duration.takeIf { it > 0 } ?: episode.duration * 1000
@@ -833,6 +965,7 @@ class PlayerActivity : ComponentActivity() {
         "GestureBackNavigation",
     ) // Back is delegated to the registered OnBackPressedCallback.
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (player?.isPlayingAd == true) return super.dispatchKeyEvent(event)
         if (remoteRepeat.discard(event)) return true
         if (event.action == KeyEvent.ACTION_UP && event.keyCode == revealKey) {
             revealKey = -1
@@ -1114,17 +1247,24 @@ class PlayerActivity : ComponentActivity() {
         errorPanel?.dismiss()
         errorPanel = null
         stopped = true
+        adGeneration++
+        adStartJob?.cancel()
         desiredPlay = player?.playWhenReady ?: desiredPlay
         save()
         cancelNext()
         handler.removeCallbacksAndMessages(null)
         video.player = null
+        adsLoader?.setPlayer(null)
         player?.release()
         player = null
+        adsLoader?.release()
+        adsLoader = null
+        adLabel.visibility = View.GONE
         super.onStop()
     }
 
     override fun onSaveInstanceState(out: Bundle) {
+        out.putStringArrayList("ad-attempts", ArrayList(adAttempts))
         out.putString("episode", current?.id)
         out.putInt("quality", quality)
         out.putBoolean("playing", player?.playWhenReady ?: desiredPlay)
