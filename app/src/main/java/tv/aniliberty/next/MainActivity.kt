@@ -55,6 +55,109 @@ class MainActivity : ComponentActivity() {
         }
     }
     private var current: Screen = Screen.Welcome
+    private val detailBookmarks=linkedMapOf<Pair<Int,Int>,DetailBookmark>()
+    private val detailContentBookmarks=linkedMapOf<Pair<Int,Int>,DetailBookmark>()
+    private val detailHeroButtons=linkedMapOf<Int,String>()
+    private var detailFocusToken=0
+    private var detailFocusPending=false
+    private fun detailAddress():DetailBookmark? {
+        val focus=list.findFocus()?:return null
+        val row=list.findContainingItemView(focus)?:return null
+        return DetailBookmark(row.tag as?String?:return null,(focus.tag as?String)?.takeIf{it!=row.tag})
+    }
+    private fun rememberDetailFocus(){
+        val screen=current as?Screen.Detail?:return
+        val address=detailAddress()?:return
+        val key=screen.id to screen.tab
+        if(detailBookmarks.size>48){detailBookmarks.remove(detailBookmarks.keys.first());detailContentBookmarks.keys.firstOrNull()?.let{detailContentBookmarks.remove(it)}}
+        detailBookmarks[key]=address
+        if(address.row=="hero")address.child?.let{detailHeroButtons[screen.id]=it}
+        if(address.row!="hero" && address.row!="tabs")detailContentBookmarks[key]=address
+        (list.findViewWithTag<View>(address.row)as?RecyclerView)?.let{adapter.rememberShelf(it)}
+    }
+    private fun focusDetail(index:Int,child:String?=null,top:Boolean=false){
+        val screen=current as?Screen.Detail?:return
+        if(index !in adapter.rows.indices)return
+        val key=adapter.rows[index].key
+        val token=++detailFocusToken
+        fun apply(){
+            if(token!=detailFocusToken || current!=screen || menuOpen || !list.hasWindowFocus())return
+            val item=list.findViewHolderForAdapterPosition(index)?.itemView?:return
+            if(item.tag!=key)return
+            val exact=child?.let{item.findViewWithTag<View>(it)}
+            if(exact?.isFocusable==true)exact.requestFocus()
+            else if(key=="tabs"){
+                item.findViewWithTag<View>("detail-tab:${screen.tab}")?.requestFocus()
+            }else focusItem(item)
+            detailFocusPending=false
+        }
+        val item=list.findViewHolderForAdapterPosition(index)?.itemView
+        if(!top && item!=null && item.top>=list.paddingTop && item.bottom<=list.height-list.paddingBottom){apply();return}
+        detailFocusPending=true;list.stopScroll()
+        list.doOnNextLayout{if(token==detailFocusToken){detailFocusPending=false;apply()}}
+        grid.scrollToPositionWithOffset(index,dp(if(key=="hero")0 else if(key=="tabs")12 else 64))
+        list.requestLayout()
+    }
+    private fun focusDetailTab(index:Int=(current as?Screen.Detail)?.tab?:0){
+        if(adapter.tabStart>=0)focusDetail(adapter.tabStart,"detail-tab:$index")
+    }
+    private fun enterDetailContent(){
+        val screen=current as?Screen.Detail?:return
+        val bookmark=detailContentBookmarks[screen.id to screen.tab]
+        val position=adapter.rows.indexOfFirst{it.key==bookmark?.row}.takeIf{it>=adapter.contentStart && it>=0}
+            ?:(adapter.contentStart.coerceAtLeast(0) until adapter.rows.size).firstOrNull{adapter.rows[it].kind!=Kind.HEADING}
+        if(position!=null)focusDetail(position,bookmark?.child)
+    }
+    private fun detailKey(event:KeyEvent):Boolean {
+        val screen=current as?Screen.Detail?:return false
+        if(menuOpen || event.keyCode !in listOf(KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT,KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN))return false
+        if(event.action!=KeyEvent.ACTION_DOWN)return true
+        if(detailFocusPending)return true
+        val focus=list.findFocus()?:return false
+        val outer=list.findContainingItemView(focus)?:return false
+        val position=list.getChildAdapterPosition(outer)
+        val row=adapter.rows.getOrNull(position)?:return false
+        rememberDetailFocus()
+        val horizontal=event.keyCode==KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode==KeyEvent.KEYCODE_DPAD_RIGHT
+        val forward=event.keyCode==KeyEvent.KEYCODE_DPAD_RIGHT || event.keyCode==KeyEvent.KEYCODE_DPAD_DOWN
+        val direction=when(event.keyCode){KeyEvent.KEYCODE_DPAD_LEFT->View.FOCUS_LEFT;KeyEvent.KEYCODE_DPAD_RIGHT->View.FOCUS_RIGHT;KeyEvent.KEYCODE_DPAD_UP->View.FOCUS_UP;else->View.FOCUS_DOWN}
+        if(row.kind==Kind.HERO || row.kind==Kind.TABS){
+            if(horizontal){
+                val choices=(outer as ViewGroup).getFocusables(View.FOCUS_FORWARD).filter{it is android.widget.TextView && it.isClickable}
+                val index=choices.indexOf(focus)
+                val target=choices.getOrNull(index+if(forward)1 else -1)
+                if(index>=0 && target!=null)target.requestFocus()
+                else if(!forward && index==0 && event.repeatCount==0)openMenu()
+            }else if(row.kind==Kind.HERO){if(forward)focusDetailTab()}
+            else if(forward){
+                val tab=(focus.tag as?String)?.removePrefix("detail-tab:")?.toIntOrNull()?:screen.tab
+                enterSelectedTab(tab)
+            }else{
+                val hero=adapter.rows.indexOfFirst{it.kind==Kind.HERO}
+                if(hero>=0)focusDetail(hero,detailHeroButtons[screen.id],top=true)
+            }
+            return true
+        }
+        if(horizontal && outer is RecyclerView){
+            adapter.rememberShelf(outer)
+            val nested=focus.let{outer.findContainingItemView(it)}
+            val index=nested?.let{outer.getChildAdapterPosition(it)}?:-1
+            val size=outer.adapter?.itemCount?:0
+            if(!forward && index==0){if(event.repeatCount==0)openMenu();return true}
+            if(forward && index>=size-1)return true
+            return false // RecyclerView handles movement inside its own horizontal row.
+        }
+        val target=detailGridTarget(adapter.rows,position,direction)
+        if(target!=null){focusDetail(target);return true}
+        if(horizontal){if(!forward && event.repeatCount==0)openMenu();return true}
+        val candidates=if(forward)(position+1 until adapter.rows.size)else(position-1 downTo adapter.contentStart.coerceAtLeast(0))
+        val next=candidates.firstOrNull{adapter.rows[it].kind !in listOf(Kind.HEADING,Kind.TABS,Kind.HERO)}
+        // Grid top/bottom edges do not wrap to the previous/next row through FocusFinder.
+        if(row.kind in listOf(Kind.EPISODE,Kind.POSTER)){
+            if(!forward)focusDetailTab()
+        }else if(next!=null)focusDetail(next)else if(!forward)focusDetailTab()
+        return true
+    }
     private var enterContent = false
     private var enterDay = false
     private lateinit var root:android.widget.FrameLayout
@@ -173,6 +276,7 @@ class MainActivity : ComponentActivity() {
         }.apply{targetPosition=target})
     }
     override fun dispatchKeyEvent(event:KeyEvent):Boolean {
+        if(detailKey(event))return true
         if((current is Screen.Library || current is Screen.Franchise) && !menuOpen){
             val position=list.findFocus()?.let{list.findContainingItemView(it)}?.let{list.getChildAdapterPosition(it)}?:-1
             if(adapter.rows.getOrNull(position)?.kind==Kind.POSTER){
@@ -264,13 +368,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         list = object:RecyclerView(this){
             override fun requestChildRectangleOnScreen(child:View,rect:android.graphics.Rect,immediate:Boolean):Boolean=
-                if(current==Screen.Home)false else super.requestChildRectangleOnScreen(child,rect,immediate)
+                if(current==Screen.Home || current is Screen.Detail)false else super.requestChildRectangleOnScreen(child,rect,immediate)
         }.apply {
             setBackgroundColor(0xFF121212.toInt()); setPadding(dp(32),dp(8),dp(32),dp(24));clipToPadding=false;itemAnimator=null
         }
         grid=object:GridLayoutManager(this,15){
             override fun onRequestChildFocus(parent:RecyclerView,state:RecyclerView.State,child:View,focused:View?):Boolean=
-                current==Screen.Home || super.onRequestChildFocus(parent,state,child,focused)
+                current==Screen.Home || current is Screen.Detail || super.onRequestChildFocus(parent,state,child,focused)
         };list.layoutManager=grid
         adapter=PageAdapter(::navigate,::selectTab,::play,::favorite,{rememberFocus();model.open(Screen.Detail(it.id))},
             { id -> prefs.getLong("position:$id",0) to prefs.getLong("duration:$id",0) },
@@ -286,6 +390,7 @@ class MainActivity : ComponentActivity() {
             }
         })
         list.viewTreeObserver.addOnGlobalFocusChangeListener{_,focus->
+            if(current is Screen.Detail && focus!=null && list.findContainingItemView(focus)!=null)rememberDetailFocus()
             if((current is Screen.Catalog || current is Screen.Section) && !menuOpen && focus!=null){
                 val item=list.findContainingItemView(focus)
                 val position=item?.let{list.getChildAdapterPosition(it)}?:-1
@@ -312,6 +417,15 @@ class MainActivity : ComponentActivity() {
             else if(!model.back())finish()}})
         lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED){model.state.collect{render(it)}} }
         if(savedInstanceState==null && getSharedPreferences("viewing",MODE_PRIVATE).getBoolean("welcomed",false))model.open(Screen.Home,false)
+    }
+    override fun onWindowFocusChanged(hasFocus:Boolean){
+        super.onWindowFocusChanged(hasFocus)
+        if(hasFocus && ::adapter.isInitialized && current is Screen.Detail && !menuOpen && detailAddress()==null){
+            val screen=current as Screen.Detail
+            val bookmark=detailBookmarks[screen.id to screen.tab]
+            val index=adapter.rows.indexOfFirst{it.key==bookmark?.row}.takeIf{it>=0}?:adapter.rows.indexOfFirst{it.kind==Kind.HERO}
+            if(index>=0)focusDetail(index,bookmark?.child)
+        }
     }
     override fun onResume(){
         super.onResume()
@@ -347,6 +461,7 @@ class MainActivity : ComponentActivity() {
         startActivity(Intent(this,PlayerActivity::class.java).putExtra("release",item.releaseId).putExtra("episode",item.episodeId))
     }
     private fun rememberFocus(){
+        rememberDetailFocus()
         list.findFocus()?.let{v->list.findContainingItemView(v)?.tag as?String}?.let{focusMemory[screenKey(current)]=it}
         val first=grid.findFirstVisibleItemPosition()
         adapter.rows.getOrNull(first)?.key?.let{scrollMemory[screenKey(current)]=it to (grid.findViewByPosition(first)?.top?:list.paddingTop)}
@@ -685,17 +800,7 @@ class MainActivity : ComponentActivity() {
     }
     private fun selectTab(index:Int){enterContent=false;val previous=model.state.value;model.tab(index);if(previous==model.state.value)render(model.state.value)}
     private fun enterSelectedTab(index:Int){enterContent=true;val previous=model.state.value;model.tab(index);if(previous==model.state.value)render(model.state.value)}
-    private fun returnToTabs(){
-        if(adapter.tabStart<0)return
-        val position=adapter.tabStart
-        list.doOnNextLayout{
-            val scroll=list.findViewHolderForAdapterPosition(position)?.itemView as? android.widget.HorizontalScrollView
-            val line=scroll?.getChildAt(0) as? LinearLayout
-            val selected=(model.state.value.screen as?Screen.Detail)?.tab?:0
-            (line?.getChildAt(selected)as?LinearLayout)?.getChildAt(0)?.requestFocus()
-        }
-        grid.scrollToPositionWithOffset(position,list.dp(12))
-    }
+    private fun returnToTabs(){focusDetailTab()}
     private fun openLink(url:String?){
         if(url==null)return
         try{startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url)))}catch(_:ActivityNotFoundException){Toast.makeText(this,"Нет приложения для открытия ссылки",Toast.LENGTH_LONG).show()}
@@ -784,6 +889,7 @@ class MainActivity : ComponentActivity() {
         if(state.screen !is Screen.Catalog && state.screen !is Screen.Section){catalogSearchEditing=false;catalogSearchJob?.cancel()}
         (state.screen as?Screen.Detail)?.let{history.restore(it.id)}
         if(current==state.screen && !state.loading && adapter.rows.none{it.key=="loading"})rememberFocus()
+        val sameDetail=(current as?Screen.Detail)?.id==(state.screen as?Screen.Detail)?.id && current is Screen.Detail && adapter.rows.any{it.kind==Kind.HERO}
         val sameCatalog=current is Screen.Catalog && (current==state.screen || catalogSearchEditing) && adapter.rows.any{it.kind==Kind.CATALOG_BAR}
         val sameSection=current is Screen.Section && current==state.screen && adapter.rows.any{it.key=="section-heading"}
         val sameHome=current==Screen.Home && state.screen==Screen.Home && adapter.rows.any{it.kind==Kind.SHELF}
@@ -910,7 +1016,7 @@ class MainActivity : ComponentActivity() {
                     })
                     rows+=Row("tabs",Kind.TABS,title=r.episodes.size.toString(),selected=screen.tab)
                     when(screen.tab){
-                        0->{rows+=r.episodes.map{Row("episode:${it.id}",Kind.EPISODE,episode=it,longClick={episodeActions(r,it)})};if(r.episodes.isEmpty())rows+=Row("empty",Kind.TEXT,"Эпизоды пока недоступны")}
+                        0->{rows+=r.episodes.map{Row("episode:${it.id}",Kind.EPISODE,episode=it,episodeProgress=prefs.getLong("position:${it.id}",0) to prefs.getLong("duration:${it.id}",0),longClick={episodeActions(r,it)})};if(r.episodes.isEmpty())rows+=Row("empty",Kind.TEXT,"Эпизоды пока недоступны")}
                         1->{
                             val franchises=state.discovery?.franchises
                             when {
@@ -955,8 +1061,19 @@ class MainActivity : ComponentActivity() {
         preloadFranchises.take(12).forEach{loadFranchisePreview(it.id)}
         val keepDetailTabFocus=current is Screen.Detail && !enterContent && list.findFocus()?.let{list.findContainingItemView(it)?.tag}=="tabs"
         adapter.submit(rows)
+        if(state.screen is Screen.Detail && !state.loading && rows.any{it.kind==Kind.HERO}){
+            if(menuOpen || !list.hasWindowFocus())return
+            if(enterContent){enterContent=false;enterDetailContent();return}
+            if(keepDetailTabFocus)return
+            if(sameDetail && detailAddress()!=null)return
+            val screen=state.screen
+            val bookmark=detailBookmarks[screen.id to screen.tab]
+            val index=rows.indexOfFirst{it.key==bookmark?.row}.takeIf{it>=0}?:rows.indexOfFirst{it.kind==Kind.HERO}
+            if(index>=0)focusDetail(index,bookmark?.child)
+            return
+        }
         if(keepDetailTabFocus)return
-        if(current==Screen.Home && menuOpen)return
+        if(menuOpen)return
         if(catalogSearchEditing && (current is Screen.Catalog || current is Screen.Section))return
         if(enterCatalogResults && (current is Screen.Catalog || current is Screen.Section) && !state.loading){
             enterCatalogResults=false

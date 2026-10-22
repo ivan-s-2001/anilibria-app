@@ -22,6 +22,7 @@ open class TvSidePanel(context:Context,title:String):Dialog(context){
         addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
         addView(footer,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(16)})
     }
+    private var returnFocus:View?=null
     protected fun dp(n:Int)=(context.resources.displayMetrics.density*n).toInt()
     init{setContentView(shell)}
     fun message(text:String){
@@ -35,7 +36,26 @@ open class TvSidePanel(context:Context,title:String):Dialog(context){
             textSize=16f;maxLines=3;setPadding(dp(12),dp(12),dp(12),dp(12))
             body.addView(this,LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=dp(8)})
         }
+    override fun dispatchKeyEvent(event:android.view.KeyEvent):Boolean {
+        if(event.keyCode in listOf(android.view.KeyEvent.KEYCODE_DPAD_UP,android.view.KeyEvent.KEYCODE_DPAD_DOWN,android.view.KeyEvent.KEYCODE_DPAD_LEFT,android.view.KeyEvent.KEYCODE_DPAD_RIGHT)){
+            val focused=currentFocus
+            if(focused is TextView && focused !is android.widget.EditText && focused.isClickable){
+                if(event.action==android.view.KeyEvent.ACTION_DOWN && event.keyCode in listOf(android.view.KeyEvent.KEYCODE_DPAD_UP,android.view.KeyEvent.KEYCODE_DPAD_DOWN)){
+                    val choices=body.getFocusables(View.FOCUS_FORWARD)+footer.getFocusables(View.FOCUS_FORWARD)
+                    val index=choices.indexOf(focused)
+                    choices.getOrNull(index+if(event.keyCode==android.view.KeyEvent.KEYCODE_DPAD_DOWN)1 else -1)?.requestFocus()
+                }
+                return true
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+    override fun dismiss(){
+        super.dismiss()
+        returnFocus?.let{caller->caller.post{if(caller.isAttachedToWindow && caller.hasWindowFocus())caller.requestFocus()}}
+    }
     override fun show(){
+        if(!isShowing)returnFocus=(context as?android.app.Activity)?.currentFocus
         super.show()
         window?.apply{
             setBackgroundDrawableResource(android.R.color.transparent)

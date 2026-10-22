@@ -15,7 +15,7 @@ import org.robolectric.annotation.Config
 class HomeShelfTest {
     @Test fun titleHeaderUsesNumericAgeAndStatusAfterNamesWithoutSynopsis(){
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
-        val release=parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Название","english":"Title"},"year":2026,"added_in_users_favorites":25600,"age_rating":{"description":"18+"},"is_ongoing":true,"description":"СКРЫТОЕ КРАТКОЕ ОПИСАНИЕ","shikimori":{"rating":8.5},"mal":{"rating":8.1}}"""))
+        val release=parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Название","english":"Title"},"year":2026,"updated_at":"2026-10-22T03:15:00Z","added_in_users_favorites":25600,"age_rating":{"description":"18+"},"is_ongoing":true,"description":"СКРЫТОЕ КРАТКОЕ ОПИСАНИЕ","shikimori":{"rating":8.5},"mal":{"rating":8.1}}"""))
         adapter.submit(listOf(Row("hero",Kind.HERO,release=release)))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.HERO.ordinal)
         adapter.onBindViewHolder(holder,0)
@@ -31,6 +31,8 @@ class HomeShelfTest {
         assertNotNull((ratings.getChildAt(2)as android.widget.TextView).compoundDrawablesRelative[0])
         val metadata=(0 until info.childCount).mapNotNull{info.getChildAt(it)as?android.widget.TextView}.first{it.text.toString().endsWith("18")}.text.toString()
         assertTrue(metadata.endsWith("18"));assertFalse(metadata.contains("+"))
+        val textLines=(0 until info.childCount).mapNotNull{(info.getChildAt(it)as?android.widget.TextView)?.text?.toString()}
+        assertEquals("Обновлено ${updateTimestamp(release.updatedAt)}",textLines[textLines.indexOf(metadata)-1])
         val hero=holder.itemView
         hero.measure(android.view.View.MeasureSpec.makeMeasureSpec(960,android.view.View.MeasureSpec.EXACTLY),android.view.View.MeasureSpec.makeMeasureSpec(0,android.view.View.MeasureSpec.UNSPECIFIED))
         hero.layout(0,0,hero.measuredWidth,hero.measuredHeight)

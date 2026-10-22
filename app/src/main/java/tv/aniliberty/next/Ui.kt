@@ -57,7 +57,7 @@ fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int
 }
 
 enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH, CONTINUE, CATALOG_BAR }
-data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList(),val composition:List<String>?=null,val focusLoad:(()->Unit)?=null,val homeStyle:Boolean=false,val queryChanged:((String)->Unit)?=null,val searchDone:(()->Unit)?=null,val favoriteTitle:String?=null)
+data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList(),val composition:List<String>?=null,val focusLoad:(()->Unit)?=null,val homeStyle:Boolean=false,val queryChanged:((String)->Unit)?=null,val searchDone:(()->Unit)?=null,val favoriteTitle:String?=null,val episodeProgress:Pair<Long,Long>?=null)
 
 class PageAdapter(
     private val navigate: (Int) -> Unit,
@@ -124,7 +124,7 @@ class PageAdapter(
         // Snapshot nested lists before the outer adapter is rebound.
         attachedShelves.forEach(::saveShelf)
         val old=rows
-        val useDiff=shelfMode || old.any{it.kind==Kind.CATALOG_BAR} || value.any{it.kind==Kind.CATALOG_BAR} || old.any{it.kind==Kind.SHELF} || value.any{it.kind==Kind.SHELF}
+        val useDiff=old.any{it.kind==Kind.HERO || it.kind==Kind.TABS} || value.any{it.kind==Kind.HERO || it.kind==Kind.TABS} || shelfMode || old.any{it.kind==Kind.CATALOG_BAR} || value.any{it.kind==Kind.CATALOG_BAR} || old.any{it.kind==Kind.SHELF} || value.any{it.kind==Kind.SHELF}
         val diff=if(useDiff)androidx.recyclerview.widget.DiffUtil.calculateDiff(object:androidx.recyclerview.widget.DiffUtil.Callback(){
             override fun getOldListSize()=old.size
             override fun getNewListSize()=value.size
@@ -357,6 +357,7 @@ class PageAdapter(
                 }
             }
             Kind.TABS -> {
+                view.isFocusable=false
                 val line=(view as HorizontalScrollView).getChildAt(0)as LinearLayout
                 val labels=listOf("Серии${row.title.takeIf{it.isNotBlank()}?.let{" · $it"}.orEmpty()}","Связанные","Похожее","Команда")
                 val icons=listOf(R.drawable.ic_episodes,R.drawable.ic_related,R.drawable.ic_favorite,R.drawable.ic_team)
@@ -364,7 +365,7 @@ class PageAdapter(
                     line.removeAllViews()
                     labels.forEachIndexed{i,label->
                         val button=action(line,label,icon=icons[i],click={tab(i)}).apply{
-                            textSize=15f
+                            tag="detail-tab:$i";textSize=15f
                             setOnKeyListener{_,key,event->if(key==KeyEvent.KEYCODE_DPAD_DOWN){if(event.action==KeyEvent.ACTION_UP)enterTab(i);true}else false}
                         }
                         line.addView(LinearLayout(view.context).apply{
@@ -385,6 +386,12 @@ class PageAdapter(
             Kind.HERO -> {
                 val r=row.release!!;val box=view as LinearLayout
                 val focusedAction=box.findFocus()?.tag as?String
+                val previousControls=box.findViewWithTag<LinearLayout>("hero-controls")?.takeIf{box.getTag(R.id.hero_release)==r.id}
+                val previousButtons=previousControls?.let{line->(0 until line.childCount).map{line.getChildAt(it)as TextView}}.orEmpty()
+                val previousScroll=(previousControls?.parent as?HorizontalScrollView)?.scrollX?:0
+                // Detach action views before rebuilding metadata: the same button retains its focus identity.
+                previousControls?.removeAllViews()
+                box.setTag(R.id.hero_release,r.id)
                 box.removeAllViews();box.setPadding(0,view.dp(12),0,view.dp(16));box.gravity=Gravity.TOP
                 box.addView(ImageView(view.context).apply{
                     scaleType=ImageView.ScaleType.FIT_CENTER;load(r.poster)
@@ -403,7 +410,7 @@ class PageAdapter(
                 text(r.title,27f,WHITE,true)
                 text(r.english,13f,MUTED,false,1)
                 val ratings=LinearLayout(view.context).apply{gravity=Gravity.CENTER_VERTICAL}
-                info.addView(HorizontalScrollView(view.context).apply{isHorizontalScrollBarEnabled=false;addView(ratings)},LinearLayout.LayoutParams(-1,view.dp(36)).apply{bottomMargin=view.dp(8)})
+                info.addView(HorizontalScrollView(view.context).apply{isFocusable=false;descendantFocusability=ViewGroup.FOCUS_BLOCK_DESCENDANTS;isHorizontalScrollBarEnabled=false;addView(ratings)},LinearLayout.LayoutParams(-1,view.dp(36)).apply{bottomMargin=view.dp(8)})
                 r.ratings.forEach{rating->
                     val badge=LinearLayout(view.context).apply{gravity=Gravity.CENTER_VERTICAL;setPadding(dp(8),dp(3),dp(8),dp(3));background=shape(0xFF212121.toInt(),dp(6).toFloat());contentDescription="${rating.source}: ${rating.value}"}
                     val file=if(rating.source=="Shikimori")"shikimori"else"myanimelist"
@@ -436,17 +443,21 @@ class PageAdapter(
                 else if(episode==null)text("Серии ещё не опубликованы",13f,MUTED)
                 else if(episode.streams.isEmpty())text("Поток для выбранной серии пока недоступен",13f,MUTED)
                 info.addView(View(view.context).apply{tag="title-bottom-spacer"},LinearLayout.LayoutParams(-1,0,1f))
+                updateTimestamp(r.updatedAt).takeIf{it.isNotBlank()}?.let{text("Обновлено $it",12f,MUTED,false,1)}
                 val age=Regex("[0-9]+").find(r.age)?.value.orEmpty()
                 text(listOf(r.year,r.season,r.type,age).filter{it.isNotBlank()}.joinToString(" · "),14f,MUTED,false,1)
                 text(r.genres.joinToString(" · "),14f,WHITE,false,2)
-                val controls=LinearLayout(view.context).apply{gravity=Gravity.BOTTOM}
-                info.addView(HorizontalScrollView(view.context).apply{isHorizontalScrollBarEnabled=false;addView(controls)},LinearLayout.LayoutParams(-1,view.dp(48)).apply{topMargin=view.dp(4)})
+                val controls=LinearLayout(view.context).apply{tag="hero-controls";gravity=Gravity.BOTTOM}
+                info.addView(HorizontalScrollView(view.context).apply{isFocusable=false;isHorizontalScrollBarEnabled=false;addView(controls)},LinearLayout.LayoutParams(-1,view.dp(48)).apply{topMargin=view.dp(4)})
                 fun button(label:String,icon:Int,primary:Boolean=false,description:String=label,click:()->Unit){
                     val favorite=icon==R.drawable.ic_favorite
-                    controls.addView(action(controls,if(favorite)""else label,primary,icon,click).apply{
-                        tag="hero-action:$icon";textSize=14f;contentDescription=description
+                    val key="hero-action:$icon"
+                    val button=previousButtons.firstOrNull{it.tag==key}?:action(controls,if(favorite)""else label,primary,icon,click)
+                    button.apply{
+                        tag=key;text=if(favorite)""else label;textSize=14f;contentDescription=description;setOnClickListener{click()}
                         if(favorite){gravity=Gravity.CENTER;compoundDrawablePadding=0;setPadding(dp(11),0,dp(11),0);setTextColor(if(row.selected==1)0xFFFFD166.toInt()else WHITE);compoundDrawablesRelative[0]?.apply{setBounds(0,0,dp(24),dp(24));setTint(if(row.selected==1)0xFFFFD166.toInt()else WHITE)}}
-                    },LinearLayout.LayoutParams(if(favorite)view.dp(46)else -2,view.dp(46)).apply{marginEnd=view.dp(8)})
+                    }
+                    controls.addView(button,LinearLayout.LayoutParams(if(favorite)view.dp(46)else -2,view.dp(46)).apply{marginEnd=view.dp(8)})
                 }
                 if(episode!=null && episode.streams.isNotEmpty() && !r.blocked){
                     val following=r.episodes.any{it.id==lastEpisode(r.id)} && episode.id!=lastEpisode(r.id)
@@ -455,6 +466,7 @@ class PageAdapter(
                 }
                 button(row.favoriteTitle?:if(row.selected==1)"В библиотеке"else"В библиотеку",R.drawable.ic_favorite,description=row.favoriteTitle?:if(row.selected==1)"Убрать из библиотеки"else"Добавить в библиотеку"){favorite(r)}
                 row.controls.forEach{(label,callback)->button(label,when{label=="Описание"->R.drawable.ic_comments;label=="Коллекция"||CollectionType.entries.any{it.title==label}->R.drawable.ic_library;else->R.drawable.ic_settings},click=callback)}
+                (controls.parent as HorizontalScrollView).scrollTo(previousScroll,0)
                 if(focusedAction!=null)box.findViewWithTag<View>(focusedAction)?.requestFocus()
             }
             Kind.GENRE,Kind.FRANCHISE -> {
@@ -730,7 +742,7 @@ class PageAdapter(
             }
             Kind.EPISODE -> {
                 val box=view as FrameLayout;val e=row.episode!!
-                val watched=progress(e.id)
+                val watched=row.episodeProgress?:progress(e.id)
                 (box.getChildAt(0)as ImageView).apply{
                     contentDescription=if(watched.first<=0)"Превью скрыто до начала просмотра"else "Превью серии"
                     if(watched.first<=0)setImageDrawable(null)
