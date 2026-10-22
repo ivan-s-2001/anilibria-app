@@ -140,14 +140,14 @@ class HomeShelfTest {
         assertEquals(android.view.View.GONE,card.getChildAt(4).visibility)
     }
 
-    @Test fun catalogueKeepsTitleVisibleAndShowsBadgeOnFocus(){
+    @Test fun catalogueShowsTitleAndMetadataOnlyOnFocus(){
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
         val release=parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Название"},"year":2026,"is_ongoing":true}"""))
         adapter.submit(listOf(Row("catalogue:1",Kind.POSTER,release=release)))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.POSTER.ordinal)
         adapter.onBindViewHolder(holder,0)
         val card=holder.itemView as FrameLayout
-        assertEquals(android.view.View.VISIBLE,card.getChildAt(2).visibility)
+        assertEquals(android.view.View.GONE,card.getChildAt(2).visibility)
         assertEquals(android.view.View.GONE,card.getChildAt(3).visibility)
         card.requestFocus()
         assertEquals(android.view.View.VISIBLE,card.getChildAt(3).visibility)

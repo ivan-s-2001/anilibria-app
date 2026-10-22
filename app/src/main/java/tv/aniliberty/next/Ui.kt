@@ -344,7 +344,7 @@ class PageAdapter(
                 val spotlight=row.kind==Kind.SPOTLIGHT
                 val image=box.getChildAt(0)as ImageView
                 image.layoutParams=FrameLayout.LayoutParams(-1,if(poster)view.cardDp(198)else if(spotlight)-1 else view.cardDp(if(continuing)150 else 130),Gravity.TOP)
-                image.scaleType=if(poster)ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_CROP
+                image.scaleType=if(poster && row.selected!=2)ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_CROP
                 image.background=shape(0xFF212121.toInt(),view.dp(12).toFloat())
                 image.clipToOutline=true
                 if(continuing && row.image==null){image.scaleType=ImageView.ScaleType.FIT_CENTER;image.load(R.drawable.ic_aniliberty)}else image.load(if(poster)release?.poster else row.image)
@@ -430,11 +430,11 @@ class PageAdapter(
                     title.layoutParams=LinearLayout.LayoutParams(-1,0,1f)
                     subtitle.maxLines=1
                     fun focusPoster(focused:Boolean){
-                        content.visibility=if(focused || cataloguePoster)View.VISIBLE else View.GONE
+                        content.visibility=if(focused)View.VISIBLE else View.GONE
                         genresLine.visibility=if(focused && genresLine.text.isNotBlank())View.VISIBLE else View.GONE
                         genresLine.isSelected=focused
                         if(cataloguePoster){
-                            box.getChildAt(1).apply{background=GenreShade();visibility=View.VISIBLE}
+                            box.getChildAt(1).visibility=View.GONE
                             content.gravity=if(focused)Gravity.CENTER else Gravity.BOTTOM
                             content.setPadding(view.dp(10),view.dp(if(focused && release?.ongoing!=null)56 else if(focused)44 else 10),view.dp(10),view.dp(12))
                             title.layoutParams=LinearLayout.LayoutParams(-1,if(focused)0 else -2,if(focused)1f else 0f)

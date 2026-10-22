@@ -21,13 +21,26 @@ class CatalogPanelTest{
         val original=CatalogFilter(genres=setOf("15"),sorting="RATING_DESC")
         val panel=CatalogFilterPanel(activity,Screen.Catalog(filters=original),mapOf("genres" to listOf(CatalogChoice("15","Фэнтези")))){applied=it}
         panel.show()
-        val content=panel.findViewById<android.widget.FrameLayout>(android.R.id.content)
-        val shell=content.getChildAt(0)as LinearLayout
-        (shell.getChildAt(3)as TextView).performClick()
+        panel.footer.getChildAt(1).performClick()
         assertNull(applied)
         panel.cancel()
         assertNull(applied)
         assertEquals(setOf("15"),original.genres)
+        controller.pause().stop().destroy()
+    }
+    @Test fun genreSelectionUsesSamePanelAndBackCancelsUnconfirmedChanges(){
+        val controller=Robolectric.buildActivity(ComponentActivity::class.java).setup()
+        var applied:CatalogFilter?=null
+        val panel=CatalogFilterPanel(controller.get(),Screen.Catalog(),mapOf("genres" to listOf(CatalogChoice("15","Фэнтези")))){applied=it}
+        panel.show()
+        panel.body.getChildAt(0).performClick()
+        assertEquals("Жанры",panel.heading.text.toString())
+        panel.body.getChildAt(0).performClick()
+        panel.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP,android.view.KeyEvent.KEYCODE_BACK))
+        assertEquals("Фильтры",panel.heading.text.toString())
+        assertTrue(panel.isShowing)
+        panel.footer.getChildAt(0).performClick()
+        assertTrue(applied!!.genres.isEmpty())
         controller.pause().stop().destroy()
     }
     @Test fun applyingAfterResetPreservesSortAndClearsGenreDeepLink(){
@@ -35,11 +48,9 @@ class CatalogPanelTest{
         var applied:CatalogFilter?=null
         val panel=CatalogFilterPanel(controller.get(),Screen.Catalog(genre=15,filters=CatalogFilter(sorting="YEAR_DESC")),emptyMap()){applied=it}
         panel.show()
-        val shell=panel.findViewById<android.widget.FrameLayout>(android.R.id.content).getChildAt(0)as LinearLayout
-        val body=(shell.getChildAt(1)as ScrollView).getChildAt(0)as LinearLayout
-        assertTrue((body.getChildAt(0)as TextView).isFocusable)
-        (shell.getChildAt(3)as TextView).performClick()
-        (shell.getChildAt(2)as TextView).performClick()
+        assertTrue(panel.body.getChildAt(0).isFocusable)
+        panel.footer.getChildAt(1).performClick()
+        panel.footer.getChildAt(0).performClick()
         assertNotNull(applied)
         assertTrue(applied!!.genres.isEmpty())
         assertEquals("YEAR_DESC",applied!!.sorting)

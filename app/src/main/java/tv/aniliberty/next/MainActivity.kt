@@ -336,36 +336,57 @@ class MainActivity : ComponentActivity() {
         enterCatalogResults=true;model.open(next,false)
     }
     private fun catalogSearch(screen:Screen.Catalog){
-        val input=EditText(this).apply{setText(screen.query);hint="Название аниме";isSingleLine=true;imeOptions=EditorInfo.IME_ACTION_SEARCH}
-        val dialog=AlertDialog.Builder(this).setTitle("Поиск в каталоге").setView(input).setPositiveButton("Найти"){_,_->applyCatalog(screen.copy(query=input.text.toString().trim()))}.setNegativeButton("Отмена",null).create()
-        input.setOnEditorActionListener{_,action,_->if(action==EditorInfo.IME_ACTION_SEARCH){applyCatalog(screen.copy(query=input.text.toString().trim()));dialog.dismiss();true}else false}
-        dialog.show();input.requestFocus()
+        val panel=TvSidePanel(this,"Поиск в каталоге")
+        val input=EditText(this).apply{
+            setText(screen.query);hint="Название аниме";isSingleLine=true
+            setTextColor(WHITE);setHintTextColor(MUTED);textSize=18f
+            setPadding(dp(12),dp(12),dp(12),dp(12))
+            background=shape(0xFF121212.toInt(),dp(8).toFloat(),MUTED,dp(1))
+            imeOptions=EditorInfo.IME_ACTION_SEARCH
+        }
+        panel.body.addView(input,LinearLayout.LayoutParams(-1,dp(56)))
+        fun submit(){applyCatalog(screen.copy(query=input.text.toString().trim()));panel.dismiss()}
+        panel.addAction("Найти",true){submit()}
+        panel.addAction("Отмена"){panel.dismiss()}
+        input.setOnEditorActionListener{_,action,_->if(action==EditorInfo.IME_ACTION_SEARCH){submit();true}else false}
+        panel.show();input.requestFocus()
     }
     private fun withCatalogReferences(screen:Screen.Catalog,ready:(Map<String,List<CatalogChoice>>)->Unit){
         if(catalogReferences.isNotEmpty()){ready(catalogReferences);return}
-        val loading=AlertDialog.Builder(this).setMessage("Загрузка фильтров…").setNegativeButton("Отмена",null).create()
-        val task=lifecycleScope.launch{
+        val panel=TvSidePanel(this,"Каталог")
+        panel.message("Загрузка параметров…")
+        var task:kotlinx.coroutines.Job?=null
+        panel.addAction("Отмена"){task?.cancel();panel.dismiss()}
+        panel.setOnCancelListener{task?.cancel()}
+        task=lifecycleScope.launch{
             try{
-                val data=model.api.catalogReferences();catalogReferences=data;loading.dismiss()
+                val data=model.api.catalogReferences();catalogReferences=data;panel.dismiss()
                 if(model.state.value.screen==screen)ready(data)
-            }catch(e:kotlinx.coroutines.CancellationException){loading.dismiss();throw e}
+            }catch(e:kotlinx.coroutines.CancellationException){panel.dismiss();throw e}
             catch(_:Exception){
-                loading.dismiss()
-                if(model.state.value.screen==screen)AlertDialog.Builder(this@MainActivity).setMessage("Не удалось загрузить фильтры").setPositiveButton("Повторить"){_,_->withCatalogReferences(screen,ready)}.setNegativeButton("Отмена",null).show()
+                if(model.state.value.screen==screen){
+                    panel.message("Не удалось загрузить параметры")
+                    panel.footer.removeAllViews()
+                    panel.addAction("Повторить",true){panel.dismiss();withCatalogReferences(screen,ready)}
+                    panel.addAction("Закрыть"){panel.dismiss()}
+                    panel.footer.getChildAt(0)?.requestFocus()
+                }else panel.dismiss()
             }
         }
-        loading.setOnCancelListener{task.cancel()}
-        loading.setOnShowListener{loading.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener{task.cancel();loading.dismiss()}}
-        loading.show()
+        panel.show()
     }
     private fun catalogFilters(screen:Screen.Catalog)=withCatalogReferences(screen){refs->
         CatalogFilterPanel(this,screen,refs){filters->applyCatalog(screen.copy(filters=filters,genre=null,title=null))}.show()
     }
     private fun catalogSorting(screen:Screen.Catalog)=withCatalogReferences(screen){refs->
-        val choices=refs["sorting"].orEmpty()
-        AlertDialog.Builder(this).setTitle("Сортировка").setSingleChoiceItems(choices.map{it.title}.toTypedArray(),choices.indexOfFirst{it.value==screen.filters.sorting}){dialog,index->
-            dialog.dismiss();applyCatalog(screen.copy(filters=screen.filters.copy(sorting=choices[index].value)))
-        }.setNegativeButton("Отмена",null).show()
+        val panel=TvSidePanel(this,"Сортировка")
+        refs["sorting"].orEmpty().forEach{choice->
+            panel.addChoice(choice.title,choice.value==screen.filters.sorting){
+                panel.dismiss();applyCatalog(screen.copy(filters=screen.filters.copy(sorting=choice.value)))
+            }
+        }
+        panel.addAction("Отмена"){panel.dismiss()}
+        panel.show()
     }
     private fun catalogSummary(screen:Screen.Catalog):String{
         val f=screen.filters
@@ -397,7 +418,8 @@ class MainActivity : ComponentActivity() {
         val resume=prefs.getString("last:${item.id}",null)!=null
         val library=JSONArray(prefs.getString("library","[]"))
         val added=(0 until library.length()).any{library.getJSONObject(it).getInt("id")==item.id}
-        AlertDialog.Builder(this).setTitle(item.title).setItems(arrayOf(if(resume)"Продолжить просмотр"else"Смотреть", if(added)"Убрать из библиотеки"else"В библиотеку", "Подробнее")){_,choice->
+        val labels=arrayOf(if(resume)"Продолжить просмотр"else"Смотреть",if(added)"Убрать из библиотеки"else"В библиотеку","Подробнее")
+        fun choose(choice:Int){
             when(choice){
                 0->lifecycleScope.launch {
                     try {
@@ -411,7 +433,13 @@ class MainActivity : ComponentActivity() {
                 1->favorite(item)
                 2->{rememberFocus();model.open(Screen.Detail(item.id))}
             }
-        }.show()
+        }
+        if(current is Screen.Catalog){
+            val panel=TvSidePanel(this,item.title)
+            labels.forEachIndexed{index,label->panel.addChoice(label){panel.dismiss();choose(index)}}
+            panel.addAction("Закрыть"){panel.dismiss()}
+            panel.show()
+        }else AlertDialog.Builder(this).setTitle(item.title).setItems(labels){_,choice->choose(choice)}.show()
     }
     private fun play(episode:Episode){
         val release=model.state.value.detail?:return
