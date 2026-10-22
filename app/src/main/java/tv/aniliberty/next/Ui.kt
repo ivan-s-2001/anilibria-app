@@ -55,7 +55,7 @@ fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int
 }
 
 enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH, CONTINUE, CATALOG_BAR }
-data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList(),val watchOrder:Int?=null,val homeStyle:Boolean=false,val queryChanged:((String)->Unit)?=null,val searchDone:(()->Unit)?=null)
+data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList(),val homeStyle:Boolean=false,val queryChanged:((String)->Unit)?=null,val searchDone:(()->Unit)?=null)
 
 class PageAdapter(
     private val navigate: (Int) -> Unit,
@@ -231,7 +231,7 @@ class PageAdapter(
                 if(row.selected in listOf(6,7)){
                     val viewport=(shelf.width.takeIf{it>0}?: (view.resources.displayMetrics.widthPixels-view.dp(132)))-shelf.paddingLeft-shelf.paddingRight
                     val cardWidth=(viewport/4.5f-view.dp(8)).toInt()
-                    shelf.layoutParams=shelf.layoutParams.apply{height=(cardWidth*(if(row.selected==7)270f else 206f)/144f).toInt()+view.dp(24)}
+                    shelf.layoutParams=shelf.layoutParams.apply{height=(cardWidth*206f/144f).toInt()+view.dp(24)}
                 }
                 nested.submit(cards)
                 if(shelfResets.containsKey(row.key)){
@@ -473,7 +473,7 @@ class PageAdapter(
                 }
                 if(webPoster){
                     box.layoutParams=box.layoutParams.apply{
-                        height=if(row.selected==2 || (row.homeStyle && poster))((view.resources.displayMetrics.widthPixels-view.dp(156))/4/.7f).toInt()else view.cardDp(if(cataloguePoster)270 else 206)
+                        height=if(shelfMode && row.selected==2)(view.cardDp(144)/.7f).toInt()else if(row.selected==2 || (row.homeStyle && poster))((view.resources.displayMetrics.widthPixels-view.dp(156))/4/.7f).toInt()else view.cardDp(if(cataloguePoster)270 else 206)
                     }
                     if(row.selected==2)title.textSize=18f
                     image.layoutParams=FrameLayout.LayoutParams(-1,-1)
@@ -498,9 +498,9 @@ class PageAdapter(
                     val episodeBadge=(box.getChildAt(3)as?TextView)?:TextView(view.context).also{
                         box.addView(it,FrameLayout.LayoutParams(-2,view.dp(28),Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply{topMargin=view.dp(10)})
                     }
-                    episodeBadge.label(if(row.watchOrder!=null)"${row.watchOrder} · ${if(row.watchOrder==1)"Смотреть первым"else "Следующая часть"}"else if(cataloguePoster)release?.type?.ifBlank{"Аниме"}?:"Аниме"else release?.latestEpisode?.let{"${number(it.ordinal)} эпизод"}?:"Релиз",12f,WHITE,true)
+                    episodeBadge.label(if(cataloguePoster)release?.type?.ifBlank{"Аниме"}?:"Аниме"else release?.latestEpisode?.let{"${number(it.ordinal)} эпизод"}?:"Релиз",12f,WHITE,true)
                     episodeBadge.gravity=Gravity.CENTER;episodeBadge.setPadding(view.dp(10),0,view.dp(10),0)
-                    episodeBadge.background=shape(if(row.watchOrder!=null)0xE0121212.toInt()else 0x1AFFFFFF,view.dp(6).toFloat());episodeBadge.isFocusable=false
+                    episodeBadge.background=shape(0x1AFFFFFF,view.dp(6).toFloat());episodeBadge.isFocusable=false
                     val updateLabel=if(!cataloguePoster){
                         val label=(box.getChildAt(4)as?TextView)?:TextView(view.context).also{box.addView(it)}
                         label.layoutParams=FrameLayout.LayoutParams(-1,view.dp(16),Gravity.TOP).apply{topMargin=view.dp(40);marginStart=view.dp(8);marginEnd=view.dp(8)}
@@ -536,7 +536,7 @@ class PageAdapter(
                             title.maxLines=if(focused)4 else 3
                             subtitle.visibility=if(focused)View.VISIBLE else View.GONE
                         }
-                        episodeBadge.visibility=if(focused || row.watchOrder!=null)View.VISIBLE else View.GONE
+                        episodeBadge.visibility=if(focused)View.VISIBLE else View.GONE
                         statusBadge?.visibility=if(focused && release?.ongoing!=null)View.VISIBLE else View.GONE
                         updateLabel?.visibility=if(focused && updateLabel.text.isNotBlank())View.VISIBLE else View.GONE
                         if(!cataloguePoster){
@@ -604,7 +604,7 @@ class PageAdapter(
                         box.animate().scaleX(if(focused && !homeCard)1.025f else 1f).scaleY(if(focused && !homeCard)1.025f else 1f).setDuration(140).start()
                     }
                 }
-                box.contentDescription=listOf(row.watchOrder?.let{"Порядок просмотра: $it"}.orEmpty(),release?.title?:row.title,short).filter(String::isNotBlank).joinToString(". ")
+                box.contentDescription=listOf(release?.title?:row.title,short).filter(String::isNotBlank).joinToString(". ")
                 box.setOnClickListener{if(row.click!=null)row.click.invoke()else if(release!=null)details(release)}
                 box.setOnLongClickListener(when{row.longClick!=null->View.OnLongClickListener{row.longClick.invoke();true};release!=null->View.OnLongClickListener{quickActions(release);true};else->null})
                 box.isLongClickable=row.longClick!=null || release!=null

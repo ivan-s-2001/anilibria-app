@@ -561,8 +561,8 @@ class MainActivity : ComponentActivity() {
     }
     private fun openSection(kind:HomeSection){rememberFocus();model.open(Screen.Section(kind))}
     private fun releaseCards(items:List<Release>,key:String)=items.distinctBy{it.id}.map{Row("$key:release:${it.id}",Kind.POSTER,release=it,selected=if(key.startsWith("latest",true)||key.startsWith("schedule",true))1 else 0)}
-    private fun watchOrderCards(items:List<Release>,key:String)=items.distinctBy{it.id}.mapIndexed{index,item->
-        Row("$key:${item.id}",Kind.POSTER,release=item,watchOrder=index+1)
+    private fun watchOrderCards(items:List<Release>,key:String)=items.distinctBy{it.id}.map{item->
+        Row("$key:${item.id}",Kind.POSTER,release=item,selected=2)
     }
     private fun featureCards(items:List<Feature>,kind:HomeSection)=items.map{feature->
         Row("${kind.name}:${feature.id}",if(kind==HomeSection.GENRES)Kind.GENRE else Kind.FRANCHISE,feature.title,feature.subtitle,image=feature.image,click={

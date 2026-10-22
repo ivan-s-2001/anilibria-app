@@ -13,20 +13,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[30],application=Application::class)
 class HomeShelfTest {
-    @Test fun watchOrderRemainsExplicitWithoutFocus(){
-        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
-        val release=parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Часть франшизы"}}"""))
-        adapter.submit(listOf(Row("part:1",Kind.POSTER,release=release,watchOrder=1)))
-        val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.POSTER.ordinal)
-        adapter.onBindViewHolder(holder,0)
-        val card=holder.itemView as FrameLayout
-        val badge=card.getChildAt(3)as android.widget.TextView
-        assertEquals(android.view.View.VISIBLE,badge.visibility)
-        assertTrue(badge.text.startsWith("1 ·"))
-        assertTrue(card.contentDescription.contains("Порядок просмотра: 1"))
-        card.requestFocus();card.clearFocus()
-        assertEquals(android.view.View.VISIBLE,badge.visibility)
-    }
     @Test fun franchiseDirectoryKeepsHomeAspectWhenColumnWidthChanges(){
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
         adapter.submit(listOf(Row("franchise",Kind.FRANCHISE,"Франшиза",homeStyle=true)))
