@@ -65,9 +65,13 @@ open class TvSidePanel(context: Context, title: String) : Dialog(context) {
         text: String,
         selected: Boolean = false,
         icon: Int = 0,
+        iconTint: Int? = null,
         callback: () -> Unit,
     ): TextView =
         action(body, if (selected) "✓  $text" else text, icon = icon, click = callback).apply {
+            iconTint?.let { tint ->
+                compoundDrawablesRelative[0]?.mutate()?.setTint(tint)
+            }
             textSize = 16f
             maxLines = 3
             setPadding(dp(12), dp(12), dp(12), dp(12))
