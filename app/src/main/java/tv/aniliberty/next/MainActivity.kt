@@ -343,8 +343,14 @@ class MainActivity : ComponentActivity() {
         return true
     }
     override fun dispatchKeyEvent(event:KeyEvent):Boolean {
-        if(menuOpen && event.keyCode in listOf(KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN)){
-            if(event.action==KeyEvent.ACTION_DOWN){val choices=menu.getFocusables(View.FOCUS_FORWARD);val index=choices.indexOf(currentFocus);choices.getOrNull(index+if(event.keyCode==KeyEvent.KEYCODE_DPAD_DOWN)1 else -1)?.requestFocus()};return true
+        if(menuOpen && event.keyCode in listOf(KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN,KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT,KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER)){
+            val focused=menu.findFocus()
+            when(event.keyCode){
+                KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN->if(event.action==KeyEvent.ACTION_DOWN){val choices=menu.getFocusables(View.FOCUS_FORWARD);val index=choices.indexOf(focused);choices.getOrNull(index+if(event.keyCode==KeyEvent.KEYCODE_DPAD_DOWN)1 else -1)?.requestFocus()}
+                KeyEvent.KEYCODE_DPAD_RIGHT->if(event.action==KeyEvent.ACTION_DOWN)closeMenu()
+                KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER->if(event.action==KeyEvent.ACTION_UP)focused?.performClick()
+            }
+            return true
         }
         if(pageRemoteKey(event))return true
         if(detailKey(event))return true

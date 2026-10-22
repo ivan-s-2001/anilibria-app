@@ -41,8 +41,9 @@ class RemoteLifecycleTest {
         key(KeyEvent.KEYCODE_DPAD_LEFT);assertEquals("release:9",list.findFocus()?.tag)
         key(KeyEvent.KEYCODE_DPAD_LEFT)
         val menu=MainActivity::class.java.getDeclaredField("menu").apply{isAccessible=true}.get(activity)as android.widget.LinearLayout
-        val menuTarget=menu.findViewWithTag<View>("menu-route:1")
-        assertTrue("Menu ${menu.width}x${menu.height} shown=${menu.isShown} target=${menuTarget?.width}x${menuTarget?.height} shown=${menuTarget?.isShown} focusable=${menuTarget?.isFocusable} targetFocus=${menuTarget?.hasFocus()} menuFocus=${menu.hasFocus()} open=${MainActivity::class.java.getDeclaredField("menuOpen").apply{isAccessible=true}.get(activity)} choices=${menu.getFocusables(View.FOCUS_FORWARD).size}; focus: ${activity.currentFocus?.tag} / ${activity.currentFocus?.javaClass?.simpleName}; content: ${list.findFocus()?.tag}",activity.currentFocus?.tag?.toString()?.startsWith("menu-route:")==true)
+        assertEquals("menu-route:1",menu.findFocus()?.tag)
+        key(KeyEvent.KEYCODE_DPAD_DOWN);assertEquals("menu-route:9",menu.findFocus()?.tag)
+        key(KeyEvent.KEYCODE_DPAD_UP);assertEquals("menu-route:1",menu.findFocus()?.tag)
         key(KeyEvent.KEYCODE_DPAD_RIGHT);assertEquals("release:9",list.findFocus()?.tag)
         controller.pause().stop().destroy()
     }

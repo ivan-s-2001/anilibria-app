@@ -52,7 +52,7 @@ open class TvSidePanel(context:Context,title:String):Dialog(context){
     }
     override fun dismiss(){
         super.dismiss()
-        returnFocus?.let{caller->caller.post{if(caller.isAttachedToWindow && caller.hasWindowFocus())caller.requestFocus()}}
+        returnFocus?.let{caller->caller.post{if(caller.isAttachedToWindow && caller.isShown)caller.requestFocus()}}
     }
     override fun show(){
         if(!isShowing)returnFocus=(context as?android.app.Activity)?.currentFocus
