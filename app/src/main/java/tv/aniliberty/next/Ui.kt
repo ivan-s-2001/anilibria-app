@@ -414,6 +414,14 @@ class PageAdapter(
                     badge.addView(TextView(view.context).apply{label("%.1f".format(rating.value),16f,if(rating.value>=8)0xFF78C99F.toInt()else WHITE,true)},LinearLayout.LayoutParams(-2,-2).apply{marginStart=view.dp(7)})
                     ratings.addView(badge,LinearLayout.LayoutParams(-2,view.dp(32)).apply{marginEnd=view.dp(8)})
                 }
+                r.favoriteCount?.let{count->
+                    ratings.addView(TextView(view.context).apply{
+                        label(compactCount(count),16f,WHITE,true);gravity=Gravity.CENTER_VERTICAL
+                        setPadding(dp(8),0,dp(8),0);compoundDrawablePadding=dp(7)
+                        setCompoundDrawablesRelative(context.getDrawable(R.drawable.ic_favorite)?.apply{setBounds(0,0,dp(24),dp(24))},null,null,null)
+                        background=shape(0xFF212121.toInt(),dp(6).toFloat());contentDescription="В избранном у $count пользователей"
+                    },LinearLayout.LayoutParams(-2,view.dp(32)).apply{marginEnd=view.dp(8)})
+                }
                 r.ongoing?.let{ongoing->
                     val color=if(ongoing)0xFF68B5FF.toInt()else 0xFF78C99F.toInt()
                     ratings.addView(TextView(view.context).apply{
@@ -421,14 +429,6 @@ class PageAdapter(
                         gravity=Gravity.CENTER;setPadding(dp(10),0,dp(10),0)
                         background=shape(if(ongoing)0x1A68B5FF else 0x1A78C99F,dp(6).toFloat())
                     },LinearLayout.LayoutParams(-2,view.dp(32)))
-                }
-                r.favoriteCount?.let{count->
-                    ratings.addView(TextView(view.context).apply{
-                        label(compactCount(count),14f,WHITE,true);gravity=Gravity.CENTER_VERTICAL
-                        setPadding(dp(10),0,dp(10),0);compoundDrawablePadding=dp(6)
-                        setCompoundDrawablesRelative(context.getDrawable(R.drawable.ic_favorite)?.apply{setBounds(0,0,dp(18),dp(18))},null,null,null)
-                        background=shape(0xFF212121.toInt(),dp(6).toFloat());contentDescription="В избранном у $count пользователей"
-                    },LinearLayout.LayoutParams(-2,view.dp(32)).apply{marginStart=view.dp(8)})
                 }
                 if(r.ratings.isEmpty() && r.ongoing==null && r.favoriteCount==null)ratings.parent.let{(it as View).visibility=View.GONE}
                 val episode=resumeEpisode(r.episodes,lastEpisode(r.id),progress)
@@ -442,7 +442,11 @@ class PageAdapter(
                 val controls=LinearLayout(view.context).apply{gravity=Gravity.BOTTOM}
                 info.addView(HorizontalScrollView(view.context).apply{isHorizontalScrollBarEnabled=false;addView(controls)},LinearLayout.LayoutParams(-1,view.dp(48)).apply{topMargin=view.dp(4)})
                 fun button(label:String,icon:Int,primary:Boolean=false,description:String=label,click:()->Unit){
-                    controls.addView(action(controls,label,primary,icon,click).apply{tag="hero-action:$icon";textSize=14f;contentDescription=description},LinearLayout.LayoutParams(-2,view.dp(46)).apply{marginEnd=view.dp(8)})
+                    val favorite=icon==R.drawable.ic_favorite
+                    controls.addView(action(controls,if(favorite)""else label,primary,icon,click).apply{
+                        tag="hero-action:$icon";textSize=14f;contentDescription=description
+                        if(favorite){gravity=Gravity.CENTER;compoundDrawablePadding=0;setPadding(dp(11),0,dp(11),0);setTextColor(if(row.selected==1)0xFFFFD166.toInt()else WHITE);compoundDrawablesRelative[0]?.apply{setBounds(0,0,dp(24),dp(24));setTint(if(row.selected==1)0xFFFFD166.toInt()else WHITE)}}
+                    },LinearLayout.LayoutParams(if(favorite)view.dp(46)else -2,view.dp(46)).apply{marginEnd=view.dp(8)})
                 }
                 if(episode!=null && episode.streams.isNotEmpty() && !r.blocked){
                     val following=r.episodes.any{it.id==lastEpisode(r.id)} && episode.id!=lastEpisode(r.id)

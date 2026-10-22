@@ -24,9 +24,10 @@ class HomeShelfTest {
         assertEquals("Title",(info.getChildAt(1)as android.widget.TextView).text.toString())
         val ratings=(info.getChildAt(2)as android.widget.HorizontalScrollView).getChildAt(0)as android.widget.LinearLayout
         assertEquals(4,ratings.childCount)
-        assertEquals("Онгоинг",(ratings.getChildAt(2)as android.widget.TextView).text.toString())
-        assertEquals("25.6к",(ratings.getChildAt(3)as android.widget.TextView).text.toString())
-        assertNotNull((ratings.getChildAt(3)as android.widget.TextView).compoundDrawablesRelative[0])
+        assertEquals("Онгоинг",(ratings.getChildAt(3)as android.widget.TextView).text.toString())
+        assertEquals(0xFF68B5FF.toInt(),(ratings.getChildAt(3)as android.widget.TextView).currentTextColor)
+        assertEquals("25.6к",(ratings.getChildAt(2)as android.widget.TextView).text.toString())
+        assertNotNull((ratings.getChildAt(2)as android.widget.TextView).compoundDrawablesRelative[0])
         val metadata=(0 until info.childCount).mapNotNull{info.getChildAt(it)as?android.widget.TextView}.first{it.text.toString().endsWith("18")}.text.toString()
         assertTrue(metadata.endsWith("18"));assertFalse(metadata.contains("+"))
         val hero=holder.itemView
@@ -35,6 +36,14 @@ class HomeShelfTest {
         val poster=(hero as android.widget.LinearLayout).getChildAt(0)
         val controls=info.getChildAt(info.childCount-1)
         assertEquals(poster.bottom,info.top+controls.bottom)
+        val favorite=(controls as android.widget.HorizontalScrollView).getChildAt(0).findViewWithTag<android.widget.TextView>("hero-action:${R.drawable.ic_favorite}")
+        assertEquals("",favorite.text.toString());assertTrue(favorite.contentDescription.isNotBlank())
+        assertEquals(favorite.layoutParams.height,favorite.layoutParams.width)
+        adapter.submit(listOf(Row("hero",Kind.HERO,release=release.copy(ongoing=false))))
+        adapter.onBindViewHolder(holder,0)
+        val finished=((holder.itemView as android.widget.LinearLayout).getChildAt(1)as android.widget.LinearLayout).getChildAt(2)as android.widget.HorizontalScrollView
+        val status=(finished.getChildAt(0)as android.widget.LinearLayout).getChildAt(3)as android.widget.TextView
+        assertEquals("Завершён",status.text.toString());assertEquals(0xFF78C99F.toInt(),status.currentTextColor)
         assertFalse((0 until info.childCount).mapNotNull{info.getChildAt(it)as?android.widget.TextView}.any{it.text.contains("СКРЫТОЕ")})
     }
     @Test fun detailTabsKeepFocusOnSelectionAndEnterContentOnlyOnDown(){
@@ -278,7 +287,7 @@ class HomeShelfTest {
         assertNotNull((card.getChildAt(0)as android.widget.ImageView).colorFilter)
         assertEquals(height,card.layoutParams.height)
         assertEquals(android.view.View.VISIBLE,card.getChildAt(3).visibility)
-        assertEquals(5,card.childCount)
+        assertEquals(android.view.View.GONE,card.findViewWithTag<android.widget.TextView>("favorite-count").visibility)
         assertEquals(android.view.View.GONE,card.getChildAt(4).visibility)
     }
 
@@ -293,7 +302,7 @@ class HomeShelfTest {
         assertEquals(android.view.View.GONE,card.getChildAt(3).visibility)
         card.requestFocus()
         assertEquals(android.view.View.VISIBLE,card.getChildAt(3).visibility)
-        assertEquals(5,card.childCount)
+        assertEquals(android.view.View.GONE,card.findViewWithTag<android.widget.TextView>("favorite-count").visibility)
         val status=card.getChildAt(4)as android.widget.TextView
         assertEquals("Онгоинг",status.text.toString())
         assertEquals(android.view.View.VISIBLE,status.visibility)
@@ -379,7 +388,7 @@ class HomeShelfTest {
         assertEquals(android.view.View.VISIBLE,title.visibility)
         assertEquals(android.view.View.VISIBLE,information.visibility)
         assertEquals(android.view.View.VISIBLE,badge.visibility)
-        assertEquals(5,card.childCount)
+        assertEquals(android.view.View.GONE,card.findViewWithTag<android.widget.TextView>("favorite-count").visibility)
         assertNotNull((card.getChildAt(0)as android.widget.ImageView).colorFilter)
         val root=FrameLayout(RuntimeEnvironment.getApplication())
         root.addView(card)

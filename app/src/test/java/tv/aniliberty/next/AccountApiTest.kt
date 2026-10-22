@@ -37,8 +37,8 @@ class AccountApiTest {
         assertEquals("058701",api.deviceCode("device").code)
         assertEquals("session",api.deviceLogin("device","058701"))
         assertTrue(calls.all{it.token==null && it.method=="POST"})
-        assertEquals(58701,JSONObject(calls.last().body).getInt("code"))
-        assertEquals("device",JSONObject(calls.last().body).getString("device_id"))
+        assertEquals(58701,JSONObject(requireNotNull(calls.last().body)).getInt("code"))
+        assertEquals("device",JSONObject(requireNotNull(calls.last().body)).getString("device_id"))
     }
     @Test fun timecodeWritesUseSecondsAndWatchedFlagWithoutReleasePositionIndex()=runBlocking{
         var sent=""
