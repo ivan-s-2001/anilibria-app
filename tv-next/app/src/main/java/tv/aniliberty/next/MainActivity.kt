@@ -68,9 +68,11 @@ class MainActivity : ComponentActivity() {
                     val row = adapter.rows.firstOrNull { it.key == item.tag }
                     val saved =
                         childFocusMemory[screenKey(current) to (item.tag as? String).orEmpty()]
-                    choices
-                        .getOrNull(saved ?: if (row?.kind == Kind.ACCOUNT_TABS) row.selected else 0)
-                        ?.requestFocus() ?: choices.firstOrNull()?.requestFocus()
+                    val target =
+                        if (row?.key == "account-collections-tabs") row.selected
+                        else saved ?: if (row?.kind == Kind.ACCOUNT_TABS) row.selected else 0
+                    choices.getOrNull(target)?.requestFocus()
+                        ?: choices.firstOrNull()?.requestFocus()
                 }
             }
             null -> Unit
@@ -320,7 +322,7 @@ class MainActivity : ComponentActivity() {
                 add(Triple(4, "Избранное", R.drawable.ic_favorite))
             if (settings.enabled("menu-collections"))
                 add(Triple(5, "Коллекции", R.drawable.ic_library))
-            add(Triple(6, "История", R.drawable.ic_previous))
+            add(Triple(6, "История", R.drawable.ic_collection_history))
             add(Triple(3, "Профиль", R.drawable.ic_account))
             if (settings.enabled("menu-random", false))
                 add(Triple(8, "Случайный релиз", R.drawable.ic_refresh))
@@ -1801,15 +1803,21 @@ class MainActivity : ComponentActivity() {
         val panel = TvSidePanel(this, "Коллекция")
         panel.message(release.title)
         CollectionType.entries.forEach { type ->
-            panel.addChoice(type.title, current == type, R.drawable.ic_library) {
+            panel.addChoice(type.title, current == type, type.icon, iconTint = type.color) {
                 panel.dismiss()
-                accountAction { account.collection(release.id, type) }
+                accountAction {
+                    account.collection(release.id, type)
+                    accountReleaseScreen = null
+                }
             }
         }
         if (current != null)
             panel.addChoice("Убрать из коллекции", icon = R.drawable.ic_close) {
                 panel.dismiss()
-                accountAction { account.collection(release.id, null) }
+                accountAction {
+                    account.collection(release.id, null)
+                    accountReleaseScreen = null
+                }
             }
         panel.addAction("Отмена") { panel.dismiss() }
         panel.show()
@@ -1897,12 +1905,53 @@ class MainActivity : ComponentActivity() {
 
     private fun isFavorite(id: Int): Boolean = account.lists?.favorites?.contains(id) == true
 
+    // A successful account mutation can precede a refreshed catalog response.
+    // Keep the displayed aggregate in sync across copies of the same release.
+    private val favoriteCountOverrides = mutableMapOf<Pair<Int?, Int>, Long>()
+
+    private fun favoriteCountRelease(release: Release): Release {
+        if (!account.signedIn) return release
+        val count = favoriteCountOverrides[account.session.userId to release.id] ?: return release
+        return release.copy(favoriteCount = count)
+    }
+
+    private fun withFavoriteState(items: List<Row>): List<Row> =
+        items.map { row ->
+            row.copy(
+                release = row.release?.let(::favoriteCountRelease),
+                isFavorite = row.release?.let { isFavorite(it.id) } ?: false,
+                collectionType = row.release?.let { account.lists?.collections?.get(it.id) },
+                cards =
+                    if (row.cards.isNotEmpty()) withFavoriteState(row.cards)
+                    else if (row.items.isNotEmpty())
+                        row.items.map {
+                            Row(
+                                "${row.key}:release:${it.id}",
+                                Kind.POSTER,
+                                release = favoriteCountRelease(it),
+                                isFavorite = isFavorite(it.id),
+                                collectionType = account.lists?.collections?.get(it.id),
+                            )
+                        }
+                    else emptyList(),
+            )
+        }
+
     private fun favorite(release: Release) {
         if (!account.signedIn) account.local.remember(release)
         accountAction {
             if (account.lists == null) account.refresh()
             val added = !isFavorite(release.id)
             account.favorite(release.id, added)
+            if (account.signedIn) {
+                val key = account.session.userId to release.id
+                val previous = favoriteCountOverrides[key] ?: release.favoriteCount
+                if (previous != null)
+                    favoriteCountOverrides[key] =
+                        (previous + (if (added) 1L else -1L)).coerceAtLeast(0L)
+            }
+            // A release removed from Favorites/Collections must disappear from that list too.
+            accountReleaseScreen = null
             Toast.makeText(
                     this,
                     if (added) "Добавлено в избранное" else "Удалено из избранного",
@@ -2320,6 +2369,10 @@ class MainActivity : ComponentActivity() {
             current == Screen.Home &&
                 state.screen == Screen.Home &&
                 adapter.rows.any { it.kind == Kind.SHELF }
+        val collectionTypeChanged =
+            current is Screen.Collections &&
+                state.screen is Screen.Collections &&
+                current.type != state.screen.type
         val retainedFocus =
             if (current == state.screen)
                 list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String }
@@ -2443,7 +2496,7 @@ class MainActivity : ComponentActivity() {
                                         "continue:${item.releaseId}:${item.episodeId}",
                                         Kind.CONTINUE,
                                         item.releaseTitle,
-                                        "${item.episodeTitle}\n$status",
+                                        "Серия ${number(item.ordinal)} · $status",
                                         image = item.preview,
                                         watching = item,
                                         click = { playContinue(item) },
@@ -2833,7 +2886,7 @@ class MainActivity : ComponentActivity() {
                                     "profile-local-history",
                                     Kind.ACCOUNT_TILE,
                                     "История просмотра",
-                                    selected = R.drawable.ic_previous,
+                                    selected = R.drawable.ic_collection_history,
                                     click = { openAccountHistory() },
                                 )
                             rows +=
@@ -3605,7 +3658,24 @@ class MainActivity : ComponentActivity() {
                 current is Screen.Detail &&
                 !enterContent &&
                 list.findFocus()?.let { list.findContainingItemView(it)?.tag } == "tabs"
-        adapter.submit(rows)
+        adapter.submit(withFavoriteState(rows))
+        if (collectionTypeChanged && !menuOpen) {
+            val tabPosition = rows.indexOfFirst { it.key == "account-collections-tabs" }
+            val selectedType = (state.screen as Screen.Collections).type
+            if (tabPosition >= 0) {
+                grid.scrollToPositionWithOffset(tabPosition, list.dp(12))
+                list.doOnNextLayout {
+                    if (current != state.screen || menuOpen) return@doOnNextLayout
+                    val tabs =
+                        list.findViewHolderForAdapterPosition(tabPosition)?.itemView
+                            as? android.widget.HorizontalScrollView
+                    val line = tabs?.getChildAt(0) as? LinearLayout
+                    line?.getChildAt(CollectionType.entries.indexOf(selectedType))?.requestFocus()
+                }
+                list.requestLayout()
+            }
+            return
+        }
         if (startupVisible) return
         if (state.screen is Screen.Detail && !state.loading && rows.any { it.kind == Kind.HERO }) {
             if (menuOpen || !list.hasWindowFocus()) return
