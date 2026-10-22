@@ -16,7 +16,7 @@ data class Episode(val id: String, val ordinal: Double, val name: String, val pr
     val label: String get() = name.ifBlank { "Эпизод ${number(ordinal)}" }
 }
 data class Credit(val role: String, val name: String)
-data class Release(val id: Int, val alias: String, val title: String, val english: String, val poster: String?, val year: String, val season: String, val type: String, val age: String, val genres: List<String>, val description: String, val episodes: List<Episode>, val credits: List<Credit>, val blocked: Boolean, val latestEpisode: Episode? = null, val externalIds: ExternalIds = ExternalIds(), val ratings: List<Rating> = emptyList(), val ongoing:Boolean? = null, val updatedAt:String = "",val totalEpisodes:Int?=null,val releasedEpisodes:Int?=null,val favoriteCount:Long?=null) {
+data class Release(val id: Int, val alias: String, val title: String, val english: String, val poster: String?, val year: String, val season: String, val type: String, val age: String, val genres: List<String>, val description: String, val episodes: List<Episode>, val credits: List<Credit>, val blocked: Boolean, val latestEpisode: Episode? = null, val externalIds: ExternalIds = ExternalIds(), val ratings: List<Rating> = emptyList(), val ongoing:Boolean? = null, val updatedAt:String = "",val totalEpisodes:Int?=null,val releasedEpisodes:Int?=null,val favoriteCount:Long?=null,val publishDay:Int?=null,val scheduledEpisode:Double?=null,val fullSeason:Boolean=false) {
     val catalogueEpisodeCount:Int? get() = releasedEpisodes
     val metadata: String get() = listOf(year, season, type, age).filter(String::isNotBlank).joinToString(" · ")
 }
@@ -71,7 +71,7 @@ class Api {
         suspend fun <T> optional(block: suspend () -> T): T? = try { block() } catch(e: CancellationException) { throw e } catch (_: Exception) { null }
         val promotions = async { optional { JSONObject(request("/media/promotions")).optJSONArray("data").objects().filter { !it.optBoolean("is_ad") && it.optJSONObject("release") != null }.map { Promotion(it.text("id"), it.optJSONObject("image")?.image(), parseRelease(it.getJSONObject("release"))) } } }
         val latest = async { latest() }
-        val schedule = async { optional { val json = JSONObject(request("/anime/schedule/now")); listOf("yesterday", "today", "tomorrow").map { day -> json.optJSONArray(day).objects().mapNotNull { entry -> entry.optJSONObject("release")?.let { release -> entry.optJSONObject("published_release_episode")?.let { release.put("latest_episode",it) }; parseRelease(release) } } } } }
+        val schedule = async { optional { val json = JSONObject(request("/anime/schedule/now")); listOf("yesterday", "today", "tomorrow").map { day -> parseScheduleEntries(json.optJSONArray(day)?:JSONArray()) } } }
         val franchises = async { optional { randomFeatures(HomeSection.FRANCHISES) } }
         val genres = async { optional { randomFeatures(HomeSection.GENRES) } }
         val videos = async { optional { videos(9) } }
@@ -114,9 +114,7 @@ class Api {
     }
     suspend fun section(section:HomeSection,page:Int=1):SectionData = when(section){
         HomeSection.LATEST -> recentEpisodesPage(page)
-        HomeSection.SCHEDULE -> SectionData(releases=JSONObject(request("/anime/schedule/week")).optJSONArray("data").objects().mapNotNull{entry->
-            entry.optJSONObject("release")?.let{release->entry.optJSONObject("published_release_episode")?.let{release.put("latest_episode",it)};parseRelease(release)}
-        }.distinctBy{it.id})
+        HomeSection.SCHEDULE -> SectionData(releases=parseScheduleWeek(request("/anime/schedule/week")))
         HomeSection.FRANCHISES -> SectionData(features=features("/anime/franchises",true).sortedBy{it.title.lowercase()})
         HomeSection.GENRES -> SectionData(features=features("/anime/genres",false).sortedBy{it.title.lowercase()})
         HomeSection.VIDEOS -> videos(page*30).let{SectionData(videos=it,more=it.size>=page*30)}
@@ -238,4 +236,23 @@ internal fun filterSectionData(data:SectionData,query:String):SectionData {
         return tokens.all{text.contains(it)}
     }
     return data.copy(releases=data.releases.filter{matches(it.title,it.english)},features=data.features.filter{matches(it.title)},videos=data.videos.filter{matches(it.title)})
+}
+
+internal val scheduleDays=listOf("Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье")
+internal fun parseScheduleEntries(entries:JSONArray):List<Release> = entries.objects().mapNotNull{entry->
+    val json=entry.optJSONObject("release")?:return@mapNotNull null
+    val published=entry.optJSONObject("published_release_episode")
+    if(published!=null)json.put("latest_episode",published)
+    val day=json.optJSONObject("publish_day")
+    val described=scheduleDays.indexOfFirst{it.equals(day?.optString("description"),true)}.takeIf{it>=0}?.plus(1)
+    val number=published?.optDouble("ordinal",Double.NaN)?.takeIf{it.isFinite() && it>0}
+        ?:entry.optDouble("next_release_episode_number",Double.NaN).takeIf{it.isFinite() && it>0}
+    parseRelease(json).copy(publishDay=described?:day?.optInt("value")?.takeIf{it in 1..7},scheduledEpisode=number,fullSeason=entry.optBoolean("full_season_is_released"))
+}.distinctBy{it.id}
+internal fun parseScheduleWeek(body:String):List<Release> = parseScheduleEntries(if(body.trimStart().startsWith("["))JSONArray(body)else JSONObject(body).optJSONArray("data")?:JSONArray())
+internal fun scheduleEpisodeLabel(release:Release?):String=when{
+    release?.fullSeason==true->"Полный сезон"
+    release?.scheduledEpisode!=null->"${number(release.scheduledEpisode)} эп."
+    release?.latestEpisode!=null->"${number(release.latestEpisode.ordinal)} эп."
+    else->"Эпизод —"
 }

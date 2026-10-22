@@ -560,7 +560,8 @@ class PageAdapter(
                 val continuing=row.kind==Kind.CONTINUE
                 val poster=row.kind==Kind.POSTER
                 val webPoster=poster
-                val cataloguePoster=poster && row.selected!=1
+                val schedulePoster=poster && row.selected==3
+                val cataloguePoster=poster && row.selected !in listOf(1,3)
                 val spotlight=row.kind==Kind.SPOTLIGHT
                 val image=box.getChildAt(0)as ImageView
                 image.layoutParams=FrameLayout.LayoutParams(-1,if(poster)view.cardDp(198)else if(spotlight)-1 else view.cardDp(if(continuing)150 else 130),Gravity.TOP)
@@ -623,9 +624,9 @@ class PageAdapter(
                     val episodeBadge=(box.getChildAt(3)as?TextView)?:TextView(view.context).also{
                         box.addView(it,FrameLayout.LayoutParams(-2,view.dp(28),Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply{topMargin=view.dp(10)})
                     }
-                    episodeBadge.label(if(cataloguePoster)release?.type?.ifBlank{"Аниме"}?:"Аниме"else release?.latestEpisode?.let{"${number(it.ordinal)} эпизод"}?:"Релиз",12f,WHITE,true)
+                    episodeBadge.label(if(schedulePoster)scheduleEpisodeLabel(release)else if(cataloguePoster)release?.type?.ifBlank{"Аниме"}?:"Аниме"else release?.latestEpisode?.let{"${number(it.ordinal)} эпизод"}?:"Релиз",12f,WHITE,true)
                     episodeBadge.gravity=Gravity.CENTER;episodeBadge.setPadding(view.dp(10),0,view.dp(10),0)
-                    episodeBadge.background=shape(0x1AFFFFFF,view.dp(6).toFloat());episodeBadge.isFocusable=false
+                    episodeBadge.background=shape(if(schedulePoster)0xCC181818.toInt()else 0x1AFFFFFF,view.dp(6).toFloat());episodeBadge.isFocusable=false
                     val updateLabel=if(!cataloguePoster){
                         val label=(box.getChildAt(4)as?TextView)?:TextView(view.context).also{box.addView(it)}
                         label.layoutParams=FrameLayout.LayoutParams(-1,view.dp(16),Gravity.TOP).apply{topMargin=view.dp(40);marginStart=view.dp(8);marginEnd=view.dp(8)}
@@ -650,7 +651,7 @@ class PageAdapter(
                     title.layoutParams=LinearLayout.LayoutParams(-1,0,1f)
                     subtitle.maxLines=1
                     fun focusPoster(focused:Boolean){
-                        box.findViewWithTag<TextView>("favorite-count")?.visibility=if(focused && release?.favoriteCount!=null)View.VISIBLE else View.GONE
+                        box.findViewWithTag<TextView>("favorite-count")?.visibility=if(focused && !schedulePoster && release?.favoriteCount!=null)View.VISIBLE else View.GONE
                         content.visibility=if(focused)View.VISIBLE else View.GONE
                         genresLine.visibility=if(focused && genresLine.text.isNotBlank())View.VISIBLE else View.GONE
                         genresLine.isSelected=focused
@@ -662,7 +663,7 @@ class PageAdapter(
                             title.maxLines=if(focused)4 else 3
                             subtitle.visibility=if(focused)View.VISIBLE else View.GONE
                         }
-                        episodeBadge.visibility=if(focused)View.VISIBLE else View.GONE
+                        episodeBadge.visibility=if(focused || schedulePoster)View.VISIBLE else View.GONE
                         statusBadge?.visibility=if(focused && release?.ongoing!=null)View.VISIBLE else View.GONE
                         updateLabel?.visibility=if(focused && updateLabel.text.isNotBlank())View.VISIBLE else View.GONE
                         if(!cataloguePoster){
@@ -690,6 +691,14 @@ class PageAdapter(
                     favorites.setCompoundDrawablesRelative(view.context.getDrawable(R.drawable.ic_favorite)?.apply{setBounds(0,0,view.dp(13),view.dp(13))},null,null,null)
                     favorites.background=shape(0x1AFFFFFF,view.dp(4).toFloat())
                     favorites.contentDescription=release?.favoriteCount?.let{"В избранном у $it пользователей"}.orEmpty()
+                    box.findViewWithTag<TextView>("schedule-rating")?.visibility=if(schedulePoster)View.VISIBLE else View.GONE
+                    if(schedulePoster){
+                        val rating=box.findViewWithTag<TextView>("schedule-rating")?:TextView(view.context).also{it.tag="schedule-rating";box.addView(it)}
+                        rating.layoutParams=FrameLayout.LayoutParams(-2,view.dp(28),Gravity.TOP or Gravity.START).apply{topMargin=view.dp(10);marginStart=view.dp(8)}
+                        rating.label(release?.ratings?.firstOrNull()?.let{"%.1f".format(java.util.Locale.US,it.value)}?:"—",12f,WHITE,true)
+                        rating.setPadding(view.dp(8),0,view.dp(8),0);rating.gravity=Gravity.CENTER;rating.background=shape(0xCC181818.toInt(),view.dp(6).toFloat());rating.isFocusable=false
+                        rating.contentDescription=release?.ratings?.firstOrNull()?.let{"${it.source}: ${it.value}"}?:"Оценки пока нет"
+                    }
                     focusPoster(box.hasFocus())
                     box.setOnFocusChangeListener{_,focused->focusPoster(focused);box.animate().scaleX(if(focused && !homeCard)1.025f else 1f).scaleY(if(focused && !homeCard)1.025f else 1f).setDuration(140).start()}
                 }else{

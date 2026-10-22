@@ -179,7 +179,7 @@ class MainActivity : ComponentActivity() {
         },LinearLayout.LayoutParams(-1,dp(56)))
         val routes=buildList {
             if(settings.enabled("menu-search"))add(Triple(2,"Поиск",R.drawable.ic_search))
-            add(Triple(0,"Главная",R.drawable.ic_home));add(Triple(1,"Релизы",R.drawable.ic_catalog))
+            add(Triple(0,"Главная",R.drawable.ic_home));add(Triple(1,"Релизы",R.drawable.ic_catalog));add(Triple(9,"Расписание",R.drawable.ic_episodes))
             if(settings.enabled("menu-favorites"))add(Triple(4,"Избранное",R.drawable.ic_favorite))
             if(settings.enabled("menu-collections"))add(Triple(5,"Коллекции",R.drawable.ic_library))
             add(Triple(6,"История",R.drawable.ic_previous));add(Triple(3,"Профиль",R.drawable.ic_library))
@@ -479,7 +479,7 @@ class MainActivity : ComponentActivity() {
     }
     private fun navigate(index:Int){
         rememberFocus()
-        when(index){0->model.open(Screen.Home);1->model.open(Screen.Catalog());2->search();3->library();4->openAccountList(Screen.Favorites());5->openAccountList(Screen.Collections());6->if(account.signedIn)openAccountHistory()else login();7->model.open(Screen.Settings);8->lifecycleScope.launch{try{val r=model.api.randomRelease();model.open(Screen.Detail(r.id))}catch(_:Exception){Toast.makeText(this@MainActivity,"Не удалось выбрать релиз",Toast.LENGTH_SHORT).show()}}}
+        when(index){0->model.open(Screen.Home);1->model.open(Screen.Catalog());2->search();9->openSection(HomeSection.SCHEDULE);3->library();4->openAccountList(Screen.Favorites());5->openAccountList(Screen.Collections());6->if(account.signedIn)openAccountHistory()else login();7->model.open(Screen.Settings);8->lifecycleScope.launch{try{val r=model.api.randomRelease();model.open(Screen.Detail(r.id))}catch(_:Exception){Toast.makeText(this@MainActivity,"Не удалось выбрать релиз",Toast.LENGTH_SHORT).show()}}}
     }
     private fun search(){
         val screen=(model.state.value.screen as?Screen.Catalog)?:Screen.Catalog()
@@ -502,6 +502,7 @@ class MainActivity : ComponentActivity() {
         }
         enterCatalogResults=true;model.open(next,false)
     }
+    private var scheduleDay=java.time.LocalDate.now().dayOfWeek.value
     private val sectionQueries=mutableMapOf<HomeSection,String>()
     private var catalogSearchEditing=false
     private var catalogSearchDraft=""
@@ -950,7 +951,7 @@ class MainActivity : ComponentActivity() {
         }
     }
     private fun openSection(kind:HomeSection){rememberFocus();model.open(Screen.Section(kind))}
-    private fun releaseCards(items:List<Release>,key:String)=items.distinctBy{it.id}.map{Row("$key:release:${it.id}",Kind.POSTER,release=it,selected=if(key.startsWith("latest",true)||key.startsWith("schedule",true))1 else 0)}
+    private fun releaseCards(items:List<Release>,key:String)=items.distinctBy{it.id}.map{Row("$key:release:${it.id}",Kind.POSTER,release=it,selected=if(key.startsWith("schedule",true))3 else if(key.startsWith("latest",true))1 else 0)}
     private fun watchOrderCards(items:List<Release>,key:String)=items.distinctBy{it.id}.map{item->
         Row("$key:${item.id}",Kind.POSTER,release=item,selected=2)
     }
@@ -1016,7 +1017,7 @@ class MainActivity : ComponentActivity() {
         val sameHome=current==Screen.Home && state.screen==Screen.Home && adapter.rows.any{it.kind==Kind.SHELF}
         val retainedFocus = if(current==state.screen) list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String } else null
         current=state.screen
-        val section=when(current){Screen.Profile,Screen.AccountSessions,is Screen.AccountSettings->3;Screen.AccountHistory->6;Screen.Settings->7;is Screen.Favorites->4;is Screen.Collections->5;Screen.Home->0;is Screen.Catalog,is Screen.Section,is Screen.Franchise->1;is Screen.Library->3;else->selectedSection}
+        val section=when(current){Screen.Profile,Screen.AccountSessions,is Screen.AccountSettings->3;Screen.AccountHistory->6;Screen.Settings->7;is Screen.Favorites->4;is Screen.Collections->5;Screen.Home->0;is Screen.Section->if((current as Screen.Section).kind==HomeSection.SCHEDULE)9 else 1;is Screen.Catalog,is Screen.Franchise->1;is Screen.Library->3;else->selectedSection}
         if(section!=selectedSection){selectedSection=section;buildMenu()}
         homeMenuLayout()
         val spans=if(current==Screen.Profile || isAccountList(current) || current is Screen.Catalog || current is Screen.Section || current is Screen.Library || current is Screen.Franchise)20 else 15
@@ -1075,7 +1076,11 @@ class MainActivity : ComponentActivity() {
                             "Сбросить" to {sectionQueries.remove(screen.kind);catalogSearchDraft="";catalogSearchEditing=false;render(model.state.value)}
                         ))
                     if(query.isNotBlank() && data.more)rows+=Row("section-search-scope",Kind.TEXT,"Поиск по загруженным · остальные появляются при прокрутке")
-                    val filtered=filterSectionData(data,query)
+                    if(screen.kind==HomeSection.SCHEDULE){
+                        rows+=Row("schedule-week-days",Kind.ACCOUNT_TABS,selected=scheduleDay,controls=(listOf("Вся неделя")+scheduleDays.map{it.take(2)}).mapIndexed{i,label->label to {scheduleDay=i;rememberFocus();render(model.state.value)}})
+                    }
+                    val searched=filterSectionData(data,query)
+                    val filtered=if(screen.kind==HomeSection.SCHEDULE && scheduleDay!=0)searched.copy(releases=searched.releases.filter{it.publishDay==scheduleDay})else searched
                     val cards=when(screen.kind){
                         HomeSection.LATEST,HomeSection.SCHEDULE->releaseCards(filtered.releases,screen.kind.name)
                         HomeSection.FRANCHISES,HomeSection.GENRES->featureCards(filtered.features,screen.kind)
@@ -1086,6 +1091,12 @@ class MainActivity : ComponentActivity() {
                             rows+=Row("period:${period.key}",Kind.HEADING,period.title,selected=1)
                             rows+=Row("period-shelf:${period.key}",Kind.SHELF,selected=6,cards=releaseCards(period.releases,screen.kind.name))
                         }
+                    }else if(screen.kind==HomeSection.SCHEDULE){
+                        val groups=if(scheduleDay==0)filtered.releases.groupBy{it.publishDay}.toSortedMap(compareBy<Int?>{it?:8})else mapOf(scheduleDay to filtered.releases)
+                        groups.forEach{(day,items)->if(items.isNotEmpty()){
+                            rows+=Row("schedule-day:$day",Kind.HEADING,day?.let{scheduleDays.getOrNull(it-1)}?:"День уточняется",selected=1)
+                            rows+=Row("schedule-day-shelf:$day",Kind.SHELF,selected=6,cards=releaseCards(items,"schedule:week:$day"))
+                        }}
                     }else rows+=cards.map{it.copy(homeStyle=true)}
                     if((query.isNotBlank() || screen.kind==HomeSection.LATEST) && cards.isEmpty() && state.more && !state.loadingMore && state.moreError==null){
                         list.post{if(model.state.value.screen==screen && sectionQueries[screen.kind]==query)model.loadMoreSection()}
