@@ -45,6 +45,16 @@ class SupportAdsTest {
                     (0 until view.childCount).flatMap { views(view.getChildAt(it)) }
                 else emptyList()
         val nodes = views(dialog.window!!.decorView)
+        assertTrue(
+            nodes.filterIsInstance<android.widget.TextView>().any {
+                it.text.toString() == "Показывать видеорекламу"
+            }
+        )
+        assertTrue(
+            nodes.filterIsInstance<android.widget.TextView>().any {
+                it.text.toString() == "Перед просмотром видео"
+            }
+        )
         val switches = nodes.filterIsInstance<android.widget.Switch>()
         assertEquals(3, switches.size)
         assertTrue(switches.none { it.isChecked })
@@ -55,6 +65,7 @@ class SupportAdsTest {
             .filterIsInstance<android.widget.TextView>()
             .single { it.text.toString() == "Продолжить" }
             .performClick()
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
         assertEquals(1, continued)
         assertTrue(SupportAds(context).decided)
         controller.pause().stop().destroy()
