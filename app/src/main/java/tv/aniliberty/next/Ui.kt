@@ -192,11 +192,9 @@ class PageAdapter(
             Kind.MORE,Kind.REFRESH -> {
                 val box=view as LinearLayout
                 box.layoutParams=box.layoutParams.apply{
-                    width=view.dp(96);height=view.dp(144)
-                    if(this is RecyclerView.LayoutParams){
-                        val shelfCardHeight=view.cardDp(when(row.selected){1->204;2->236;3->190;4->206;5->150;else->270})
-                        topMargin=view.dp(4)+(shelfCardHeight-height).coerceAtLeast(0)/2
-                    }
+                    width=view.dp(96)
+                    height=view.cardDp(when(row.selected){1->204;2->236;3->190;4->206;5->150;else->270})
+                    if(this is RecyclerView.LayoutParams)topMargin=view.dp(4)
                 }
                 val icon=box.getChildAt(0)as ImageView
                 icon.layoutParams=LinearLayout.LayoutParams(view.dp(32),view.dp(32))

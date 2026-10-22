@@ -41,6 +41,11 @@ class MainActivity : ComponentActivity() {
     private fun focusItem(item:View?) {
         when(item){
             is RecyclerView->adapter.restoreShelf(item)
+            is android.widget.HorizontalScrollView->{
+                val line=item.getChildAt(0)as?LinearLayout
+                if(current==Screen.Home && item.tag=="schedule-days")line?.getChildAt(model.state.value.homeDay+1)?.requestFocus()
+                else line?.getFocusables(View.FOCUS_FORWARD)?.firstOrNull()?.requestFocus()
+            }
             null->Unit
             else->if(item.isFocusable)item.requestFocus()else if(item is ViewGroup)item.getFocusables(View.FOCUS_FORWARD).firstOrNull()?.requestFocus()
         }
