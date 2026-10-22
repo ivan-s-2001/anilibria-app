@@ -173,12 +173,16 @@ class PageAdapter(
             Kind.POSTER, Kind.SPOTLIGHT, Kind.FEATURE, Kind.GENRE, Kind.FRANCHISE, Kind.CONTINUE -> object:FrameLayout(context){
                 override fun onMeasure(widthMeasureSpec:Int,heightMeasureSpec:Int){
                     val width=View.MeasureSpec.getSize(widthMeasureSpec)
+                    if(Kind.entries[type]==Kind.FEATURE && width>0){
+                        val ratio=getTag(R.id.video_ratio)as?Float?: (16f/9f)
+                        super.onMeasure(widthMeasureSpec,View.MeasureSpec.makeMeasureSpec((width/ratio).toInt(),View.MeasureSpec.EXACTLY))
+                        return
+                    }
                     if(Kind.entries[type]==Kind.FRANCHISE && !shelfMode && getTag(R.id.shelf_key)==true && width>0){
                         val imageWidth=(width*150f/312f).toInt()
-                        if(!hasFocus()){
-                            getChildAt(0)?.let{image->if(image.layoutParams.width!=imageWidth)image.layoutParams=image.layoutParams.apply{this.width=imageWidth}}
-                            getChildAt(2)?.let{content->val params=content.layoutParams as FrameLayout.LayoutParams;if(params.marginStart!=imageWidth)content.layoutParams=params.apply{marginStart=imageWidth}}
-                        }
+                        getChildAt(0)?.let{image->if(image.layoutParams.width!=imageWidth)image.layoutParams=image.layoutParams.apply{this.width=imageWidth}}
+                        getChildAt(2)?.let{content->val params=content.layoutParams as FrameLayout.LayoutParams;if(params.marginStart!=imageWidth)content.layoutParams=params.apply{marginStart=imageWidth}}
+                        findViewWithTag<LinearLayout>("franchise-composition")?.let{overlay->if(overlay.layoutParams.width!=imageWidth)overlay.layoutParams=overlay.layoutParams.apply{this.width=imageWidth}}
                         super.onMeasure(widthMeasureSpec,View.MeasureSpec.makeMeasureSpec((width*190f/312f).toInt(),View.MeasureSpec.EXACTLY))
                     }else super.onMeasure(widthMeasureSpec,heightMeasureSpec)
                 }
@@ -235,6 +239,7 @@ class PageAdapter(
                     val cardWidth=(viewport/4.5f-view.dp(8)).toInt()
                     shelf.layoutParams=shelf.layoutParams.apply{height=(cardWidth*206f/144f).toInt()+view.dp(24)}
                 }
+                if(row.selected==1 && cards.all{it.kind==Kind.FEATURE})shelf.layoutParams=shelf.layoutParams.apply{height=view.dp((232*1.18f*9/16).toInt()+20)}
                 nested.submit(cards)
                 if(shelfResets.containsKey(row.key)){
                     val focusFirst=shelfResets.remove(row.key)==true
@@ -425,7 +430,12 @@ class PageAdapter(
                 meta.visibility=if(row.subtitle.isBlank())View.GONE else View.VISIBLE
                 val baseImage=FrameLayout.LayoutParams(image.layoutParams as FrameLayout.LayoutParams)
                 val baseContent=FrameLayout.LayoutParams(content.layoutParams as FrameLayout.LayoutParams)
-                val composition=(content.getChildAt(2)as?LinearLayout)?:LinearLayout(view.context).apply{orientation=LinearLayout.VERTICAL;isFocusable=false;content.addView(this,LinearLayout.LayoutParams(-1,-2))}
+                val composition=box.findViewWithTag<LinearLayout>("franchise-composition")?:LinearLayout(view.context).apply{
+                    tag="franchise-composition";orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER_VERTICAL;isFocusable=false
+                    setPadding(view.dp(8),view.dp(8),view.dp(8),view.dp(8))
+                    box.addView(this,FrameLayout.LayoutParams(baseImage.width,-1,Gravity.START))
+                }
+                composition.layoutParams=FrameLayout.LayoutParams(baseImage.width,-1,Gravity.START)
                 composition.removeAllViews()
                 if(!genre){
                     val names=if(row.items.isNotEmpty())row.items.mapIndexed{index,item->"${index+1}. ${item.title}"}else listOf(if(row.selected==-1)"Состав недоступен"else if(row.selected==-2)"Состав пока не указан"else "Загрузка состава…")
@@ -434,24 +444,14 @@ class PageAdapter(
                 fun featureFocus(focused:Boolean){
                     image.colorFilter=if(focused)android.graphics.ColorMatrixColorFilter(floatArrayOf(.15f,0f,0f,0f,0f,0f,.15f,0f,0f,0f,0f,0f,.15f,0f,0f,0f,0f,0f,1f,0f))else null
                     composition.visibility=if(focused && !genre)View.VISIBLE else View.GONE
-                    if(!genre && focused){
-                        image.layoutParams=FrameLayout.LayoutParams(-1,-1)
-                        content.layoutParams=FrameLayout.LayoutParams(-1,-1)
-                        content.setBackgroundColor(Color.TRANSPARENT)
-                        content.gravity=Gravity.CENTER_VERTICAL
-                        title.visibility=View.GONE;meta.visibility=View.GONE
-                    }else{
-                        image.layoutParams=FrameLayout.LayoutParams(baseImage)
-                        content.layoutParams=FrameLayout.LayoutParams(baseContent)
-                        content.setBackgroundColor(if(genre || franchisePage)Color.TRANSPARENT else 0xFF212121.toInt())
-                        title.visibility=View.VISIBLE;meta.visibility=if(row.subtitle.isBlank())View.GONE else View.VISIBLE
-                    }
+                    image.layoutParams=FrameLayout.LayoutParams(baseImage)
+                    content.layoutParams=FrameLayout.LayoutParams(baseContent)
+                    title.visibility=View.VISIBLE;meta.visibility=if(row.subtitle.isBlank())View.GONE else View.VISIBLE
                 }
                 box.contentDescription=listOf(row.title,row.subtitle).filter(String::isNotBlank).joinToString(". ")
                 box.setOnClickListener{row.click?.invoke()}
                 featureFocus(box.hasFocus())
-                box.setOnFocusChangeListener{_,focused->featureFocus(focused);if(focused && !genre)row.focusLoad?.invoke()}
-                if(box.hasFocus() && !genre)row.focusLoad?.invoke()
+                box.setOnFocusChangeListener{_,focused->featureFocus(focused)}
             }
             Kind.SPOTLIGHT,Kind.FEATURE,Kind.POSTER,Kind.CONTINUE -> {
                 val homeCard=shelfMode || row.homeStyle
@@ -470,7 +470,7 @@ class PageAdapter(
                 image.scaleType=if(poster && row.selected!=2)ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_CROP
                 image.background=shape(0xFF212121.toInt(),view.dp(12).toFloat())
                 image.clipToOutline=true
-                if(continuing && row.image==null){image.scaleType=ImageView.ScaleType.FIT_CENTER;image.load(R.drawable.ic_aniliberty)}else image.load(if(poster)release?.poster else row.image)
+                if(continuing && row.image==null){image.scaleType=ImageView.ScaleType.FIT_CENTER;image.load(R.drawable.ic_aniliberty)}else if(row.kind!=Kind.FEATURE)image.load(if(poster)release?.poster else row.image)
                 box.getChildAt(1).visibility=if(spotlight)View.VISIBLE else View.GONE
                 title.label(release?.title?:row.title,if(spotlight)30f else if(homeCard)17f else 14f,WHITE,true)
                 title.maxLines=2
@@ -633,7 +633,26 @@ class PageAdapter(
                     }
                 }
                 if(row.kind==Kind.FEATURE){
+                    image.scaleType=ImageView.ScaleType.FIT_CENTER
                     image.layoutParams=FrameLayout.LayoutParams(-1,-1)
+                    image.load(row.image){
+                        listener(onSuccess={_,result->
+                            val source=result.image
+                            if(source.width>0 && source.height>0 && box.tag==row.key){
+                                box.setTag(R.id.video_ratio,source.width.toFloat()/source.height)
+                                box.post{
+                                    if(box.tag==row.key){
+                                        box.requestLayout()
+                                        val shelf=box.parent as?RecyclerView
+                                        if(shelf!=null && shelfMode){
+                                            val desired=(box.width*source.height.toFloat()/source.width).toInt()+box.dp(20)
+                                            if(desired>0 && shelf.layoutParams.height!=desired)shelf.layoutParams=shelf.layoutParams.apply{height=desired}
+                                        }
+                                    }
+                                }
+                            }
+                        })
+                    }
                     box.getChildAt(1).apply{background=GenreShade();visibility=View.VISIBLE}
                     content.layoutParams=FrameLayout.LayoutParams(-1,-1)
                     content.gravity=Gravity.CENTER;content.setPadding(view.dp(14),view.dp(14),view.dp(14),view.dp(14))

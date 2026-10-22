@@ -35,16 +35,19 @@ class HomeShelfTest {
     @Test fun franchiseCompositionHasOneNumberedLinePerPartOnFocus(){
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
         val parts=(1..3).map{parseRelease(org.json.JSONObject().put("id",it).put("name",org.json.JSONObject().put("main","Часть $it")))}
-        adapter.submit(listOf(Row("franchise",Kind.FRANCHISE,"Франшиза",items=parts)))
+        adapter.submit(listOf(Row("franchise",Kind.FRANCHISE,"Франшиза","3 части",items=parts)))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.FRANCHISE.ordinal)
         adapter.onBindViewHolder(holder,0)
         val card=holder.itemView as FrameLayout
         val content=card.getChildAt(2)as android.widget.LinearLayout
-        val lines=content.getChildAt(2)as android.widget.LinearLayout
+        val lines=card.findViewWithTag<android.widget.LinearLayout>("franchise-composition")
         assertEquals(android.view.View.GONE,lines.visibility)
         card.requestFocus()
         assertEquals(android.view.View.VISIBLE,lines.visibility)
         assertEquals(3,lines.childCount)
+        assertEquals(card.getChildAt(0).layoutParams.width,lines.layoutParams.width)
+        assertEquals(android.view.View.VISIBLE,content.getChildAt(0).visibility)
+        assertEquals(android.view.View.VISIBLE,content.getChildAt(1).visibility)
         for(index in 0..2){val line=lines.getChildAt(index)as android.widget.TextView;assertEquals("${index+1}. Часть ${index+1}",line.text.toString());assertEquals(1,line.maxLines)}
     }
     @Test fun franchiseDirectoryKeepsHomeAspectWhenColumnWidthChanges(){
