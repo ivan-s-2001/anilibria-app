@@ -320,7 +320,7 @@ class MainActivity : ComponentActivity() {
                 add(Triple(4, "Избранное", R.drawable.ic_favorite))
             if (settings.enabled("menu-collections"))
                 add(Triple(5, "Коллекции", R.drawable.ic_library))
-            add(Triple(6, "История", R.drawable.ic_previous))
+            add(Triple(6, "История", R.drawable.ic_collection_history))
             add(Triple(3, "Профиль", R.drawable.ic_account))
             if (settings.enabled("menu-random", false))
                 add(Triple(8, "Случайный релиз", R.drawable.ic_refresh))
@@ -353,6 +353,11 @@ class MainActivity : ComponentActivity() {
                         contentDescription = title
                         isFocusableInTouchMode = true
                         if (route == selectedSection) setTextColor(WHITE)
+                        if (route == 4 || route == 6)
+                            compoundDrawablesRelative[0]?.mutate()?.setTint(
+                                if (route == 4) CollectionVisuals.FAVORITE_COLOR
+                                else CollectionVisuals.HISTORY_COLOR
+                            )
                         setOnKeyListener { _, key, event ->
                             if (key == KeyEvent.KEYCODE_DPAD_RIGHT) {
                                 if (event.action == KeyEvent.ACTION_UP) closeMenu()
@@ -1801,7 +1806,7 @@ class MainActivity : ComponentActivity() {
         val panel = TvSidePanel(this, "Коллекция")
         panel.message(release.title)
         CollectionType.entries.forEach { type ->
-            panel.addChoice(type.title, current == type, R.drawable.ic_library) {
+            panel.addChoice(type.title, current == type, type.icon, iconTint = type.color) {
                 panel.dismiss()
                 accountAction { account.collection(release.id, type) }
             }
@@ -2852,7 +2857,7 @@ class MainActivity : ComponentActivity() {
                                     "profile-local-history",
                                     Kind.ACCOUNT_TILE,
                                     "История просмотра",
-                                    selected = R.drawable.ic_previous,
+                                    selected = R.drawable.ic_collection_history,
                                     click = { openAccountHistory() },
                                 )
                             rows +=
