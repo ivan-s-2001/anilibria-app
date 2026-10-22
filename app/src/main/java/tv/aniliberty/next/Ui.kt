@@ -70,12 +70,21 @@ class PageAdapter(
     private val quickActions: (Release) -> Unit = {},
     private val shelfMode: Boolean = false,
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+    private var visibleShelfCards=0f
     private val stableKeys=mutableMapOf<String,Long>()
     private var nextStableId=0L
     init{setHasStableIds(true)}
     override fun getItemId(position:Int):Long=stableKeys.getOrPut(rows[position].key){nextStableId++}
     fun rememberShelf(shelf:RecyclerView)=saveShelf(shelf)
-    private fun View.cardDp(value:Int)=dp(if(shelfMode || getTag(R.id.shelf_key)==true)(value*1.18f).toInt()else value)
+    private fun View.cardDp(value:Int):Int {
+        if(shelfMode && visibleShelfCards>0){
+            val shelf=parent as?RecyclerView
+            val viewport=((shelf?.width?.takeIf{it>0}?: (resources.displayMetrics.widthPixels-dp(132)))-(shelf?.paddingLeft?:0)-(shelf?.paddingRight?:0)).coerceAtLeast(1)
+            val cardWidth=(viewport/visibleShelfCards-dp(8)).toInt()
+            return (value*cardWidth/144f).toInt()
+        }
+        return dp(if(shelfMode || getTag(R.id.shelf_key)==true)(value*1.18f).toInt()else value)
+    }
     private data class ShelfPosition(val focusedKey:String?,val anchorKey:String?,val offset:Int)
     private val shelfPositions=mutableMapOf<String,ShelfPosition>()
     private val shelfResets=mutableMapOf<String,Boolean>()
@@ -190,6 +199,7 @@ class PageAdapter(
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         val row = rows[position]; val view = holder.itemView
         view.tag = row.key
+        if(shelfMode && visibleShelfCards>0)view.layoutParams=view.layoutParams.apply{width=view.cardDp(144)}
         if(row.kind!=Kind.SHELF)view.setTag(R.id.shelf_key,row.homeStyle)
         val firstContent = if(contentStart>=0) (contentStart until rows.size).firstOrNull{rows[it].kind!=Kind.HEADING} else null
         val firstRowCount = when(firstContent?.let{rows[it].kind}){Kind.POSTER->5;Kind.EPISODE->3;else->1}
@@ -206,7 +216,14 @@ class PageAdapter(
                 shelf.setTag(R.id.shelf_key,row.key)
                 shelf.layoutParams=shelf.layoutParams.apply{height=view.dp((when(row.selected){1->220;2->252;3->206;4->222;5->166;else->286}*1.18f).toInt())}
                 val cards=if(row.cards.isNotEmpty())row.cards else row.items.map{Row("${row.key}:release:${it.id}",Kind.POSTER,release=it)}
-                (shelf.adapter as PageAdapter).submit(cards)
+                val nested=shelf.adapter as PageAdapter
+                nested.visibleShelfCards=if(row.selected==6)4.5f else 0f
+                if(row.selected==6){
+                    val viewport=(shelf.width.takeIf{it>0}?: (view.resources.displayMetrics.widthPixels-view.dp(132)))-shelf.paddingLeft-shelf.paddingRight
+                    val cardWidth=(viewport/4.5f-view.dp(8)).toInt()
+                    shelf.layoutParams=shelf.layoutParams.apply{height=(cardWidth*206f/144f).toInt()+view.dp(24)}
+                }
+                nested.submit(cards)
                 if(shelfResets.containsKey(row.key)){
                     val focusFirst=shelfResets.remove(row.key)==true
                     shelfPositions.remove(row.key)

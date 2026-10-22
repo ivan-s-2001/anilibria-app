@@ -277,6 +277,11 @@ class MainActivity : ComponentActivity() {
                 val item=list.findContainingItemView(focus)
                 val position=item?.let{list.getChildAdapterPosition(it)}?:-1
                 val state=model.state.value
+                if(item is RecyclerView && adapter.rows.getOrNull(position)?.key?.startsWith("period-shelf:")==true && state.more && state.moreError==null){
+                    val nestedItem=item.findContainingItemView(focus)
+                    val nestedPosition=nestedItem?.let{item.getChildAdapterPosition(it)}?:-1
+                    if(nestedPosition>=((item.adapter?.itemCount?:0)-5).coerceAtLeast(0))list.post{if(model.state.value.screen==state.screen)model.loadMoreSection()}
+                }
                 if(position>=0 && adapter.rows.getOrNull(position)?.kind in listOf(Kind.POSTER,Kind.GENRE,Kind.FRANCHISE,Kind.FEATURE) && position>=adapter.itemCount-9 && state.more && state.moreError==null){
                     list.post{if(model.state.value.screen==state.screen && model.state.value.moreError==null){if(state.screen is Screen.Section)model.loadMoreSection()else model.loadMoreCatalog()}}
                 }
@@ -647,7 +652,7 @@ class MainActivity : ComponentActivity() {
                     if(screen.kind==HomeSection.LATEST){
                         episodePeriods(filtered.releases).forEach{period->
                             rows+=Row("period:${period.key}",Kind.HEADING,period.title,selected=1)
-                            rows+=releaseCards(period.releases,screen.kind.name).map{it.copy(homeStyle=true)}
+                            rows+=Row("period-shelf:${period.key}",Kind.SHELF,selected=6,cards=releaseCards(period.releases,screen.kind.name))
                         }
                     }else rows+=cards.map{it.copy(homeStyle=true)}
                     if((query.isNotBlank() || screen.kind==HomeSection.LATEST) && cards.isEmpty() && state.more && !state.loadingMore && state.moreError==null){
