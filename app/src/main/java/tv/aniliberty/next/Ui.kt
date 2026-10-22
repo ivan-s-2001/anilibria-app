@@ -323,7 +323,7 @@ class PageAdapter(
                     content.gravity=Gravity.CENTER;content.setPadding(view.dp(10),view.dp(10),view.dp(10),view.dp(10))
                     title.gravity=Gravity.CENTER;title.maxLines=4
                     subtitle.gravity=Gravity.CENTER;subtitle.maxLines=4
-                    subtitle.text=listOf(release?.metadata.orEmpty(),release?.genres?.joinToString(" • ").orEmpty()).filter(String::isNotBlank).joinToString("\n")
+                    subtitle.text=listOf(release?.metadata.orEmpty(),release?.genres?.take(2)?.joinToString(" • ").orEmpty()).filter(String::isNotBlank).joinToString("\n")
                     val episodeBadge=(box.getChildAt(3)as?TextView)?:TextView(view.context).also{
                         box.addView(it,FrameLayout.LayoutParams(-2,view.dp(28),Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply{topMargin=view.dp(10)})
                     }
@@ -347,7 +347,7 @@ class PageAdapter(
                     }
                     content.setPadding(view.dp(10),view.dp(44),view.dp(10),view.dp(12))
                     title.layoutParams=LinearLayout.LayoutParams(-1,0,1f)
-                    subtitle.maxLines=3
+                    subtitle.maxLines=2
                     fun focusPoster(focused:Boolean){
                         content.visibility=if(focused || cataloguePoster)View.VISIBLE else View.GONE
                         if(cataloguePoster){
