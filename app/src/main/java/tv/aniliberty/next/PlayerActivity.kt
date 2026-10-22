@@ -52,6 +52,7 @@ class PlayerActivity : ComponentActivity() {
     private lateinit var qualityButton:TextView
     private lateinit var nextButton:TextView
     private var panel:ViewGroup?=null
+    private val panelPlayback=PanelPlayback()
     private var panelChild=false
     private var panelCaller:View?=null
     private var player:ExoPlayer?=null
@@ -282,7 +283,12 @@ class PlayerActivity : ComponentActivity() {
         queueAccountProgress(this,episode.id,engine.currentPosition,duration)
         prefs.edit().putLong("position:${episode.id}",engine.currentPosition.coerceAtLeast(0)).putLong("duration:${episode.id}",duration).putString("last:${item.id}",episode.id).apply()
     }
+    private fun pauseForPanel(){
+        panelPlayback.open{player?.pause()}
+        pendingSeek=null;save();updateChrome()
+    }
     private fun openPanel(caption:String,caller:View,build:(LinearLayout)->View?){
+        pauseForPanel()
         remoteClick.cancel();panelChild=caption in listOf("Качество","Скорость","Масштаб изображения")
         cancelNext();handler.removeCallbacks(hide)
         panel?.let{root.removeView(it)};panelCaller=caller
@@ -295,16 +301,20 @@ class PlayerActivity : ComponentActivity() {
         root.addView(scroll,FrameLayout.LayoutParams((resources.displayMetrics.widthPixels*.42f).toInt(),-1,Gravity.END))
         scroll.post{(target?:content.getChildAt(1)).requestFocus()}
     }
-    private fun closePanel(){remoteClick.cancel();panel?.let{root.removeView(it)};panel=null;panelChild=false;showControls(panelCaller?.takeIf{it.isAttachedToWindow && it.isEnabled});panelCaller=null}
+    private fun closePanel(resume:Boolean=true){
+        remoteClick.cancel();panel?.let{root.removeView(it)};panel=null;panelChild=false
+        panelPlayback.close(resume && !stopped){desiredPlay=true;player?.play()}
+        showControls(panelCaller?.takeIf{it.isAttachedToWindow && it.isEnabled});panelCaller=null
+    }
     private fun episodes(){
         val item=release?:return
-        save();remoteClick.cancel();panelChild=false
+        pauseForPanel();save();remoteClick.cancel();panelChild=false
         cancelNext();handler.removeCallbacks(hide);panel?.let{root.removeView(it)};panelCaller=episodesButton
         val body=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(16),dp(20),dp(16),dp(12));setBackgroundColor(0xF51A1A1A.toInt())}
         body.addView(TextView(this).apply{label("Серии · ${item.episodes.size}",22f,WHITE,true)},LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=dp(12)})
         val list=RecyclerView(this).apply{
             tag="player-episodes";layoutManager=LinearLayoutManager(this@PlayerActivity);itemAnimator=null
-            adapter=PlayerEpisodeAdapter(item.episodes,current?.id,{id->prefs.getLong("position:$id",0) to prefs.getLong("duration:$id",0)}){episode->closePanel();startEpisode(episode)}
+            adapter=PlayerEpisodeAdapter(item.episodes,current?.id,{id->prefs.getLong("position:$id",0) to prefs.getLong("duration:$id",0)}){episode->closePanel(false);startEpisode(episode)}
         }
         body.addView(list,LinearLayout.LayoutParams(-1,0,1f))
         body.addView(action(body,"Вернуться к видео",icon=R.drawable.ic_close){closePanel()},LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(12)})
