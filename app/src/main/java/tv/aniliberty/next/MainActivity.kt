@@ -1077,7 +1077,7 @@ class MainActivity : ComponentActivity() {
                         ))
                     if(query.isNotBlank() && data.more)rows+=Row("section-search-scope",Kind.TEXT,"Поиск по загруженным · остальные появляются при прокрутке")
                     if(screen.kind==HomeSection.SCHEDULE){
-                        rows+=Row("schedule-week-days",Kind.ACCOUNT_TABS,selected=scheduleDay,controls=(listOf("Вся неделя")+scheduleDays.map{it.take(2)}).mapIndexed{i,label->label to {scheduleDay=i;rememberFocus();render(model.state.value)}})
+                        rows+=Row("schedule-week-days",Kind.ACCOUNT_TABS,selected=scheduleDay,controls=(listOf("Вся неделя")+listOf("Пн","Вт","Ср","Чт","Пт","Сб","Вс")).mapIndexed{i,label->label to {scheduleDay=i;rememberFocus();render(model.state.value)}})
                     }
                     val searched=filterSectionData(data,query)
                     val filtered=if(screen.kind==HomeSection.SCHEDULE && scheduleDay!=0)searched.copy(releases=searched.releases.filter{it.publishDay==scheduleDay})else searched
