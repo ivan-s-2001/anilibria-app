@@ -333,7 +333,7 @@ class PageAdapter(
                 val focused=line.indexOfChild(line.findFocus())
                 line.removeAllViews();line.setPadding(0,view.dp(4),0,view.dp(8))
                 row.controls.forEachIndexed{index,(title,callback)->
-                    val icon=when(index){0->R.drawable.ic_search;1->if(row.controls.size==2)R.drawable.ic_refresh else R.drawable.ic_filter;2->R.drawable.ic_sort;else->R.drawable.ic_refresh}
+                    val icon=when(index){0->R.drawable.ic_search;1->if(row.controls.size==2)R.drawable.ic_refresh else R.drawable.ic_filter;2->if(title=="Сбросить")R.drawable.ic_refresh else R.drawable.ic_sort;else->R.drawable.ic_refresh}
                     line.addView(action(line,title,icon=icon,click=callback).apply{
                         textSize=14f;setSingleLine();ellipsize=android.text.TextUtils.TruncateAt.END
                         if(index==0)gravity=Gravity.CENTER_VERTICAL or Gravity.START

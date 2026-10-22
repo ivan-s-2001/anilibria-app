@@ -27,6 +27,9 @@ class ScreenAuditTest {
         val states=listOf(
             UiState(Screen.Catalog(),releases=listOf(release)),
             UiState(Screen.Profile),
+            UiState(Screen.Settings),
+            UiState(Screen.Favorites()),
+            UiState(Screen.Collections()),
             UiState(Screen.AccountHistory),
             UiState(Screen.AccountSessions),
             UiState(Screen.Library(emptyList())),
@@ -42,7 +45,17 @@ class ScreenAuditTest {
             activity.window.decorView.layout(0,0,1920,1080)
             val grid=list.layoutManager as androidx.recyclerview.widget.GridLayoutManager
             assertEquals(grid.spanCount,grid.spanSizeLookup.getSpanSize(RecyclerView.NO_POSITION))
-            assertTrue((list.adapter as PageAdapter).rows.isNotEmpty())
+            val rows=(list.adapter as PageAdapter).rows
+            assertTrue(rows.isNotEmpty())
+            if(state.screen==Screen.Profile){
+                assertTrue(rows.any{it.key=="profile-settings"})
+                assertFalse(rows.any{it.key=="profile-favorites" || it.key.startsWith("profile-collection:")})
+            }
+            if(state.screen==Screen.Settings){
+                assertTrue(rows.any{it.key=="setting:skip-opening"})
+                assertFalse(rows.any{it.key.contains("fullscreen")})
+            }
+            if(isAccountList(state.screen))assertEquals(20,grid.spanCount)
             if(state.screen is Screen.Library || state.screen is Screen.Franchise)assertEquals(20,grid.spanCount)
         }
         controller.pause().stop().destroy()

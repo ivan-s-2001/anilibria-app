@@ -1009,7 +1009,7 @@ class MainActivity : ComponentActivity() {
         (state.screen as?Screen.Detail)?.let{history.restore(it.id)}
         if(current==state.screen && !state.loading && adapter.rows.none{it.key=="loading"})rememberFocus()
         val sameDetail=(current as?Screen.Detail)?.id==(state.screen as?Screen.Detail)?.id && current is Screen.Detail && adapter.rows.any{it.kind==Kind.HERO}
-        val sameCatalog=(current is Screen.Catalog || isAccountList(current)) && (current==state.screen || catalogSearchEditing) && adapter.rows.any{it.kind==Kind.CATALOG_BAR}
+        val sameCatalog=(current is Screen.Catalog || isAccountList(current)) && (current==state.screen || catalogSearchEditing || (current is Screen.Collections && state.screen is Screen.Collections)) && adapter.rows.any{it.kind==Kind.CATALOG_BAR}
         val sameSection=current is Screen.Section && current==state.screen && adapter.rows.any{it.key=="section-heading"}
         val sameProfile=(current==Screen.Profile || current==Screen.AccountSessions || current==Screen.Settings) && current==state.screen && adapter.rows.any{it.kind==Kind.ACTION}
         val sameAccountHistory=current==Screen.AccountHistory && state.screen==Screen.AccountHistory && adapter.rows.any{it.key=="account-history-refresh"}
