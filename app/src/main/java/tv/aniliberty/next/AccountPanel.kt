@@ -91,7 +91,7 @@ class AccountPanel(context:Context,private val scope:CoroutineScope,private val 
     }
     private fun requestCode(){
         heading.text="Вход по QR-коду"
-        task?.cancel();message("Получаем код устройства…");footer.removeAllViews();addAction("Отмена"){dismiss()}
+        task?.cancel();message("Получаем код устройства…");footer.removeAllViews();addAction("Отмена"){dismiss()}.requestFocus()
         task=scope.launch{
             try{
                 val device=account.session.deviceId
