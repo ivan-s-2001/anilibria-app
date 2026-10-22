@@ -371,7 +371,7 @@ class PageAdapter(
                     line.removeAllViews()
                     labels.forEachIndexed{i,label->
                         val button=action(line,label,icon=icons[i],click={tab(i)}).apply{
-                            tag="detail-tab:$i";textSize=15f
+                            id=listOf(R.id.detail_tab_0,R.id.detail_tab_1,R.id.detail_tab_2,R.id.detail_tab_3)[i];tag="detail-tab:$i";textSize=15f
                             setOnKeyListener{_,key,event->if(key==KeyEvent.KEYCODE_DPAD_DOWN){if(event.action==KeyEvent.ACTION_UP)enterTab(i);true}else false}
                         }
                         line.addView(LinearLayout(view.context).apply{
@@ -457,6 +457,7 @@ class PageAdapter(
                     val key="hero-action:$icon"
                     val button=previousButtons.firstOrNull{it.tag==key}?:action(controls,if(favorite)""else label,primary,icon,click)
                     button.apply{
+                        id=when(icon){R.drawable.ic_play->R.id.hero_play;R.drawable.ic_favorite->R.id.hero_favorite;R.drawable.ic_library->R.id.hero_collection;R.drawable.ic_comments->R.id.hero_description;else->R.id.hero_more}
                         tag=key;text=if(favorite)""else label;textSize=14f;contentDescription=description;setOnClickListener{click()}
                         if(favorite){gravity=Gravity.CENTER;compoundDrawablePadding=0;setPadding(dp(11),0,dp(11),0);setTextColor(if(row.selected==1)0xFFFFD166.toInt()else WHITE);compoundDrawablesRelative[0]?.apply{setBounds(0,0,dp(24),dp(24));setTint(if(row.selected==1)0xFFFFD166.toInt()else WHITE)}}
                     }

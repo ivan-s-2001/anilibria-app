@@ -575,9 +575,9 @@ class MainActivity : ComponentActivity() {
     }
     private fun login(){
         AccountPanel(this,lifecycleScope,account){
-            accountHistoryJob?.cancel();accountHistoryLoadJob?.cancel();accountHistoryItems=emptyList();accountHistoryPage=0;profileError=null;lastHistoryHydration=0L;accountLoadedAt=0L
+            accountHistoryJob?.cancel();accountHistoryLoadJob?.cancel();accountHistoryItems=emptyList();accountSessions=emptyList();accountHistoryPage=0;profileError=null;lastHistoryHydration=0L;accountLoadedAt=0L
             Toast.makeText(this,"Вход выполнен · ${account.session.name}",Toast.LENGTH_SHORT).show()
-            rememberFocus();render(model.state.value);refreshAccount(force=true,after={offerLocalHistory()})
+            rememberFocus();render(model.state.value);refreshAccount(force=true,after={offerLocalHistory(automatic=true)})
         }.start()
     }
     private fun refreshAccount(force:Boolean=false,after:(()->Unit)?=null){
@@ -651,6 +651,47 @@ class MainActivity : ComponentActivity() {
         val ids=if(type==null)lists.favorites.toList()else lists.collections.filterValues{it==type}.keys.toList()
         rememberFocus();model.open(Screen.Library(ids,type?.title?:"Избранное"))
     }
+    private var accountSessions:List<AccountDeviceSession> = emptyList()
+    private var accountSessionsLoading=false
+    private var accountSessionsError:String?=null
+    private fun loadAccountSessions(){
+        if(accountSessionsLoading || !account.signedIn)return
+        accountSessionsLoading=true;accountSessionsError=null
+        lifecycleScope.launch{
+            val user=account.session.userId
+            try{val sessions=account.sessions();if(account.session.userId==user)accountSessions=sessions}
+            catch(e:kotlinx.coroutines.CancellationException){throw e}
+            catch(e:Exception){accountSessionsError=e.message?:"Не удалось загрузить сеансы"}
+            finally{accountSessionsLoading=false;if(current==Screen.AccountSessions)render(model.state.value)}
+        }
+    }
+    private fun editAccountIdentity(nickname:Boolean){
+        val panel=TvSidePanel(this,if(nickname)"Имя в профиле"else"Логин")
+        val input=EditText(this).apply{
+            setSingleLine();setText(if(nickname)account.session.profile()?.name else account.session.profile()?.login)
+            textSize=18f;setTextColor(WHITE);setPadding(dp(12),dp(12),dp(12),dp(12));webControlBackground()
+            inputType=android.text.InputType.TYPE_CLASS_TEXT
+            imeOptions=EditorInfo.IME_ACTION_DONE or EditorInfo.IME_FLAG_NO_EXTRACT_UI
+        }
+        panel.body.addView(input,LinearLayout.LayoutParams(-1,-2))
+        val save=panel.addAction("Сохранить",true){
+            val value=input.text.toString().trim()
+            if(value.isBlank()){input.error="Заполните поле"}else accountAction(done={panel.dismiss()}){account.updateIdentity(nickname,value)}
+        }
+        input.setOnEditorActionListener{_,action,_->if(action==EditorInfo.IME_ACTION_DONE){save.requestFocus();true}else false}
+        panel.addAction("Отмена"){panel.dismiss()};panel.show();input.requestFocus();input.setSelection(input.text.length)
+    }
+    private fun accountSettingsOnPhone(){
+        val url="https://www.aniliberty.top/app/settings/account"
+        val panel=TvSidePanel(this,"Настройки аккаунта")
+        panel.message("Изменение аватара, почты и пароля доступно на официальном сайте. Откройте QR-код на телефоне и войдите в свой аккаунт.")
+        val matrix=com.google.zxing.qrcode.QRCodeWriter().encode(url,com.google.zxing.BarcodeFormat.QR_CODE,256,256)
+        val image=android.graphics.Bitmap.createBitmap(256,256,android.graphics.Bitmap.Config.ARGB_8888)
+        image.setPixels(IntArray(256*256){i->if(matrix[i%256,i/256])android.graphics.Color.BLACK else android.graphics.Color.WHITE},0,256,0,0,256,256)
+        panel.body.addView(android.widget.ImageView(this).apply{setImageBitmap(image);contentDescription="QR-код настроек аккаунта"},LinearLayout.LayoutParams(dp(180),dp(180)).apply{gravity=android.view.Gravity.CENTER_HORIZONTAL})
+        panel.addAction("Открыть на ТВ"){openLink(url)}
+        panel.addAction("Закрыть"){panel.dismiss()};panel.show()
+    }
     private fun confirmLogout(){
         TvSidePanel(this,"Выйти из аккаунта?").apply{
             message("Данные аккаунта останутся на сайте. Приложение переключится на гостевую историю этого ТВ.")
@@ -684,9 +725,9 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    private fun offerLocalHistory(){
+    private fun offerLocalHistory(automatic:Boolean=false){
         val local=localTimecodes(getSharedPreferences("viewing",MODE_PRIVATE))
-        if(local.isEmpty())return
+        if(local.isEmpty()){if(!automatic)Toast.makeText(this,"На этом ТВ нет локальной истории для переноса",Toast.LENGTH_SHORT).show();return}
         var plan:List<AccountTimecode> = emptyList()
         // Code-login's callback can arrive while the account refresh job is completing.
         list.post{
@@ -921,12 +962,12 @@ class MainActivity : ComponentActivity() {
         val sameDetail=(current as?Screen.Detail)?.id==(state.screen as?Screen.Detail)?.id && current is Screen.Detail && adapter.rows.any{it.kind==Kind.HERO}
         val sameCatalog=current is Screen.Catalog && (current==state.screen || catalogSearchEditing) && adapter.rows.any{it.kind==Kind.CATALOG_BAR}
         val sameSection=current is Screen.Section && current==state.screen && adapter.rows.any{it.key=="section-heading"}
-        val sameProfile=current==Screen.Profile && state.screen==Screen.Profile
+        val sameProfile=(current==Screen.Profile || current==Screen.AccountSessions) && current==state.screen
         val sameAccountHistory=current==Screen.AccountHistory && state.screen==Screen.AccountHistory
         val sameHome=current==Screen.Home && state.screen==Screen.Home && adapter.rows.any{it.kind==Kind.SHELF}
         val retainedFocus = if(current==state.screen) list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String } else null
         current=state.screen
-        val section=when(current){Screen.Profile,Screen.AccountHistory->3;Screen.Home->0;is Screen.Catalog,is Screen.Section,is Screen.Franchise->1;is Screen.Library->3;else->selectedSection}
+        val section=when(current){Screen.Profile,Screen.AccountHistory,Screen.AccountSessions->3;Screen.Home->0;is Screen.Catalog,is Screen.Section,is Screen.Franchise->1;is Screen.Library->3;else->selectedSection}
         if(section!=selectedSection){selectedSection=section;buildMenu()}
         homeMenuLayout()
         val spans=if(current is Screen.Catalog || current is Screen.Section || current is Screen.Library || current is Screen.Franchise)20 else 15
@@ -1020,7 +1061,10 @@ class MainActivity : ComponentActivity() {
                         val queued=pending(prefs).size
                         if(queued>0)rows+=Row("profile-pending",Kind.TEXT,"Ожидают синхронизации: $queued серий","Прогресс сохранён на этом ТВ.")
                         rows+=Row("profile-refresh",Kind.ACTION,"Синхронизировать",click={refreshAccount(force=true)})
-                        rows+=Row("profile-site",Kind.ACTION,"Настройки аккаунта на сайте",click={openLink("https://www.aniliberty.top")})
+                        rows+=Row("profile-nickname",Kind.ACTION,"Изменить имя",click={editAccountIdentity(true)})
+                        rows+=Row("profile-login-name",Kind.ACTION,"Изменить логин",click={editAccountIdentity(false)})
+                        rows+=Row("profile-sessions",Kind.ACTION,"Устройства и сеансы",click={rememberFocus();model.open(Screen.AccountSessions);loadAccountSessions()})
+                        rows+=Row("profile-site",Kind.ACTION,"Аватар, почта и пароль",click={accountSettingsOnPhone()})
                         rows+=Row("profile-relogin",Kind.ACTION,"Войти в другой аккаунт",click={login()})
                         rows+=Row("profile-logout",Kind.ACTION,"Выйти из аккаунта",click={confirmLogout()})
                     }else{
@@ -1028,6 +1072,29 @@ class MainActivity : ComponentActivity() {
                         rows+=Row("profile-login",Kind.ACTION,"Войти по QR-коду",click={login()})
                         rows+=Row("profile-local",Kind.ACTION,"Библиотека на этом ТВ",click={localLibrary()})
                     }
+                }
+                Screen.AccountSessions->{
+                    rows+=Row("sessions-heading",Kind.HEADING,"Устройства и сеансы",selected=1)
+                    if(accountSessionsLoading)rows+=Row("sessions-loading",Kind.TEXT,"Загрузка устройств…")
+                    accountSessions.forEach{session->
+                        if(session.current)rows+=Row("session:${session.id}",Kind.TEXT,"${session.title} · Этот ТВ",session.description)
+                        else rows+=Row("session:${session.id}",Kind.ACTION,session.title,session.description,click={
+                            TvSidePanel(this,"Завершить сеанс?").apply{
+                                message(session.title+"\n"+session.description)
+                                addAction("Завершить"){dismiss();accountAction(done={loadAccountSessions()}){account.deleteSession(session.id)}}
+                                addAction("Отмена"){dismiss()};show()
+                            }
+                        })
+                    }
+                    if(accountSessionsError!=null)rows+=Row("sessions-error",Kind.TEXT,"Не удалось обновить",accountSessionsError.orEmpty())
+                    rows+=Row("sessions-refresh",Kind.ACTION,"Обновить устройства",click={loadAccountSessions()})
+                    if(accountSessions.any{!it.current})rows+=Row("sessions-others",Kind.ACTION,"Завершить все другие сеансы",click={
+                        TvSidePanel(this,"Завершить другие сеансы?").apply{
+                            message("Потребуется заново войти на остальных устройствах. Этот ТВ останется в аккаунте.")
+                            addAction("Завершить"){dismiss();accountAction(done={loadAccountSessions()}){account.deleteOtherSessions()}}
+                            addAction("Отмена"){dismiss()};show()
+                        }
+                    })
                 }
                 Screen.AccountHistory->{
                     rows+=Row("account-history-heading",Kind.HEADING,"История просмотра",selected=1)

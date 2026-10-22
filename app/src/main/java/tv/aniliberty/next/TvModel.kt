@@ -11,6 +11,7 @@ sealed interface Screen {
     data object Welcome : Screen
     data object Home : Screen
     data object Profile : Screen
+    data object AccountSessions : Screen
     data object AccountHistory : Screen
     data class Library(val ids:List<Int>,val title:String="Моя библиотека"):Screen
     data class Catalog(val query: String = "", val page: Int = 1, val genre: Int? = null, val title: String? = null,val filters:CatalogFilter=CatalogFilter()) : Screen

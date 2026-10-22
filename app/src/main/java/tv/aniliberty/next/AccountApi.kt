@@ -15,6 +15,7 @@ data class AccountLists(val favorites:Set<Int>,val collections:Map<Int,Collectio
 data class AccountTimecode(val episodeId:String,val seconds:Double,val watched:Boolean)
 data class AccountHistoryItem(val releaseId:Int,val episodeId:String,val updatedAt:Long)
 data class DeviceCode(val code:String,val remainingSeconds:Int)
+class AccountValidationException(message:String):Exception(message)
 class AccountHttpException(val status:Int):Exception(when(status){401,403->"Нужно войти в аккаунт заново";404->"Данные не найдены";429->"Слишком много запросов. Повторите позже";else->"Сервис ответил: $status"})
 fun interface AccountTransport { suspend fun request(path:String,method:String,body:String?,token:String?):String }
 class AccountHttpTransport:AccountTransport {
@@ -27,7 +28,18 @@ class AccountHttpTransport:AccountTransport {
             connection.setRequestProperty("User-Agent","AniLiberty-Next/Android-TV")
             if(token!=null)connection.setRequestProperty("Authorization","Bearer $token")
             if(body!=null){connection.doOutput=true;connection.setRequestProperty("Content-Type","application/json; charset=utf-8");connection.outputStream.use{it.write(body.toByteArray(Charsets.UTF_8))}}
-            if(connection.responseCode !in 200..299)throw AccountHttpException(connection.responseCode)
+            if(connection.responseCode !in 200..299){
+                val status=connection.responseCode
+                if(status==422){
+                    val message=runCatching{
+                        val error=JSONObject(connection.errorStream.bufferedReader().use{it.readText()})
+                        val errors=error.optJSONObject("errors")
+                        errors?.keys()?.asSequence()?.mapNotNull{errors.optJSONArray(it)?.optString(0)}?.firstOrNull()?.takeIf{it.isNotBlank()}?:error.optString("message").takeIf{it.isNotBlank()}
+                    }.getOrNull()
+                    throw AccountValidationException(message?.take(300)?:"Проверьте введённые данные")
+                }
+                throw AccountHttpException(status)
+            }
             connection.inputStream.bufferedReader().use{it.readText()}
         }finally{connection.disconnect()}
     }
@@ -61,6 +73,17 @@ class AccountApi(private val transport:AccountTransport=AccountHttpTransport()){
         val body=JSONArray();values.forEach{v->body.put(JSONObject().put("release_episode_id",v.episodeId).put("time",v.seconds.coerceAtLeast(0.0)).put("is_watched",v.watched))}
         transport.request("/accounts/users/me/views/timecodes","POST",body.toString(),token)
     }
+    suspend fun updateIdentity(token:String,nickname:Boolean,value:String):AccountProfile {
+        val field=if(nickname)"Nickname"else"Login"
+        val body=JSONObject().put(if(nickname)"new_nickname"else"new_login",value)
+        val response=transport.request("/accounts/users/me/settings/account/update$field","POST",body.toString(),token)
+        return if(response.isNotBlank())parseAccountProfile(JSONObject(response))else profile(token)
+    }
+    suspend fun sessions(token:String):List<AccountDeviceSession> = parseAccountSessions(transport.request("/accounts/users/me/settings/sessions/fetchUserSessions","GET",null,token))
+    suspend fun deleteSession(token:String,id:String){
+        transport.request("/accounts/users/me/settings/sessions/deleteUserSession/${java.net.URLEncoder.encode(id,"UTF-8")}","DELETE",null,token)
+    }
+    suspend fun deleteOtherSessions(token:String){transport.request("/accounts/users/me/settings/sessions/deleteAllOtherSessions","DELETE",null,token)}
     suspend fun history(token:String,page:Int=1):AccountHistoryPage = parseAccountHistoryPage(transport.request("/accounts/users/me/views/history?limit=30&page=$page","GET",null,token),page)
     suspend fun recentHistory(token:String):List<AccountHistoryItem> = parseAccountHistory(transport.request("/accounts/users/me/views/history?limit=30","GET",null,token))
     suspend fun logout(token:String){transport.request("/accounts/users/auth/logout","POST",null,token)}
@@ -111,4 +134,17 @@ internal fun parseAccountHistoryPage(body:String,page:Int):AccountHistoryPage {
     val pagination=json.optJSONObject("meta")?.optJSONObject("pagination")
     val pages=pagination?.optInt("total_pages",-1)?:-1
     return AccountHistoryPage(items,if(pages>=0)page<pages else data.length()>=30)
+}
+
+data class AccountDeviceSession(val id:String,val title:String,val description:String,val current:Boolean)
+internal fun parseAccountSessions(body:String):List<AccountDeviceSession>{
+    val data=JSONArray(body)
+    return(0 until data.length()).mapNotNull{i->
+        val item=data.optJSONObject(i)?:return@mapNotNull null
+        val id=item.optString("id").takeIf{it.isNotBlank()}?:return@mapNotNull null
+        val device=item.optJSONObject("device");val browser=item.optJSONObject("browser")
+        val title=listOf(device?.optString("name").orEmpty(),browser?.optString("name").orEmpty()).filter{it.isNotBlank()}.distinct().joinToString(" · ").ifBlank{"Устройство"}
+        val description=listOf(device?.optString("platform").orEmpty(),item.optJSONObject("location")?.optString("country").orEmpty(),updateTimestamp(item.optString("last_active"))).filter{it.isNotBlank()}.joinToString(" · ")
+        AccountDeviceSession(id,title,description,item.optBoolean("is_current"))
+    }.sortedByDescending{it.current}
 }

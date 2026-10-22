@@ -125,6 +125,13 @@ class AccountRepository(private val context:Context,val api:AccountApi=AccountAp
             }
         }
     }
+    suspend fun updateIdentity(nickname:Boolean,value:String){
+        val token=token();val profile=api.updateIdentity(token,nickname,value)
+        if(session.token()==token)session.saveProfile(profile)
+    }
+    suspend fun sessions():List<AccountDeviceSession> = api.sessions(token())
+    suspend fun deleteSession(id:String){api.deleteSession(token(),id)}
+    suspend fun deleteOtherSessions(){api.deleteOtherSessions(token())}
     suspend fun history(page:Int=1):AccountHistoryPage = api.history(token(),page)
     suspend fun recentHistory():List<AccountHistoryItem> = api.recentHistory(token())
     suspend fun localImportPlan():List<AccountTimecode> {

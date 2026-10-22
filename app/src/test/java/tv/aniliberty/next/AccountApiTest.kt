@@ -71,6 +71,21 @@ class AccountApiTest {
         assertEquals(42,page.items.single().release.id);assertEquals("uuid",page.items.single().episode.id)
         assertEquals(12.5,page.items.single().time.seconds,.001);assertTrue(page.more)
     }
+    @Test fun identityAndSessionManagementFollowOfficialWebClientEndpoints()=runBlocking{
+        val calls=mutableListOf<Call>()
+        val api=AccountApi(AccountTransport{p,m,b,t->calls+=Call(p,m,b,t);if(p.contains("updateNickname"))"""{"id":42,"nickname":"Новое имя"}"""else"[]"})
+        assertEquals("Новое имя",api.updateIdentity("session",true,"Новое имя").name)
+        api.deleteSession("session","opaque-id");api.deleteOtherSessions("session")
+        assertEquals("Новое имя",JSONObject(requireNotNull(calls.first().body)).getString("new_nickname"))
+        assertTrue(calls.first().path.endsWith("/updateNickname"));assertEquals("POST",calls.first().method)
+        assertTrue(calls[1].path.endsWith("/deleteUserSession/opaque-id"));assertEquals("DELETE",calls[1].method)
+        assertTrue(calls[2].path.endsWith("/deleteAllOtherSessions"));assertEquals("DELETE",calls[2].method)
+        assertTrue(calls.all{it.token=="session"})
+    }
+    @Test fun currentDeviceIsIdentifiedAndOrderedFirst(){
+        val sessions=parseAccountSessions("""[{"id":"other","device":{"name":"Phone"},"is_current":false},{"id":"this","device":{"name":"Android TV"},"is_current":true}]""")
+        assertEquals("this",sessions.first().id);assertTrue(sessions.first().current);assertFalse(sessions.last().current)
+    }
     @Test fun guestAndAccountPlaybackAreIsolatedAndUnsentQueueIsDurable(){
         val context=RuntimeEnvironment.getApplication()
         val session=context.getSharedPreferences("account-session",Context.MODE_PRIVATE)

@@ -26,6 +26,9 @@ class ScreenAuditTest {
         val release=parseRelease(JSONObject("""{"id":1,"name":{"main":"Очень длинное название для проверки компоновки страницы тайтла"},"episodes":[{"id":"episode-1","ordinal":1,"name":"Начало","hls_720":"https://example.test/1.m3u8","duration":1440}]}"""))
         val states=listOf(
             UiState(Screen.Catalog(),releases=listOf(release)),
+            UiState(Screen.Profile),
+            UiState(Screen.AccountHistory),
+            UiState(Screen.AccountSessions),
             UiState(Screen.Library(emptyList())),
             UiState(Screen.Library(listOf(1)),releases=listOf(release)),
             UiState(Screen.Franchise("one","Франшиза"),releases=listOf(release)),
