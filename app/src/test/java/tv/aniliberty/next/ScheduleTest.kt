@@ -64,7 +64,10 @@ class ScheduleTest {
         assertEquals("1.4к", rating.text.toString())
         assertNotNull(rating.compoundDrawablesRelative[0])
         assertEquals("В избранном у 1400 пользователей", rating.contentDescription)
-        assertEquals(android.view.View.VISIBLE, rating.visibility)
+        val badge = box.findViewWithTag<android.widget.LinearLayout>("poster-meta-badge")
+        assertEquals(android.view.View.GONE, rating.visibility)
+        assertEquals(android.view.View.VISIBLE, badge.visibility)
+        assertEquals("1.4к", (badge.getChildAt(0) as android.widget.TextView).text.toString())
         assertEquals("7 эп.", (box.getChildAt(3) as android.widget.TextView).text.toString())
         assertEquals(android.view.View.VISIBLE, box.getChildAt(3).visibility)
         box.onFocusChangeListener?.onFocusChange(box, false)
@@ -72,6 +75,7 @@ class ScheduleTest {
         adapter.submit(listOf(Row("catalog:42", Kind.POSTER, release = release, selected = 2)))
         adapter.onBindViewHolder(holder, 0)
         assertEquals(android.view.View.GONE, rating.visibility)
+        assertEquals(android.view.View.VISIBLE, badge.visibility)
     }
 
     @Test
