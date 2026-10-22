@@ -332,6 +332,8 @@ class PageAdapter(
                     if(poster)box.layoutParams=box.layoutParams.apply{height=view.cardDp(270)}
                 }
                 if(continuing){
+                    // Preserve the original 272 × 150 episode preview; overlay text without stretching it.
+                    box.layoutParams=box.layoutParams.apply{height=view.cardDp(150)}
                     image.layoutParams=FrameLayout.LayoutParams(-1,-1)
                     box.getChildAt(1).apply{background=GenreShade();visibility=View.VISIBLE}
                     content.layoutParams=FrameLayout.LayoutParams(-1,-1)
