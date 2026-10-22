@@ -383,7 +383,7 @@ class PageAdapter(
                         updateLabel?.visibility=if(focused && updateLabel.text.isNotBlank())View.VISIBLE else View.GONE
                         if(!cataloguePoster){
                             content.setPadding(view.dp(10),view.dp(if(updateLabel?.text?.isNotBlank()==true)56 else 44),view.dp(10),view.dp(12))
-                            title.gravity=Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                            title.gravity=Gravity.CENTER
                             title.includeFontPadding=false
                         }
                         image.colorFilter=if(focused)android.graphics.ColorMatrixColorFilter(floatArrayOf(.045f,0f,0f,0f,12.75f,0f,.045f,0f,0f,12.75f,0f,0f,.045f,0f,12.75f,0f,0f,0f,1f,0f))else null
