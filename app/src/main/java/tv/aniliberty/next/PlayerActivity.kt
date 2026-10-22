@@ -257,6 +257,10 @@ class PlayerActivity : ComponentActivity() {
         previousButton.visibility=if(release?.episodes?.indexOfFirst{it.id==episode.id}?.let{it>0}==true)View.VISIBLE else View.GONE
         nextButton.visibility=if(nextEpisode(release?.episodes.orEmpty(),episode.id)!=null)View.VISIBLE else View.GONE
         engine.addListener(object:Player.Listener{
+            override fun onEvents(player:Player,events:Player.Events){
+                if(this@PlayerActivity.player===engine)
+                    video.keepScreenOn=engine.playWhenReady && engine.playbackState!=Player.STATE_ENDED && engine.playerError==null
+            }
             override fun onPlayerError(error:PlaybackException){
                 if(player!==engine || stopped)return
                 save();cancelNext();showControls()
@@ -442,6 +446,6 @@ class PlayerActivity : ComponentActivity() {
     private fun insidePanel(view:View):Boolean=panel?.let{insideView(view,it)}?:false
     private fun insideView(view:View,container:View):Boolean{var node:android.view.ViewParent?=view.parent;while(node!=null){if(node===container)return true;node=node.parent};return false}
     override fun onStart(){super.onStart();stopped=false;handler.post(ticker);if(player==null)current?.let{startEpisode(it,quality,desiredPlay)}}
-    override fun onStop(){remoteClick.cancel();errorPanel?.dismiss();errorPanel=null;stopped=true;desiredPlay=player?.playWhenReady?:desiredPlay;save();cancelNext();handler.removeCallbacksAndMessages(null);video.player=null;player?.release();player=null;super.onStop()}
+    override fun onStop(){video.keepScreenOn=false;remoteClick.cancel();errorPanel?.dismiss();errorPanel=null;stopped=true;desiredPlay=player?.playWhenReady?:desiredPlay;save();cancelNext();handler.removeCallbacksAndMessages(null);video.player=null;player?.release();player=null;super.onStop()}
     override fun onSaveInstanceState(out:Bundle){out.putString("episode",current?.id);out.putInt("quality",quality);out.putBoolean("playing",player?.playWhenReady?:desiredPlay);super.onSaveInstanceState(out)}
 }
