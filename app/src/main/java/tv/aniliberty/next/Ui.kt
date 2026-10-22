@@ -323,7 +323,7 @@ class PageAdapter(
                     content.gravity=Gravity.CENTER;content.setPadding(view.dp(10),view.dp(10),view.dp(10),view.dp(10))
                     title.gravity=Gravity.CENTER;title.maxLines=4
                     subtitle.gravity=Gravity.CENTER;subtitle.maxLines=4
-                    subtitle.text=listOf(release?.year.orEmpty(),release?.season.orEmpty(),release?.age.orEmpty()).filter(String::isNotBlank).joinToString(" · ")
+                    subtitle.text=listOf(release?.year.orEmpty(),release?.season.orEmpty(),release?.age?.let{Regex("[0-9]+").find(it)?.value?.plus("+")}.orEmpty()).filter(String::isNotBlank).joinToString(" · ")
                     subtitle.maxLines=1
                     val genresLine=(content.getChildAt(2)as?TextView)?:TextView(view.context).also{
                         content.addView(it,LinearLayout.LayoutParams(-1,-2).apply{topMargin=view.dp(3)})
