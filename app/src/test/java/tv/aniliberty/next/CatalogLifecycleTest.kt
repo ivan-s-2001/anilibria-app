@@ -44,6 +44,9 @@ class CatalogLifecycleTest{
         val first=adapter.rows.indexOfFirst{it.kind==Kind.POSTER}
         assertEquals(5,grid.spanSizeLookup.getSpanSize(first))
         assertEquals(20,grid.spanSizeLookup.getSpanSize(0))
+        // TV crash: GridLayoutManager can query NO_POSITION while re-anchoring.
+        assertEquals(20,grid.spanSizeLookup.getSpanSize(RecyclerView.NO_POSITION))
+        assertEquals(20,grid.spanSizeLookup.getSpanSize(adapter.itemCount))
         controller.pause().stop().destroy()
     }
 }
