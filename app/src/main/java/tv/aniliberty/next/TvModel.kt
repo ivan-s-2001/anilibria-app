@@ -134,6 +134,7 @@ class TvModel : ViewModel() {
         }
     }
     fun tab(index: Int) { (state.value.screen as? Screen.Detail)?.let { state.value = state.value.copy(screen = it.copy(tab = index)) } }
+    fun resetNavigation(screen:Screen){stack.clear();open(screen,false)}
     fun back(): Boolean {
         if (stack.isEmpty()) return false
         open(stack.removeAt(stack.lastIndex), false); return true

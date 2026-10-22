@@ -67,6 +67,8 @@ class DetailFocusTest {
         assertEquals("episode:ep2",list.findFocus()?.tag)
         render(model.state.value.copy(discovery=Discovery(emptyList(),emptyList()),discoveryLoading=false))
         assertEquals("episode:ep2",list.findFocus()?.tag)
+        controller.pause().stop().start().resume().windowFocusChanged(true);layout()
+        assertEquals("episode:ep2",list.findFocus()?.tag)
         key(KeyEvent.KEYCODE_DPAD_UP)
         assertEquals("detail-tab:0",list.findFocus()?.tag)
         key(KeyEvent.KEYCODE_DPAD_DOWN)

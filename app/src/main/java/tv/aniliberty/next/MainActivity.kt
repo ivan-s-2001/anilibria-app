@@ -574,9 +574,12 @@ class MainActivity : ComponentActivity() {
         ).filter(String::isNotBlank).joinToString(" · ")
     }
     private fun login(){
+        val previousUser=account.session.userId
         AccountPanel(this,lifecycleScope,account){
+            accountJob?.cancel();accountJob=null;profileSyncing=false
             accountHistoryJob?.cancel();accountHistoryLoadJob?.cancel();accountHistoryItems=emptyList();accountSessions=emptyList();accountHistoryPage=0;profileError=null;lastHistoryHydration=0L;accountLoadedAt=0L
             Toast.makeText(this,"Вход выполнен · ${account.session.name}",Toast.LENGTH_SHORT).show()
+            if(previousUser!=null && previousUser!=account.session.userId)model.resetNavigation(Screen.Profile)
             rememberFocus();render(model.state.value);refreshAccount(force=true,after={offerLocalHistory(automatic=true)})
         }.start()
     }
@@ -657,6 +660,7 @@ class MainActivity : ComponentActivity() {
     private fun loadAccountSessions(){
         if(accountSessionsLoading || !account.signedIn)return
         accountSessionsLoading=true;accountSessionsError=null
+        if(current==Screen.AccountSessions)render(model.state.value)
         lifecycleScope.launch{
             val user=account.session.userId
             try{val sessions=account.sessions();if(account.session.userId==user)accountSessions=sessions}
@@ -697,7 +701,10 @@ class MainActivity : ComponentActivity() {
             message("Данные аккаунта останутся на сайте. Приложение переключится на гостевую историю этого ТВ.")
             addAction("Выйти"){
                 dismiss();accountHistoryLoadJob?.cancel();accountHistoryJob?.cancel()
-                accountAction(done={lastHistoryHydration=0;accountHistoryItems=emptyList();accountHistoryPage=0;model.open(Screen.Profile,false)}){account.logout()}
+                model.resetNavigation(Screen.Profile)
+                accountAction(done={lastHistoryHydration=0;accountHistoryItems=emptyList();accountSessions=emptyList();accountHistoryPage=0;model.open(Screen.Profile,false)}){
+                    if(!account.logout())Toast.makeText(this,"Вышли на этом ТВ. Сервис не подтвердил завершение сеанса.",Toast.LENGTH_LONG).show()
+                }
             }
             addAction("Отмена"){dismiss()};show()
         }
@@ -962,8 +969,8 @@ class MainActivity : ComponentActivity() {
         val sameDetail=(current as?Screen.Detail)?.id==(state.screen as?Screen.Detail)?.id && current is Screen.Detail && adapter.rows.any{it.kind==Kind.HERO}
         val sameCatalog=current is Screen.Catalog && (current==state.screen || catalogSearchEditing) && adapter.rows.any{it.kind==Kind.CATALOG_BAR}
         val sameSection=current is Screen.Section && current==state.screen && adapter.rows.any{it.key=="section-heading"}
-        val sameProfile=(current==Screen.Profile || current==Screen.AccountSessions) && current==state.screen
-        val sameAccountHistory=current==Screen.AccountHistory && state.screen==Screen.AccountHistory
+        val sameProfile=(current==Screen.Profile || current==Screen.AccountSessions) && current==state.screen && adapter.rows.any{it.kind==Kind.ACTION}
+        val sameAccountHistory=current==Screen.AccountHistory && state.screen==Screen.AccountHistory && adapter.rows.any{it.key=="account-history-refresh"}
         val sameHome=current==Screen.Home && state.screen==Screen.Home && adapter.rows.any{it.kind==Kind.SHELF}
         val retainedFocus = if(current==state.screen) list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String } else null
         current=state.screen

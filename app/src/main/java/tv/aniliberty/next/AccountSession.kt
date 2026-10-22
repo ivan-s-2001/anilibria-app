@@ -145,7 +145,13 @@ class AccountRepository(private val context:Context,val api:AccountApi=AccountAp
         loadProgress()
         return plan.size
     }
-    suspend fun logout(){val value=session.token();try{if(value!=null)api.logout(value)}finally{session.clear();lists=null;remote=emptyMap();appliedProgress.clear()}}
+    suspend fun logout():Boolean {
+        val value=session.token()
+        return try{if(value!=null)api.logout(value);true}
+        catch(e:kotlinx.coroutines.CancellationException){throw e}
+        catch(_:Exception){false}
+        finally{session.clear();lists=null;remote=emptyMap();appliedProgress.clear()}
+    }
 }
 private val progressLock=Any()
 internal fun pending(prefs:SharedPreferences):Map<String,AccountTimecode> = runCatching{parseTimecodes(prefs.getString("account-pending","[]")!!).associateBy{it.episodeId}}.getOrDefault(emptyMap())
