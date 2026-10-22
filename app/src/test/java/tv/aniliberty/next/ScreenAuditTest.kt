@@ -104,6 +104,13 @@ class ScreenAuditTest {
                 View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
             )
             activity.window.decorView.layout(0, 0, 1920, 1080)
+            // Rendering can be deferred while RecyclerView computes its previous layout.
+            shadowOf(Looper.getMainLooper()).idle()
+            activity.window.decorView.measure(
+                View.MeasureSpec.makeMeasureSpec(1920, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+            )
+            activity.window.decorView.layout(0, 0, 1920, 1080)
             val grid = list.layoutManager as androidx.recyclerview.widget.GridLayoutManager
             assertEquals(grid.spanCount, grid.spanSizeLookup.getSpanSize(RecyclerView.NO_POSITION))
             val rows = (list.adapter as PageAdapter).rows
