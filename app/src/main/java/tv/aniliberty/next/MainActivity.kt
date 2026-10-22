@@ -741,7 +741,7 @@ class MainActivity : ComponentActivity() {
         if(catalogSearchEditing && (current is Screen.Catalog || current is Screen.Section))return
         if(enterCatalogResults && (current is Screen.Catalog || current is Screen.Section) && !state.loading){
             enterCatalogResults=false
-            val index=rows.indexOfFirst{it.kind in listOf(Kind.POSTER,Kind.GENRE,Kind.FRANCHISE,Kind.FEATURE)}.takeIf{it>=0}?:rows.indexOfFirst{it.kind==Kind.CATALOG_BAR}
+            val index=rows.indexOfFirst{it.kind in listOf(Kind.POSTER,Kind.GENRE,Kind.FRANCHISE,Kind.FEATURE,Kind.SHELF)}.takeIf{it>=0}?:rows.indexOfFirst{it.kind==Kind.CATALOG_BAR}
             if(index>=0){
                 list.doOnNextLayout{focusItem(list.findViewHolderForAdapterPosition(index)?.itemView)}
                 grid.scrollToPositionWithOffset(index,list.dp(96))
