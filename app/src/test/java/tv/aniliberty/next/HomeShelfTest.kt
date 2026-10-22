@@ -13,6 +13,18 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[30],application=Application::class)
 class HomeShelfTest {
+    @Test fun franchiseDirectoryKeepsHomeAspectWhenColumnWidthChanges(){
+        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        adapter.submit(listOf(Row("franchise",Kind.FRANCHISE,"Франшиза",homeStyle=true)))
+        val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.FRANCHISE.ordinal)
+        adapter.onBindViewHolder(holder,0)
+        val card=holder.itemView as FrameLayout
+        for(width in listOf(624,936)){
+            card.measure(android.view.View.MeasureSpec.makeMeasureSpec(width,android.view.View.MeasureSpec.EXACTLY),android.view.View.MeasureSpec.makeMeasureSpec(0,android.view.View.MeasureSpec.UNSPECIFIED))
+            assertEquals(312f/190f,width.toFloat()/card.measuredHeight,.01f)
+            assertEquals(150f/312f,card.getChildAt(0).layoutParams.width.toFloat()/width,.01f)
+        }
+    }
     @Test fun inlineSearchRetainsEditorAndCursorWhenResultsRebind(){
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
         var query=""
