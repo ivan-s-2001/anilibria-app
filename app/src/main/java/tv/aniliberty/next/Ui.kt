@@ -385,9 +385,9 @@ private class GenreShade:android.graphics.drawable.Drawable(){
 }
 
 
-/** Discovery previews are three items plus two independently focusable actions. */
+/** Discovery previews are four items plus two independently focusable actions. */
 fun discoveryShelfCards(key:String,title:String,items:List<Row>,style:Int,busy:Boolean=false,failed:Boolean=false,refresh:()->Unit,openAll:()->Unit):List<Row> =
-    items.take(3)+listOf(
+    items.take(4)+listOf(
         Row("$key:refresh",Kind.REFRESH,if(busy)"Обновление…"else if(failed)"Повторить обновление"else"Обновить",selected=style,click=if(busy)null else refresh),
         Row("$key:all",Kind.MORE,title,selected=style,click=openAll)
     )
