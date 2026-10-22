@@ -75,7 +75,7 @@ class PageAdapter(
     init{setHasStableIds(true)}
     override fun getItemId(position:Int):Long=stableKeys.getOrPut(rows[position].key){nextStableId++}
     fun rememberShelf(shelf:RecyclerView)=saveShelf(shelf)
-    private fun View.cardDp(value:Int)=dp(if(shelfMode)(value*1.18f).toInt()else value)
+    private fun View.cardDp(value:Int)=dp(if(shelfMode || getTag(R.id.shelf_key)==true)(value*1.18f).toInt()else value)
     private data class ShelfPosition(val focusedKey:String?,val anchorKey:String?,val offset:Int)
     private val shelfPositions=mutableMapOf<String,ShelfPosition>()
     private val shelfResets=mutableMapOf<String,Boolean>()
@@ -190,6 +190,7 @@ class PageAdapter(
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         val row = rows[position]; val view = holder.itemView
         view.tag = row.key
+        if(row.kind!=Kind.SHELF)view.setTag(R.id.shelf_key,row.homeStyle)
         val firstContent = if(contentStart>=0) (contentStart until rows.size).firstOrNull{rows[it].kind!=Kind.HEADING} else null
         val firstRowCount = when(firstContent?.let{rows[it].kind}){Kind.POSTER->5;Kind.EPISODE->3;else->1}
         view.setOnKeyListener { _, key, event ->
@@ -398,6 +399,7 @@ class PageAdapter(
                 box.setOnFocusChangeListener{_,focused->box.animate().scaleX(if(focused && !shelfMode)1.025f else 1f).scaleY(if(focused && !shelfMode)1.025f else 1f).setDuration(140).start()}
             }
             Kind.SPOTLIGHT,Kind.FEATURE,Kind.POSTER,Kind.CONTINUE -> {
+                val homeCard=shelfMode || row.homeStyle
                 val box=view as FrameLayout
                 val content=box.getChildAt(2)as LinearLayout
                 val title=content.getChildAt(0)as TextView
@@ -415,14 +417,14 @@ class PageAdapter(
                 image.clipToOutline=true
                 if(continuing && row.image==null){image.scaleType=ImageView.ScaleType.FIT_CENTER;image.load(R.drawable.ic_aniliberty)}else image.load(if(poster)release?.poster else row.image)
                 box.getChildAt(1).visibility=if(spotlight)View.VISIBLE else View.GONE
-                title.label(release?.title?:row.title,if(spotlight)30f else if(shelfMode)17f else 14f,WHITE,true)
+                title.label(release?.title?:row.title,if(spotlight)30f else if(homeCard)17f else 14f,WHITE,true)
                 title.maxLines=2
                 title.breakStrategy=android.text.Layout.BREAK_STRATEGY_BALANCED
                 title.hyphenationFrequency=android.text.Layout.HYPHENATION_FREQUENCY_NONE
-                if(poster || continuing)androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(title,12,if(row.selected==2)20 else if(shelfMode)17 else 14,1,android.util.TypedValue.COMPLEX_UNIT_SP)
+                if(poster || continuing)androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(title,12,if(row.selected==2)20 else if(homeCard)17 else 14,1,android.util.TypedValue.COMPLEX_UNIT_SP)
                 val short=if(release!=null)listOf(release.year,release.type,release.latestEpisode?.let{"Эп. ${number(it.ordinal)}"}.orEmpty()).filter(String::isNotBlank).joinToString(" · ")else row.subtitle
                 val full=if(release!=null)listOf(release.metadata,release.genres.take(2).joinToString(" · ")).filter(String::isNotBlank).joinToString(" · ")else row.subtitle
-                subtitle.label(if(box.hasFocus())full else short,if(shelfMode)14f else 12f,MUTED)
+                subtitle.label(if(box.hasFocus())full else short,if(homeCard)14f else 12f,MUTED)
                 subtitle.maxLines=1;subtitle.visibility=if(short.isBlank()&&full.isBlank())View.GONE else View.VISIBLE
                 if(spotlight){
                     content.setPadding(view.dp(24),view.dp(12),view.dp(24),view.dp(12))
@@ -440,11 +442,11 @@ class PageAdapter(
                 content.setBackgroundColor(Color.TRANSPARENT)
                 box.setOnFocusChangeListener{_,focused->
                     if(!spotlight){subtitle.text=if(focused)full else short;title.setTextColor(if(focused)WHITE else 0xFFDDDDDD.toInt())}
-                    box.animate().scaleX(if(focused && !shelfMode)1.025f else 1f).scaleY(if(focused && !shelfMode)1.025f else 1f).setDuration(140).start()
+                    box.animate().scaleX(if(focused && !homeCard)1.025f else 1f).scaleY(if(focused && !homeCard)1.025f else 1f).setDuration(140).start()
                 }
                 if(webPoster){
                     box.layoutParams=box.layoutParams.apply{
-                        height=if(row.selected==2)((view.resources.displayMetrics.widthPixels-view.dp(156))/4/.7f).toInt()else view.cardDp(if(cataloguePoster)270 else 206)
+                        height=if(row.selected==2 || (row.homeStyle && poster))((view.resources.displayMetrics.widthPixels-view.dp(156))/4/.7f).toInt()else view.cardDp(if(cataloguePoster)270 else 206)
                     }
                     if(row.selected==2)title.textSize=18f
                     image.layoutParams=FrameLayout.LayoutParams(-1,-1)
@@ -458,7 +460,7 @@ class PageAdapter(
                     val genresLine=(content.getChildAt(2)as?TextView)?:TextView(view.context).also{
                         content.addView(it,LinearLayout.LayoutParams(-1,-2).apply{topMargin=view.dp(3)})
                     }
-                    genresLine.label(release?.genres?.joinToString(" • ").orEmpty(),if(shelfMode)14f else 12f,MUTED)
+                    genresLine.label(release?.genres?.joinToString(" • ").orEmpty(),if(homeCard)14f else 12f,MUTED)
                     genresLine.gravity=Gravity.CENTER;genresLine.maxLines=1
                     genresLine.setSingleLine(true)
                     genresLine.ellipsize=android.text.TextUtils.TruncateAt.MARQUEE
@@ -528,7 +530,7 @@ class PageAdapter(
                         count.isFocusable=false
                     }else box.getChildAt(5)?.visibility=View.GONE
                     focusPoster(box.hasFocus())
-                    box.setOnFocusChangeListener{_,focused->focusPoster(focused);box.animate().scaleX(if(focused && !shelfMode)1.025f else 1f).scaleY(if(focused && !shelfMode)1.025f else 1f).setDuration(140).start()}
+                    box.setOnFocusChangeListener{_,focused->focusPoster(focused);box.animate().scaleX(if(focused && !homeCard)1.025f else 1f).scaleY(if(focused && !homeCard)1.025f else 1f).setDuration(140).start()}
                 }else{
                     image.clearColorFilter();content.visibility=View.VISIBLE;content.gravity=Gravity.TOP
                     title.gravity=Gravity.START;subtitle.gravity=Gravity.START
@@ -572,7 +574,7 @@ class PageAdapter(
                     focusContinue(box.hasFocus())
                     box.setOnFocusChangeListener{_,focused->
                         focusContinue(focused)
-                        box.animate().scaleX(if(focused && !shelfMode)1.025f else 1f).scaleY(if(focused && !shelfMode)1.025f else 1f).setDuration(140).start()
+                        box.animate().scaleX(if(focused && !homeCard)1.025f else 1f).scaleY(if(focused && !homeCard)1.025f else 1f).setDuration(140).start()
                     }
                 }
                 box.contentDescription=listOf(release?.title?:row.title,short).filter(String::isNotBlank).joinToString(". ")

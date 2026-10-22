@@ -647,10 +647,10 @@ class MainActivity : ComponentActivity() {
                     if(screen.kind==HomeSection.LATEST){
                         episodePeriods(filtered.releases).forEach{period->
                             rows+=Row("period:${period.key}",Kind.HEADING,period.title,selected=1)
-                            rows+=releaseCards(period.releases,screen.kind.name)
+                            rows+=releaseCards(period.releases,screen.kind.name).map{it.copy(homeStyle=true)}
                         }
                     }else rows+=cards.map{it.copy(homeStyle=true)}
-                    if(query.isNotBlank() && cards.isEmpty() && state.more && !state.loadingMore && state.moreError==null){
+                    if((query.isNotBlank() || screen.kind==HomeSection.LATEST) && cards.isEmpty() && state.more && !state.loadingMore && state.moreError==null){
                         list.post{if(model.state.value.screen==screen && sectionQueries[screen.kind]==query)model.loadMoreSection()}
                     }
                     if(state.loadingMore)rows+=Row("section-loading-more",Kind.TEXT,"Загрузка…")

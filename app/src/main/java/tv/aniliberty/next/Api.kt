@@ -93,13 +93,27 @@ class Api {
     suspend fun releaseTorrents(releaseId:Int):List<TorrentLink> = JSONArray(request("/anime/torrents/release/$releaseId")).objects().map{t->
         TorrentLink(t.text("label").ifBlank{listOf(t.display("quality"),t.display("codec")).filter(String::isNotBlank).joinToString(" · ")},t.text("description"),t.text("magnet").takeIf{it.startsWith("magnet:")})
     }
-    suspend fun section(section:HomeSection,page:Int=1):SectionData = when(section){
-        HomeSection.LATEST -> latest(page*30).let{items->
-            val recent=recentEpisodeReleases(items)
-            val cutoff=java.time.LocalDate.now().minusMonths(1)
-            val reachedEnd=items.any{episodeUpdateDate(it,java.time.ZoneId.systemDefault())?.isBefore(cutoff)==true}
-            SectionData(releases=recent,more=items.size>=page*30 && !reachedEnd)
+    private suspend fun recentEpisodesPage(page:Int):SectionData {
+        val body=request(catalogPath(Screen.Catalog(),page))
+        val parsed=parseCatalogPage(body,page)
+        if(parsed.releases.isEmpty())return SectionData()
+        val ids=parsed.releases.joinToString(","){it.id.toString()}
+        val details=JSONObject(request("/anime/releases/list?ids=$ids&limit=30&include=id,episodes.id,episodes.ordinal,episodes.name,episodes.updated_at,episodes.preview,episodes.sort_order,episodes.duration"))
+            .optJSONArray("data").objects().associate{it.getInt("id") to parseRelease(it).episodes}
+        val items=parsed.releases.map{release->
+            val episodes=details[release.id]?:error("Не удалось получить серии релиза")
+            release.copy(latestEpisode=episodes.maxByOrNull{it.updatedAt})
+        }.filter{it.latestEpisode!=null}
+        val cutoff=java.time.LocalDate.now().minusMonths(1)
+        // The catalogue is ordered by fresh_at; only its ordered dates can end pagination.
+        val freshDates=JSONObject(body).optJSONArray("data").objects().map{json->
+            runCatching{java.time.OffsetDateTime.parse(json.text("fresh_at")).atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate()}.getOrNull()
         }
+        val reachedEnd=freshDates.isNotEmpty() && freshDates.all{it!=null && it.isBefore(cutoff)}
+        return SectionData(releases=recentEpisodeReleases(items),more=parsed.more && !reachedEnd)
+    }
+    suspend fun section(section:HomeSection,page:Int=1):SectionData = when(section){
+        HomeSection.LATEST -> recentEpisodesPage(page)
         HomeSection.SCHEDULE -> SectionData(releases=JSONObject(request("/anime/schedule/week")).optJSONArray("data").objects().mapNotNull{entry->
             entry.optJSONObject("release")?.let{release->entry.optJSONObject("published_release_episode")?.let{release.put("latest_episode",it)};parseRelease(release)}
         }.distinctBy{it.id})

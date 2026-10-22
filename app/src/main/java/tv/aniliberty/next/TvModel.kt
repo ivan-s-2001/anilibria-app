@@ -103,7 +103,8 @@ class TvModel : ViewModel() {
             try{
                 val next=api.section(screen.kind,before.catalogPage+1)
                 if(generation!=navigationGeneration || state.value.screen!=screen)return@launch
-                val merged=mergeSectionData(previous,next)
+                val combined=mergeSectionData(previous,next)
+                val merged=if(screen.kind==HomeSection.LATEST)combined.copy(more=next.more)else combined
                 val updated=state.value.copy(section=merged,more=merged.more,catalogPage=before.catalogPage+1,loadingMore=false)
                 sectionCache[screen]=updated;state.value=updated
             }catch(e:CancellationException){throw e}
