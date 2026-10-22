@@ -3,6 +3,7 @@ plugins { id("com.android.application") }
 android {
     namespace = "tv.aniliberty.next"
     compileSdk = 36
+    lint { lintConfig = file("lint.xml") }
     defaultConfig {
         applicationId = "tv.aniliberty.next"
         minSdk = 26
