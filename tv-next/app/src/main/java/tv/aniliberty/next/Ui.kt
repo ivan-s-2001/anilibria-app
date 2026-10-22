@@ -378,7 +378,7 @@ class PageAdapter(
                 view.isFocusable=false
                 val line=(view as HorizontalScrollView).getChildAt(0)as LinearLayout
                 val labels=listOf("Серии${row.title.takeIf{it.isNotBlank()}?.let{" · $it"}.orEmpty()}","Связанные","Похожее","Команда")
-                val icons=listOf(R.drawable.ic_episodes,R.drawable.ic_related,R.drawable.ic_favorite,R.drawable.ic_team)
+                val icons=listOf(R.drawable.ic_episodes,R.drawable.ic_related,R.drawable.ic_similar,R.drawable.ic_team)
                 if(line.childCount!=labels.size){
                     line.removeAllViews()
                     labels.forEachIndexed{i,label->
