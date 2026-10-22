@@ -23,9 +23,14 @@ class PlayerChrome(context:Context):LinearLayout(context){
     val buttons=LinearLayout(context).apply{gravity=Gravity.CENTER_VERTICAL}
     val hint=TextView(context).apply{label("← → перемотка   ·   OK пауза   ·   ↓ управление",12f,MUTED);maxLines=1}
     init{
-        orientation=VERTICAL;setPadding(dp(32),dp(42),dp(32),dp(20))
+        orientation=VERTICAL;setPadding(dp(32),dp(28),dp(32),dp(16))
         background=GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,intArrayOf(0x00101010,0xE8101010.toInt(),0xFC101010.toInt()))
-        addView(title);addView(episode,LayoutParams(-1,-2).apply{topMargin=dp(4);bottomMargin=dp(12)})
+        addView(LinearLayout(context).apply{
+            gravity=Gravity.CENTER_VERTICAL
+            addView(title,LayoutParams(0,-2,2f))
+            episode.gravity=Gravity.END
+            addView(episode,LayoutParams(0,-2,1f).apply{marginStart=dp(16)})
+        },LayoutParams(-1,-2).apply{bottomMargin=dp(12)})
         addView(LinearLayout(context).apply{gravity=Gravity.CENTER_VERTICAL;addView(elapsed,LayoutParams(0,-2,1f));addView(remaining,LayoutParams(0,-2,1f))})
         addView(seek,LayoutParams(-1,dp(36)))
         addView(buttons,LayoutParams(-1,dp(56)).apply{topMargin=dp(6);bottomMargin=dp(10)})

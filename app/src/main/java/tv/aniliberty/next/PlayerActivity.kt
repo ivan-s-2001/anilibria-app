@@ -142,7 +142,7 @@ class PlayerActivity : ComponentActivity() {
             val engine=player
             val range=manualSkipRange()
             if(engine!=null && range!=null){engine.seekTo(range.second);updateChrome();pause.requestFocus()}
-        }.apply{visibility=View.GONE}
+        }.apply{visibility=View.INVISIBLE;layoutParams=LinearLayout.LayoutParams(dp(116),dp(48)).apply{marginEnd=dp(8)}}
         setContentView(root)
         onBackPressedDispatcher.addCallback(this,object:OnBackPressedCallback(true){override fun handleOnBackPressed(){
             remoteClick.cancel()
@@ -201,16 +201,17 @@ class PlayerActivity : ComponentActivity() {
         if(::skipButton.isInitialized){
             val range=manualSkipRange()
             if(range==null && skipButton.hasFocus())pause.requestFocus()
-            skipButton.visibility=if(range!=null && pendingSeek==null)View.VISIBLE else View.GONE
-            skipButton.text=range?.first.orEmpty()
+            skipButton.visibility=if(range!=null && pendingSeek==null)View.VISIBLE else View.INVISIBLE
+            skipButton.text=if(range?.first?.contains("эндинг")==true)"Эндинг"else"Опенинг"
+            skipButton.contentDescription=range?.first?:"Пропустить заставку"
             skipPrompt.text=range?.let{"↓  ${it.first}  ·  OK"}.orEmpty()
             skipPrompt.visibility=if(range!=null && controls.visibility!=View.VISIBLE && panel==null && nextOffer==null)View.VISIBLE else View.GONE
         }
     }
     private fun showControls(focus:View?=null){controls.visibility=View.VISIBLE;skipPrompt.visibility=View.GONE;(focus?:pause).requestFocus();refreshControls()}
     private fun hideControls(){controls.visibility=View.GONE;seekPreview.visibility=View.GONE;skipPrompt.visibility=View.GONE;pendingSeek=null;video.requestFocus()}
-    private fun togglePause(){val engine=player?:return;if(engine.isPlaying)engine.pause()else engine.play();desiredPlay=engine.playWhenReady;save();if(panel==null && nextOffer==null)showControls()else updateChrome()}
-    private fun startEpisode(episode:Episode, requestedQuality:Int=0, play:Boolean=true){
+    private fun togglePause(){val engine=player?:return;if(engine.isPlaying)engine.pause()else{if(engine.playbackState==Player.STATE_ENDED)engine.seekTo(0);engine.play()};desiredPlay=engine.playWhenReady;save();if(panel==null && nextOffer==null)showControls()else updateChrome()}
+    private fun startEpisode(episode:Episode, requestedQuality:Int=0, play:Boolean=true,positionOverride:Long?=null){
         val selected=requestedQuality.takeIf{it in episode.streams.indices}?:0
         val stream=episode.streams.getOrNull(selected)?:run{Toast.makeText(this,"Нет доступного потока",Toast.LENGTH_LONG).show();return}
         errorPanel?.dismiss();errorPanel=null
@@ -226,7 +227,7 @@ class PlayerActivity : ComponentActivity() {
             override fun onPlayerError(error:PlaybackException){
                 if(player!==engine || stopped)return
                 save();cancelNext();showControls()
-                showPlaybackError("Повторите загрузку или выберите другое качество."){startEpisode(episode,quality)}
+                showPlaybackError("Повторите загрузку или выберите другое качество."){startEpisode(episode,quality,desiredPlay)}
             }
             override fun onIsPlayingChanged(isPlaying:Boolean){if(!isPlaying)save()}
             override fun onPlaybackStateChanged(state:Int){
@@ -238,7 +239,7 @@ class PlayerActivity : ComponentActivity() {
         engine.setMediaItem(MediaItem.fromUri(stream.second));engine.prepare()
         val saved=prefs.getLong("position:${episode.id}",0)
         val duration=prefs.getLong("duration:${episode.id}",0)
-        engine.seekTo(if(duration>0 && saved>=duration-1000)0 else saved);engine.playWhenReady=play
+        engine.seekTo(positionOverride?:if(duration>0 && saved>=duration-1000)0 else saved);engine.playWhenReady=play
         if(panel==null)hideControls()
     }
     private fun save(){
@@ -262,7 +263,7 @@ class PlayerActivity : ComponentActivity() {
         root.addView(scroll,FrameLayout.LayoutParams((resources.displayMetrics.widthPixels*.42f).toInt(),-1,Gravity.END))
         scroll.post{(target?:content.getChildAt(1)).requestFocus()}
     }
-    private fun closePanel(){remoteClick.cancel();panel?.let{root.removeView(it)};panel=null;panelChild=false;showControls(panelCaller?.takeIf{it.isShown && it.isEnabled});panelCaller=null}
+    private fun closePanel(){remoteClick.cancel();panel?.let{root.removeView(it)};panel=null;panelChild=false;showControls(panelCaller?.takeIf{it.isAttachedToWindow && it.isEnabled});panelCaller=null}
     private fun episodes(){
         val item=release?:return
         save();remoteClick.cancel();panelChild=false
@@ -308,7 +309,7 @@ class PlayerActivity : ComponentActivity() {
         openPanel("Качество",qualityButton){content->
             var target:View?=null
             episode.streams.forEachIndexed{index,stream->
-                val button=action(content,(if(index==quality)"✓  "else"")+stream.first){val playing=player?.playWhenReady?:desiredPlay;startEpisode(episode,index,playing);closePanel()}
+                val button=action(content,(if(index==quality)"✓  "else"")+stream.first){val playing=player?.playWhenReady?:desiredPlay;startEpisode(episode,index,playing,player?.currentPosition);closePanel()}
                 content.addView(button,LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(8)})
                 if(index==quality)target=button
             };target
