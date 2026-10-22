@@ -190,7 +190,7 @@ class MainActivity : ComponentActivity() {
         loading.show()
     }
     private fun openSection(kind:HomeSection){rememberFocus();model.open(Screen.Section(kind))}
-    private fun releaseCards(items:List<Release>,key:String)=items.distinctBy{it.id}.map{Row("$key:release:${it.id}",Kind.POSTER,release=it)}
+    private fun releaseCards(items:List<Release>,key:String)=items.distinctBy{it.id}.map{Row("$key:release:${it.id}",Kind.POSTER,release=it,selected=if(key.startsWith("latest",true)||key.startsWith("schedule",true))1 else 0)}
     private fun featureCards(items:List<Feature>,kind:HomeSection)=items.map{feature->
         Row("${kind.name}:${feature.id}",if(kind==HomeSection.GENRES)Kind.GENRE else Kind.FRANCHISE,feature.title,feature.subtitle,image=feature.image,click={
             rememberFocus()
@@ -200,7 +200,7 @@ class MainActivity : ComponentActivity() {
     }
     private fun videoCards(items:List<HomeVideo>)=items.map{video->Row("video:${video.id}",Kind.FEATURE,video.title,video.subtitle,image=video.image,click={openLink(video.url.takeIf{it.startsWith("https://")})})}
     private fun homeShelf(kind:HomeSection,items:List<Row>,wide:Boolean=false,key:String=kind.name):Row {
-        val style=when(kind){HomeSection.GENRES->2;HomeSection.FRANCHISES->3;else->if(wide)1 else 0}
+        val style=when(kind){HomeSection.LATEST,HomeSection.SCHEDULE->4;HomeSection.GENRES->2;HomeSection.FRANCHISES->3;else->if(wide)1 else 0}
         return Row("shelf:$key",Kind.SHELF,selected=style,cards=shelfCards(key,kind.title,items,wide,style){openSection(kind)})
     }
     private fun render(state:UiState){

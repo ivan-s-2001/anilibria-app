@@ -155,14 +155,14 @@ class PageAdapter(
                 val oldKey=shelf.getTag(R.id.shelf_key) as? String
                 if(oldKey!=row.key){shelf.adapter=PageAdapter(navigate,tab,play,favorite,details,progress,lastEpisode,returnToTabs,day,quickActions,true);shelf.scrollToPosition(0)}
                 shelf.setTag(R.id.shelf_key,row.key)
-                shelf.layoutParams=shelf.layoutParams.apply{height=view.dp(when(row.selected){1->220;2->252;3->206;else->286})}
+                shelf.layoutParams=shelf.layoutParams.apply{height=view.dp(when(row.selected){1->220;2->252;3->206;4->222;else->286})}
                 val cards=if(row.cards.isNotEmpty())row.cards else row.items.map{Row("${row.key}:release:${it.id}",Kind.POSTER,release=it)}
                 (shelf.adapter as PageAdapter).submit(cards)
                 restoreShelf(shelf,false)
             }
             Kind.MORE -> {
                 val text=view as TextView
-                text.layoutParams=text.layoutParams.apply{if(shelfMode){width=view.dp(when(row.selected){1->232;2->172;3->312;else->144});height=view.dp(when(row.selected){1->204;2->236;3->190;else->270})}}
+                text.layoutParams=text.layoutParams.apply{if(shelfMode){width=view.dp(when(row.selected){1->232;2->172;3->312;else->144});height=view.dp(when(row.selected){1->204;2->236;3->190;4->206;else->270})}}
                 text.label("Все\n${row.title}",16f,WHITE,true)
                 val arrow=view.context.getDrawable(R.drawable.ic_arrow_right)!!.mutate().apply{setBounds(0,0,view.dp(32),view.dp(32));setTint(WHITE)}
                 text.setCompoundDrawables(null,arrow,null,null);text.compoundDrawablePadding=view.dp(12)
@@ -271,6 +271,7 @@ class PageAdapter(
                 val subtitle=content.getChildAt(1)as TextView
                 val release=row.release
                 val poster=row.kind==Kind.POSTER
+                val webPoster=poster && row.selected==1
                 val spotlight=row.kind==Kind.SPOTLIGHT
                 val image=box.getChildAt(0)as ImageView
                 image.layoutParams=FrameLayout.LayoutParams(-1,if(poster)view.dp(198)else if(spotlight)-1 else view.dp(130),Gravity.TOP)
@@ -297,6 +298,26 @@ class PageAdapter(
                 box.setOnFocusChangeListener{_,focused->
                     if(!spotlight){subtitle.text=if(focused)full else short;title.setTextColor(if(focused)WHITE else 0xFFDDDDDD.toInt())}
                     box.animate().scaleX(if(focused)1.025f else 1f).scaleY(if(focused)1.025f else 1f).setDuration(140).start()
+                }
+                if(webPoster){
+                    box.layoutParams=box.layoutParams.apply{height=view.dp(206)}
+                    image.layoutParams=FrameLayout.LayoutParams(-1,-1)
+                    box.getChildAt(1).visibility=View.GONE
+                    content.layoutParams=FrameLayout.LayoutParams(-1,-1)
+                    content.gravity=Gravity.CENTER;content.setPadding(view.dp(10),view.dp(10),view.dp(10),view.dp(10))
+                    title.gravity=Gravity.CENTER;title.maxLines=4
+                    subtitle.gravity=Gravity.CENTER;subtitle.maxLines=4
+                    subtitle.text=listOf(release?.latestEpisode?.let{"Эпизод ${number(it.ordinal)}"}.orEmpty(),full).filter(String::isNotBlank).joinToString("\n")
+                    fun focusPoster(focused:Boolean){
+                        content.visibility=if(focused)View.VISIBLE else View.GONE
+                        image.colorFilter=if(focused)android.graphics.ColorMatrixColorFilter(floatArrayOf(.045f,0f,0f,0f,12.75f,0f,.045f,0f,0f,12.75f,0f,0f,.045f,0f,12.75f,0f,0f,0f,1f,0f))else null
+                    }
+                    focusPoster(box.hasFocus())
+                    box.setOnFocusChangeListener{_,focused->focusPoster(focused);box.animate().scaleX(if(focused)1.025f else 1f).scaleY(if(focused)1.025f else 1f).setDuration(140).start()}
+                }else{
+                    image.clearColorFilter();content.visibility=View.VISIBLE;content.gravity=Gravity.TOP
+                    title.gravity=Gravity.START;subtitle.gravity=Gravity.START
+                    if(poster)box.layoutParams=box.layoutParams.apply{height=view.dp(270)}
                 }
                 box.contentDescription=listOf(release?.title?:row.title,short).filter(String::isNotBlank).joinToString(". ")
                 box.setOnClickListener{if(row.click!=null)row.click.invoke()else if(release!=null)details(release)}

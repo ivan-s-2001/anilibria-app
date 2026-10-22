@@ -69,4 +69,19 @@ class HomeShelfTest {
         assertEquals(android.view.View.GONE,card.getChildAt(1).visibility)
     }
 
+    @Test fun latestShowsWebInformationOverlayOnlyOnFocus(){
+        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
+        val release=parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Название"},"year":2026}"""))
+        adapter.submit(listOf(Row("latest:1",Kind.POSTER,release=release,selected=1)))
+        val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.POSTER.ordinal)
+        adapter.onBindViewHolder(holder,0)
+        val card=holder.itemView as FrameLayout
+        val height=card.layoutParams.height
+        assertEquals(android.view.View.GONE,card.getChildAt(2).visibility)
+        card.requestFocus()
+        assertEquals(android.view.View.VISIBLE,card.getChildAt(2).visibility)
+        assertNotNull((card.getChildAt(0)as android.widget.ImageView).colorFilter)
+        assertEquals(height,card.layoutParams.height)
+    }
+
 }
