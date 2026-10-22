@@ -30,4 +30,23 @@ class ScheduleTest {
         val release=parseScheduleEntries(JSONArray("""[{"release":{"id":42},"published_release_episode":{"id":"e","ordinal":3.5},"next_release_episode_number":4}]""")).single()
         assertEquals("3.5 эп.",scheduleEpisodeLabel(release))
     }
+    @Test fun ratingAndEpisodeStayVisibleWithoutFocusAndDoNotLeakOnRebind(){
+        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        val release=parseScheduleWeek(body).first()
+        adapter.submit(listOf(Row("schedule:42",Kind.POSTER,release=release,selected=3)))
+        val holder=adapter.onCreateViewHolder(android.widget.FrameLayout(org.robolectric.RuntimeEnvironment.getApplication()),Kind.POSTER.ordinal)
+        adapter.onBindViewHolder(holder,0)
+        val box=holder.itemView as android.widget.FrameLayout
+        val rating=box.findViewWithTag<android.widget.TextView>("schedule-rating")
+        assertEquals("8.1",rating.text.toString())
+        assertEquals(android.view.View.VISIBLE,rating.visibility)
+        assertEquals("7 эп.",(box.getChildAt(3)as android.widget.TextView).text.toString())
+        assertEquals(android.view.View.VISIBLE,box.getChildAt(3).visibility)
+        box.onFocusChangeListener?.onFocusChange(box,false)
+        assertEquals(android.view.View.VISIBLE,box.getChildAt(3).visibility)
+        adapter.submit(listOf(Row("catalog:42",Kind.POSTER,release=release,selected=2)))
+        adapter.onBindViewHolder(holder,0)
+        assertEquals(android.view.View.GONE,rating.visibility)
+    }
+
 }

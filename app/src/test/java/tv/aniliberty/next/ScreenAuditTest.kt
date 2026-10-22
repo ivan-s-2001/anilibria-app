@@ -39,6 +39,7 @@ class ScreenAuditTest {
             UiState(Screen.Franchise("one","Франшиза"),releases=listOf(release)),
             UiState(Screen.Section(HomeSection.GENRES),section=SectionData()),
             UiState(Screen.Section(HomeSection.LATEST),section=SectionData()),
+            UiState(Screen.Section(HomeSection.SCHEDULE),section=SectionData(releases=listOf(release.copy(publishDay=java.time.LocalDate.now().dayOfWeek.value,scheduledEpisode=2.0)))),
         )+(0..3).map{UiState(Screen.Detail(1,it),detail=release,discovery=Discovery(listOf(FranchiseGroup("f","Франшиза",listOf(release))),listOf(release.copy(id=2))))}+
             UiState(Screen.Home,home=HomeData(null,emptyList(),listOf(emptyList(),emptyList(),emptyList()),emptyList(),emptyList(),emptyList()))
         states.forEach{state->
