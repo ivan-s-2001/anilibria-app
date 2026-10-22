@@ -54,16 +54,24 @@ class MainActivity : ComponentActivity() {
     private fun buildMenu() {
         menu.removeAllViews()
         menu.layoutParams=LinearLayout.LayoutParams(dp(if(menuOpen)196 else 60),-1)
-        menu.addView(android.widget.TextView(this).apply{label(if(menuOpen)"AniLiberty"else"A",20f,RED,true);gravity=android.view.Gravity.CENTER},LinearLayout.LayoutParams(-1,dp(56)))
+        menu.addView(LinearLayout(this).apply{
+            gravity=android.view.Gravity.CENTER_VERTICAL
+            addView(android.widget.ImageView(this@MainActivity).apply{setImageResource(R.drawable.ic_aniliberty);contentDescription="AniLiberty"},LinearLayout.LayoutParams(dp(36),dp(36)).apply{marginStart=dp(8);marginEnd=dp(10)})
+            if(menuOpen)addView(android.widget.TextView(this@MainActivity).apply{label("AniLiberty",18f,WHITE,true)})
+        },LinearLayout.LayoutParams(-1,dp(56)))
         val titles=listOf("Поиск","Главная","Релизы","Моё")
-        val icons=listOf(android.R.drawable.ic_menu_search,android.R.drawable.ic_menu_view,android.R.drawable.ic_menu_sort_by_size,R.drawable.ic_favorite)
+        val icons=listOf(R.drawable.ic_search,R.drawable.ic_home,R.drawable.ic_catalog,R.drawable.ic_library)
         titles.forEachIndexed { index,title ->
             val route=listOf(2,0,1,3)[index]
             menu.addView(action(menu,if(menuOpen)title else "",icon=icons[index]){
                 selectedSection=route;closeMenu(false);navigate(route)
             }.apply {
                 contentDescription=title
-                if(route==selectedSection)setTextColor(RED)
+                if(route==selectedSection){
+                    setTextColor(WHITE)
+                    val marker=android.graphics.drawable.GradientDrawable().apply{setColor(RED)}
+                    background=android.graphics.drawable.LayerDrawable(arrayOf(background!!,marker)).apply{setLayerWidth(1,dp(2));setLayerGravity(1,android.view.Gravity.START)}
+                }
                 setOnKeyListener{_,key,event->if(key==KeyEvent.KEYCODE_DPAD_RIGHT){if(event.action==KeyEvent.ACTION_UP)closeMenu();true}else false}
             },LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(6)})
         }

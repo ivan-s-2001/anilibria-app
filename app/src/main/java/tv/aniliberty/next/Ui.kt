@@ -18,17 +18,17 @@ import androidx.recyclerview.widget.RecyclerView
 import coil3.load
 
 const val RED = 0xFFFE3635.toInt()
-const val WHITE = 0xFFF2F2F2.toInt()
-const val MUTED = 0xFF999999.toInt()
+const val WHITE = 0xFFFFFFFF.toInt()
+const val MUTED = 0xFFB4B4B4.toInt()
 fun View.dp(n: Int): Int = (n * resources.displayMetrics.density).toInt()
-fun shape(color: Int, radius: Float = 6f, stroke: Int = 0): GradientDrawable = GradientDrawable().apply {
+fun shape(color: Int, radius: Float = 6f, stroke: Int = 0, strokeWidth:Int=2): GradientDrawable = GradientDrawable().apply {
     setColor(color); cornerRadius = radius
-    if (stroke != 0) setStroke(2, stroke)
+    if (stroke != 0) setStroke(strokeWidth, stroke)
 }
-fun View.focusBackground(primary: Boolean = false) {
+fun View.focusBackground(primary: Boolean = false, radiusDp:Int=6) {
     background = StateListDrawable().apply {
-        addState(intArrayOf(android.R.attr.state_focused), shape(if (primary) WHITE else 0xFF292929.toInt(), dp(6).toFloat(), if (primary) 0 else WHITE))
-        addState(intArrayOf(), shape(if (primary) RED else Color.TRANSPARENT, dp(6).toFloat()))
+        addState(intArrayOf(android.R.attr.state_focused), shape(if (primary) WHITE else 0xFF292929.toInt(), dp(radiusDp).toFloat(), if (primary) 0 else WHITE,dp(2)))
+        addState(intArrayOf(), shape(if (primary) RED else Color.TRANSPARENT, dp(radiusDp).toFloat()))
     }
 }
 fun TextView.label(value: String, size: Float, color: Int = WHITE, bold: Boolean = false) {
@@ -115,7 +115,7 @@ class PageAdapter(
                 addView(TextView(context));addView(TextView(context),LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(4)})
             }
             Kind.POSTER, Kind.SPOTLIGHT, Kind.FEATURE, Kind.GENRE, Kind.FRANCHISE -> FrameLayout(context).apply {
-                isFocusable = true; isClickable = true; focusBackground(); clipToOutline=true; setPadding(dp(3),dp(3),dp(3),dp(3))
+                isFocusable = true; isClickable = true; focusBackground(radiusDp=12); clipToOutline=true; setPadding(dp(3),dp(3),dp(3),dp(3))
                 addView(ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_CROP },FrameLayout.LayoutParams(-1,-1))
                 addView(View(context).apply { background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,intArrayOf(0xF5121212.toInt(),0x10121212)) },FrameLayout.LayoutParams(-1,-1))
                 addView(LinearLayout(context).apply {
@@ -164,10 +164,13 @@ class PageAdapter(
                 val text=view as TextView
                 text.layoutParams=text.layoutParams.apply{if(shelfMode){width=view.dp(when(row.selected){1->232;2->172;3->312;else->144});height=view.dp(when(row.selected){1->204;2->236;3->190;4->206;else->270})}}
                 text.label(if(row.kind==Kind.REFRESH)row.title else "Открыть все\n${row.title}",16f,WHITE,true)
-                val arrow=view.context.getDrawable(if(row.kind==Kind.REFRESH)R.drawable.ic_refresh else R.drawable.ic_arrow_right)!!.mutate().apply{setBounds(0,0,view.dp(32),view.dp(32));setTint(WHITE)}
+                val arrow=view.context.getDrawable(if(row.kind==Kind.REFRESH)R.drawable.ic_refresh else R.drawable.ic_arrow_right)!!.mutate().apply{setBounds(0,0,view.dp(32),view.dp(32));setTint(RED)}
                 text.setCompoundDrawables(null,arrow,null,null);text.compoundDrawablePadding=view.dp(12)
                 text.gravity=Gravity.CENTER;text.isFocusable=true;text.isClickable=row.click!=null
-                text.focusBackground();text.contentDescription=if(row.kind==Kind.REFRESH)row.title else "Открыть раздел ${row.title} полностью"
+                text.background=StateListDrawable().apply{
+                    addState(intArrayOf(android.R.attr.state_focused),shape(0xFF292929.toInt(),view.dp(12).toFloat(),WHITE,view.dp(2)))
+                    addState(intArrayOf(),shape(0xFF212121.toInt(),view.dp(12).toFloat()))
+                };text.contentDescription=if(row.kind==Kind.REFRESH)row.title else "Открыть раздел ${row.title} полностью"
                 text.setOnClickListener(row.click?.let{callback->View.OnClickListener{callback()}});text.isClickable=row.click!=null
             }
             Kind.DAYS -> {
@@ -235,7 +238,7 @@ class PageAdapter(
                 val title=content.getChildAt(0)as TextView
                 val meta=content.getChildAt(1)as TextView
                 val genre=row.kind==Kind.GENRE
-                box.focusBackground();box.clipToOutline=true
+                box.focusBackground(radiusDp=12);box.clipToOutline=true
                 image.load(row.image);image.scaleType=ImageView.ScaleType.CENTER_CROP
                 if(genre){
                     image.layoutParams=FrameLayout.LayoutParams(-1,-1)
@@ -276,7 +279,7 @@ class PageAdapter(
                 val image=box.getChildAt(0)as ImageView
                 image.layoutParams=FrameLayout.LayoutParams(-1,if(poster)view.dp(198)else if(spotlight)-1 else view.dp(130),Gravity.TOP)
                 image.scaleType=if(poster)ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_CROP
-                image.background=shape(0xFF212121.toInt(),view.dp(6).toFloat())
+                image.background=shape(0xFF212121.toInt(),view.dp(12).toFloat())
                 image.clipToOutline=true
                 image.load(if(poster)release?.poster else row.image)
                 box.getChildAt(1).visibility=if(spotlight)View.VISIBLE else View.GONE

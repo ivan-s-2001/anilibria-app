@@ -63,6 +63,8 @@ class PlayerActivity : ComponentActivity() {
                 seek.progress=if(duration>0)(position*1000/duration).toInt().coerceIn(0,1000)else 0
                 clock.text="${time(position)} / ${time(duration)}"+if(pendingSeek!=null)" · OK — перейти · Назад — отменить"else ""
                 pause.text=if(engine.isPlaying)"Пауза"else"Продолжить"
+                val icon=getDrawable(if(engine.isPlaying)R.drawable.ic_pause else R.drawable.ic_play)!!.mutate().apply{setBounds(0,0,dp(20),dp(20));setTintList(pause.textColors)}
+                pause.setCompoundDrawablesRelative(icon,null,null,null)
                 if(++progressTicks%10==0)save()
             }
             if(!stopped)handler.postDelayed(this,1000)
@@ -103,14 +105,14 @@ class PlayerActivity : ComponentActivity() {
             }
         }
         controls.addView(seek,LinearLayout.LayoutParams(-1,dp(34)))
-        val buttons=LinearLayout(this);controls.addView(buttons)
-        previousButton=action(buttons,"Предыдущий"){
+        val buttons=LinearLayout(this);controls.addView(android.widget.HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;addView(buttons)})
+        previousButton=action(buttons,"Предыдущий",icon=R.drawable.ic_previous){
             val items=release?.episodes.orEmpty();val index=items.indexOfFirst{it.id==current?.id};items.getOrNull(index-1)?.let{startEpisode(it)}
         };buttons.addView(previousButton)
-        pause=action(buttons,"Пауза",true,R.drawable.ic_play){togglePause()};buttons.addView(pause)
-        nextButton=action(buttons,"Следующий"){nextEpisode(release?.episodes.orEmpty(),current?.id)?.let{startEpisode(it)}};buttons.addView(nextButton)
+        pause=action(buttons,"Пауза",true,R.drawable.ic_play){togglePause()};buttons.addView(pause,LinearLayout.LayoutParams(dp(150),-2))
+        nextButton=action(buttons,"Следующий",icon=R.drawable.ic_next){nextEpisode(release?.episodes.orEmpty(),current?.id)?.let{startEpisode(it)}};buttons.addView(nextButton)
         episodesButton=action(buttons,"Эпизоды",icon=R.drawable.ic_episodes){episodes()};buttons.addView(episodesButton)
-        qualityButton=action(buttons,"Качество"){qualities()};buttons.addView(qualityButton)
+        qualityButton=action(buttons,"Качество",icon=R.drawable.ic_settings){qualities()};buttons.addView(qualityButton)
         buttons.addView(action(buttons,"Автопереход"){
             val enabled=!prefs.getBoolean("auto-next",true);prefs.edit().putBoolean("auto-next",enabled).apply()
             if(!enabled)cancelNext()
