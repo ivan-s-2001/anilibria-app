@@ -41,7 +41,7 @@ class ScreenAuditTest {
             UiState(Screen.Section(HomeSection.LATEST),section=SectionData()),
             UiState(Screen.Section(HomeSection.SCHEDULE),section=SectionData(releases=listOf(release.copy(publishDay=java.time.LocalDate.now().dayOfWeek.value,scheduledEpisode=2.0)))),
         )+(0..3).map{UiState(Screen.Detail(1,it),detail=release,discovery=Discovery(listOf(FranchiseGroup("f","Франшиза",listOf(release))),listOf(release.copy(id=2))))}+
-            UiState(Screen.Home,home=HomeData(null,emptyList(),listOf(emptyList(),emptyList(),emptyList()),emptyList(),emptyList(),emptyList()))
+            UiState(Screen.Home,home=HomeData(emptyList(),listOf(emptyList(),emptyList(),emptyList()),emptyList(),emptyList(),emptyList()))
         states.forEach{state->
             model.state.value=state;shadowOf(Looper.getMainLooper()).idle()
             activity.window.decorView.measure(View.MeasureSpec.makeMeasureSpec(1920,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(1080,View.MeasureSpec.EXACTLY))

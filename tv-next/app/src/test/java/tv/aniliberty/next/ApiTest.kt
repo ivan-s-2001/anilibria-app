@@ -10,6 +10,18 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[30])
 class ApiTest {
+    @Test fun homeLoadsOnlyVisibleSections()=kotlinx.coroutines.runBlocking{
+        val paths=mutableSetOf<String>()
+        val api=Api(AccountTransport{path,method,body,token->
+            paths+=path
+            assertEquals("GET",method);assertNull(body);assertNull(token)
+            if(path=="/anime/schedule/now")"{}"else"[]"
+        })
+        assertTrue(api.home().latest.isEmpty())
+        assertEquals(setOf("/anime/releases/latest?limit=9","/anime/schedule/now",
+            "/anime/franchises/random?limit=3","/anime/genres/random?limit=4","/media/videos?limit=9"),paths)
+    }
+
     @Test fun libraryKeepsRequestedOrderAndUsesUnauthenticatedSharedTransport()=kotlinx.coroutines.runBlocking{
         var requests=0
         val api=Api(AccountTransport{path,method,body,token->
