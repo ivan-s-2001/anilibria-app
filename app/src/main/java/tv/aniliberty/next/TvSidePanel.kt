@@ -43,7 +43,9 @@ open class TvSidePanel(context:Context,title:String):Dialog(context){
         if(remoteClick.handle(event,currentFocus))return true
         val vertical=event.keyCode in listOf(android.view.KeyEvent.KEYCODE_DPAD_UP,android.view.KeyEvent.KEYCODE_DPAD_DOWN)
         if(vertical && body.getFocusables(View.FOCUS_FORWARD).isEmpty() &&
-            (scroll.canScrollVertically(-1) || scroll.canScrollVertically(1) || scroll.hasFocus())){
+            (scroll.canScrollVertically(-1) || scroll.canScrollVertically(1) || scroll.hasFocus()) &&
+            (scroll.hasFocus() || (currentFocus===footer.getFocusables(View.FOCUS_FORWARD).firstOrNull() &&
+                (event.keyCode==android.view.KeyEvent.KEYCODE_DPAD_UP || scroll.scrollY==0)))){
             if(event.action==android.view.KeyEvent.ACTION_DOWN){
                 val direction=if(event.keyCode==android.view.KeyEvent.KEYCODE_DPAD_DOWN)1 else -1
                 if(scroll.canScrollVertically(direction)){

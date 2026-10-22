@@ -19,6 +19,7 @@ class CatalogPanelTest{
         val panel=TvSidePanel(controller.get(),"Описание")
         panel.message(List(150){"Длинное описание, строка $it"}.joinToString("\n"))
         val close=panel.addAction("Закрыть"){panel.dismiss()}
+        val other=panel.addAction("Другое"){}
         panel.show()
         val decor=panel.window!!.decorView
         decor.measure(android.view.View.MeasureSpec.makeMeasureSpec(960,android.view.View.MeasureSpec.EXACTLY),android.view.View.MeasureSpec.makeMeasureSpec(540,android.view.View.MeasureSpec.EXACTLY))
@@ -34,6 +35,10 @@ class CatalogPanelTest{
         scroll.scrollTo(0,Int.MAX_VALUE)
         val end=scroll.scrollY
         press(android.view.KeyEvent.KEYCODE_DPAD_DOWN)
+        assertTrue(close.hasFocus())
+        press(android.view.KeyEvent.KEYCODE_DPAD_DOWN)
+        assertTrue(other.hasFocus())
+        press(android.view.KeyEvent.KEYCODE_DPAD_UP)
         assertTrue(close.hasFocus())
         press(android.view.KeyEvent.KEYCODE_DPAD_UP)
         assertTrue(scroll.scrollY<end)
