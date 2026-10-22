@@ -414,7 +414,7 @@ class PageAdapter(
             }
             Kind.HERO -> {
                 val r=row.release!!;val box=view as LinearLayout
-                val focusedAction=box.findFocus()?.tag as?String
+                val focusedAction=(box.findFocus()?.tag as?String)?.takeIf{box.getTag(R.id.hero_release)==r.id}
                 val previousControls=box.findViewWithTag<LinearLayout>("hero-controls")?.takeIf{box.getTag(R.id.hero_release)==r.id}
                 val previousButtons=previousControls?.let{line->(0 until line.childCount).map{line.getChildAt(it)as TextView}}.orEmpty()
                 val previousScroll=(previousControls?.parent as?HorizontalScrollView)?.scrollX?:0

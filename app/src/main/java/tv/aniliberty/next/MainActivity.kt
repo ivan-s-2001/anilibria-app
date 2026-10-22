@@ -97,7 +97,7 @@ class MainActivity : ComponentActivity() {
         fun apply(){
             if(token!=detailFocusToken || current!=screen || menuOpen || !list.hasWindowFocus())return
             val item=list.findViewHolderForAdapterPosition(index)?.itemView?:return
-            if(item.tag!=key)return
+            if(item.tag!=key || (key=="hero" && item.getTag(R.id.hero_release)!=screen.id))return
             val exact=child?.let{item.findViewWithTag<View>(it)}
             if(exact?.isFocusable==true)exact.requestFocus()
             else if(key=="tabs"){
@@ -106,7 +106,7 @@ class MainActivity : ComponentActivity() {
             detailFocusPending=false
         }
         val item=list.findViewHolderForAdapterPosition(index)?.itemView
-        if(!top && item!=null && item.top>=list.paddingTop && item.bottom<=list.height-list.paddingBottom){apply();return}
+        if(!top && item!=null && (key!="hero" || item.getTag(R.id.hero_release)==screen.id) && item.top>=list.paddingTop && item.bottom<=list.height-list.paddingBottom){apply();return}
         detailFocusPending=true;list.stopScroll()
         list.doOnNextLayout{if(token==detailFocusToken){detailFocusPending=false;apply()}}
         grid.scrollToPositionWithOffset(index,dp(if(key=="hero")0 else if(key=="tabs")12 else 64))
@@ -1089,6 +1089,7 @@ class MainActivity : ComponentActivity() {
         val sameAccountHistory=current==Screen.AccountHistory && state.screen==Screen.AccountHistory && adapter.rows.any{it.key=="account-history-heading"}
         val sameHome=current==Screen.Home && state.screen==Screen.Home && adapter.rows.any{it.kind==Kind.SHELF}
         val retainedFocus = if(current==state.screen) list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String } else null
+        if((current as?Screen.Detail)?.id!=(state.screen as?Screen.Detail)?.id){detailFocusToken++;detailFocusPending=false;enterContent=false}
         if(current!=state.screen){remoteClick.cancel();remotePendingKey=null;remoteFocusToken++;shelfMoveToken++;pendingShelf=null}
         current=state.screen
         val section=when(current){Screen.Profile,Screen.AccountSessions,is Screen.AccountSettings->3;Screen.AccountHistory->6;Screen.Settings->7;is Screen.Favorites->4;is Screen.Collections->5;Screen.Home->0;is Screen.Section->if((current as Screen.Section).kind==HomeSection.SCHEDULE)9 else 1;is Screen.Catalog,is Screen.Franchise->1;is Screen.Library->3;else->selectedSection}
@@ -1397,7 +1398,7 @@ class MainActivity : ComponentActivity() {
             else->emptyList()
         }
         preloadFranchises.take(12).forEach{loadFranchisePreview(it.id)}
-        val keepDetailTabFocus=current is Screen.Detail && !enterContent && list.findFocus()?.let{list.findContainingItemView(it)?.tag}=="tabs"
+        val keepDetailTabFocus=sameDetail && current is Screen.Detail && !enterContent && list.findFocus()?.let{list.findContainingItemView(it)?.tag}=="tabs"
         adapter.submit(rows)
         if(state.screen is Screen.Detail && !state.loading && rows.any{it.kind==Kind.HERO}){
             if(menuOpen || !list.hasWindowFocus())return
@@ -1407,7 +1408,7 @@ class MainActivity : ComponentActivity() {
             val screen=state.screen
             val bookmark=detailBookmarks[screen.id to screen.tab]
             val index=rows.indexOfFirst{it.key==bookmark?.row}.takeIf{it>=0}?:rows.indexOfFirst{it.kind==Kind.HERO}
-            if(index>=0)focusDetail(index,bookmark?.child)
+            if(index>=0)focusDetail(index,bookmark?.child?:if(rows[index].kind==Kind.HERO)"hero-action:${R.drawable.ic_play}"else null)
             return
         }
         if(keepDetailTabFocus)return

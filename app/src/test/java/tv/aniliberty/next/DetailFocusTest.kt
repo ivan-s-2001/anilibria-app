@@ -95,4 +95,22 @@ class DetailFocusTest {
         assertTrue(caller.hasFocus())
         controller.pause().stop().destroy()
     }
+    @Test fun quickTitleChangesDoNotCarryFavoriteOrTabFocusIntoNewRelease(){
+        val context=RuntimeEnvironment.getApplication()
+        context.getSharedPreferences("viewing",Context.MODE_PRIVATE).edit().clear().commit()
+        val controller=Robolectric.buildActivity(MainActivity::class.java).setup().visible().windowFocusChanged(true)
+        val activity=controller.get()
+        val model=MainActivity::class.java.getDeclaredMethod("getModel").apply{isAccessible=true}.invoke(activity)as TvModel
+        val list=MainActivity::class.java.getDeclaredField("list").apply{isAccessible=true}.get(activity)as RecyclerView
+        fun release(id:Int)=parseRelease(JSONObject("""{"id":$id,"episodes":[{"id":"e:$id","ordinal":1,"hls_720":"https://example.test/e.m3u8"}]}"""))
+        fun layout(){shadowOf(Looper.getMainLooper()).idle();val root=activity.window.decorView;root.measure(View.MeasureSpec.makeMeasureSpec(1920,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(1080,View.MeasureSpec.EXACTLY));root.layout(0,0,1920,1080);shadowOf(Looper.getMainLooper()).idle()}
+        model.state.value=UiState(Screen.Detail(100),detail=release(100));layout()
+        list.findViewWithTag<View>("hero-action:${R.drawable.ic_favorite}").requestFocus()
+        model.state.value=UiState(Screen.Detail(101),detail=release(101))
+        model.state.value=UiState(Screen.Detail(102),detail=release(102));layout()
+        assertEquals("hero-action:${R.drawable.ic_play}",list.findFocus()?.tag)
+        assertEquals(102,list.findViewWithTag<View>("hero").getTag(R.id.hero_release))
+        controller.pause().stop().destroy()
+    }
+
 }

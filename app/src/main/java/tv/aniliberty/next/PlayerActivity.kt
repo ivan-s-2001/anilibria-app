@@ -9,6 +9,10 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.view.ViewGroup
+import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.core.view.doOnNextLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
@@ -28,7 +32,11 @@ class PlayerActivity : ComponentActivity() {
     private lateinit var video:PlayerView
     private lateinit var buffering:android.widget.ProgressBar
     private var errorPanel:TvSidePanel?=null
-    private lateinit var autoNextButton:TextView
+    private lateinit var chrome:PlayerChrome
+    private lateinit var seekPreview:TextView
+    private lateinit var skipButton:TextView
+    private var lastPlaying:Boolean?=null
+    private val options by lazy{getSharedPreferences("player-options",MODE_PRIVATE)}
     private lateinit var controls:LinearLayout
     private lateinit var title:TextView
     private lateinit var clock:TextView
@@ -38,7 +46,7 @@ class PlayerActivity : ComponentActivity() {
     private lateinit var episodesButton:TextView
     private lateinit var qualityButton:TextView
     private lateinit var nextButton:TextView
-    private var panel:ScrollView?=null
+    private var panel:ViewGroup?=null
     private var panelCaller:View?=null
     private var player:ExoPlayer?=null
     private var release:Release?=null
@@ -60,7 +68,7 @@ class PlayerActivity : ComponentActivity() {
     private val skippedRanges=mutableSetOf<String>()
     private val prefs by lazy{playbackPreferences(this)}
     private fun dp(value:Int)=(value*resources.displayMetrics.density).toInt()
-    private fun time(ms:Long):String{val seconds=ms.coerceAtLeast(0)/1000;return "%d:%02d".format(seconds/60,seconds%60)}
+    private fun time(ms:Long)=playbackTime(ms)
     private val hide=Runnable{if(panel==null && pendingSeek==null && player?.isPlaying==true)hideControls()}
     private val ticker=object:Runnable{
         override fun run(){
@@ -77,11 +85,7 @@ class PlayerActivity : ComponentActivity() {
                         }
                     }
                 }
-                seek.progress=if(duration>0)(position*1000/duration).toInt().coerceIn(0,1000)else 0
-                clock.text="${time(position)} / ${time(duration)}"+if(pendingSeek!=null)" · OK — перейти · Назад — отменить"else ""
-                pause.text=if(engine.isPlaying)"Пауза"else"Продолжить"
-                val icon=getDrawable(if(engine.isPlaying)R.drawable.ic_pause else R.drawable.ic_play)!!.mutate().apply{setBounds(0,0,dp(20),dp(20));setTintList(pause.textColors)}
-                pause.setCompoundDrawablesRelative(icon,null,null,null)
+                updateChrome()
                 if(++progressTicks%10==0)save()
             }
             if(!stopped)handler.postDelayed(this,1000)
@@ -104,11 +108,11 @@ class PlayerActivity : ComponentActivity() {
         root.addView(video,FrameLayout.LayoutParams(-1,-1))
         buffering=android.widget.ProgressBar(this).apply{isFocusable=false;contentDescription="Загрузка видео"}
         root.addView(buffering,FrameLayout.LayoutParams(dp(48),dp(48),Gravity.CENTER))
-        controls=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(28),dp(16),dp(28),dp(20));setBackgroundColor(0xEE121212.toInt());visibility=View.GONE}
-        root.addView(controls,FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM))
-        title=TextView(this).apply{label("Загрузка…",18f,WHITE,true);maxLines=2};controls.addView(title)
-        clock=TextView(this).apply{label("",14f,MUTED)};controls.addView(clock)
-        seek=SeekBar(this).apply{max=1000;progressTintList=android.content.res.ColorStateList.valueOf(RED);contentDescription="Перемотка"}
+        chrome=PlayerChrome(this);controls=chrome;title=chrome.title;clock=chrome.elapsed;seek=chrome.seek
+        root.addView(chrome,FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM))
+        chrome.visibility=View.GONE
+        seekPreview=TextView(this).apply{label("",34f,WHITE,true);gravity=Gravity.CENTER;setPadding(dp(24),dp(14),dp(24),dp(14));background=shape(0xDD181818.toInt(),dp(12).toFloat());visibility=View.GONE;isFocusable=false}
+        root.addView(seekPreview,FrameLayout.LayoutParams(-2,-2,Gravity.CENTER))
         seek.setOnKeyListener{_,key,event->
             when(key){
                 KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT->{
@@ -122,22 +126,19 @@ class PlayerActivity : ComponentActivity() {
                 else->false
             }
         }
-        controls.addView(seek,LinearLayout.LayoutParams(-1,dp(34)))
-        val buttons=LinearLayout(this);controls.addView(android.widget.HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;addView(buttons)})
-        previousButton=action(buttons,"Предыдущий",icon=R.drawable.ic_previous){
-            val items=release?.episodes.orEmpty();val index=items.indexOfFirst{it.id==current?.id};items.getOrNull(index-1)?.let{startEpisode(it)}
-        };buttons.addView(previousButton)
-        pause=action(buttons,"Пауза",true,R.drawable.ic_play){togglePause()};buttons.addView(pause,LinearLayout.LayoutParams(dp(150),-2))
-        nextButton=action(buttons,"Следующий",icon=R.drawable.ic_next){nextEpisode(release?.episodes.orEmpty(),current?.id)?.let{startEpisode(it)}};buttons.addView(nextButton)
-        episodesButton=action(buttons,"Эпизоды",icon=R.drawable.ic_episodes){episodes()};buttons.addView(episodesButton)
-        qualityButton=action(buttons,"Качество",icon=R.drawable.ic_settings){qualities()};buttons.addView(qualityButton)
-        autoNextButton=action(buttons,if(settings.enabled("auto-next",prefs.getBoolean("auto-next",true)))"Автопереход: вкл"else "Автопереход: выкл"){
-            val enabled=!settings.enabled("auto-next",prefs.getBoolean("auto-next",true));settings.toggle("auto-next",prefs.getBoolean("auto-next",true))
-            autoNextButton.text=if(enabled)"Автопереход: вкл"else "Автопереход: выкл"
-            if(!enabled)cancelNext()
-            Toast.makeText(this,if(enabled)"Автопереход включён"else"Автопереход отключён",Toast.LENGTH_SHORT).show()
-        };buttons.addView(autoNextButton)
-        for(index in 0 until buttons.childCount){buttons.getChildAt(index).layoutParams=(buttons.getChildAt(index).layoutParams as?LinearLayout.LayoutParams?:LinearLayout.LayoutParams(-2,-2)).apply{marginEnd=dp(8)}}
+        previousButton=chrome.icon("Предыдущая серия",R.drawable.ic_previous){
+            val items=release?.episodes.orEmpty();items.getOrNull(items.indexOfFirst{it.id==current?.id}-1)?.let{startEpisode(it)}
+        }
+        pause=chrome.icon("Пауза",R.drawable.ic_pause,true){togglePause()}
+        nextButton=chrome.icon("Следующая серия",R.drawable.ic_next){nextEpisode(release?.episodes.orEmpty(),current?.id)?.let{startEpisode(it)}}
+        chrome.buttons.addView(View(this),LinearLayout.LayoutParams(0,1,1f))
+        episodesButton=chrome.button("Серии",R.drawable.ic_episodes){episodes()}
+        qualityButton=chrome.button("Настройки",R.drawable.ic_settings){playerSettings()}
+        skipButton=chrome.button("Пропустить",R.drawable.ic_next){
+            val engine=player
+            val range=manualSkipRange()
+            if(engine!=null && range!=null){engine.seekTo(range.second);updateChrome();pause.requestFocus()}
+        }.apply{visibility=View.GONE}
         setContentView(root)
         onBackPressedDispatcher.addCallback(this,object:OnBackPressedCallback(true){override fun handleOnBackPressed(){
             remoteClick.cancel()
@@ -174,9 +175,33 @@ class PlayerActivity : ComponentActivity() {
         dialog.setOnCancelListener{if(current==null)finish()else showControls()}
         dialog.show()
     }
-    private fun refreshControls(){handler.removeCallbacks(hide);handler.postDelayed(hide,5000)}
+    private fun refreshControls(){updateChrome();handler.removeCallbacks(hide);handler.postDelayed(hide,5000)}
+    private fun manualSkipRange():Pair<String,Long>? {
+        val engine=player?:return null;val episode=current?:return null
+        return listOf("Пропустить опенинг" to episode.opening,"Пропустить эндинг" to episode.ending).firstNotNullOfOrNull{(label,range)->skipTarget(range,engine.currentPosition,engine.duration)?.let{label to it}}
+    }
+    private fun updateChrome(){
+        if(!::chrome.isInitialized)return
+        val engine=player;val duration=engine?.duration?.coerceAtLeast(0)?:0
+        val position=pendingSeek?:engine?.currentPosition?:0
+        chrome.update(position,duration,pendingSeek!=null,engine?.isPlaying==true)
+        seek.secondaryProgress=if(duration>0)(((engine?.bufferedPosition?:0).coerceIn(0,duration)*1000)/duration).toInt()else 0
+        seekPreview.visibility=if(pendingSeek!=null && panel==null)View.VISIBLE else View.GONE
+        if(pendingSeek!=null){val delta=position-(engine?.currentPosition?:0);seekPreview.text="${time(position)}   ${if(delta>=0)"+"else"−"}${time(kotlin.math.abs(delta))}"}
+        val playing=engine?.isPlaying==true
+        if(::pause.isInitialized && playing!=lastPlaying){
+            lastPlaying=playing;pause.contentDescription=if(playing)"Пауза"else"Продолжить"
+            pause.setCompoundDrawablesRelative(getDrawable(if(playing)R.drawable.ic_pause else R.drawable.ic_play)?.mutate()?.apply{setBounds(0,0,dp(24),dp(24));setTintList(pause.textColors)},null,null,null)
+        }
+        if(::skipButton.isInitialized){
+            val range=manualSkipRange()
+            if(range==null && skipButton.hasFocus())pause.requestFocus()
+            skipButton.visibility=if(range!=null && pendingSeek==null)View.VISIBLE else View.GONE
+            skipButton.text=range?.first.orEmpty()
+        }
+    }
     private fun showControls(focus:View?=null){controls.visibility=View.VISIBLE;(focus?:pause).requestFocus();refreshControls()}
-    private fun hideControls(){controls.visibility=View.GONE;pendingSeek=null;video.requestFocus()}
+    private fun hideControls(){controls.visibility=View.GONE;seekPreview.visibility=View.GONE;pendingSeek=null;video.requestFocus()}
     private fun togglePause(){val engine=player?:return;if(engine.isPlaying)engine.pause()else engine.play();desiredPlay=engine.playWhenReady;save();showControls()}
     private fun startEpisode(episode:Episode, requestedQuality:Int=0, play:Boolean=true){
         val selected=requestedQuality.takeIf{it in episode.streams.indices}?:0
@@ -185,7 +210,9 @@ class PlayerActivity : ComponentActivity() {
         buffering.visibility=View.VISIBLE
         save();cancelNext();player?.release();current=episode;quality=selected;desiredPlay=play
         val engine=ExoPlayer.Builder(this).build();player=engine;video.player=engine
-        title.text="${release?.title.orEmpty()} · ${episode.label}"
+        title.text=release?.title.orEmpty();chrome.episode.text=listOf(episode.label,stream.first,"${options.getFloat("speed",1f)}×").joinToString("  ·  ")
+        engine.setPlaybackSpeed(options.getFloat("speed",1f));video.resizeMode=options.getInt("resize",androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT)
+        lastPlaying=null
         previousButton.visibility=if(release?.episodes?.indexOfFirst{it.id==episode.id}?.let{it>0}==true)View.VISIBLE else View.GONE
         nextButton.visibility=if(nextEpisode(release?.episodes.orEmpty(),episode.id)!=null)View.VISIBLE else View.GONE
         engine.addListener(object:Player.Listener{
@@ -223,25 +250,48 @@ class PlayerActivity : ComponentActivity() {
         content.addView(action(content,"Закрыть"){closePanel()},LinearLayout.LayoutParams(-1,dp(46)))
         val target=build(content)
         val scroll=ScrollView(this).apply{isFillViewport=true;addView(content);isFocusable=false}
-        panel=scroll;controls.visibility=View.GONE
+        panel=scroll;controls.visibility=View.GONE;seekPreview.visibility=View.GONE
         root.addView(scroll,FrameLayout.LayoutParams((resources.displayMetrics.widthPixels*.42f).toInt(),-1,Gravity.END))
         scroll.post{(target?:content.getChildAt(1)).requestFocus()}
     }
-    private fun closePanel(){panel?.let{root.removeView(it)};panel=null;showControls(panelCaller);panelCaller=null}
+    private fun closePanel(){remoteClick.cancel();panel?.let{root.removeView(it)};panel=null;showControls(panelCaller?.takeIf{it.isShown && it.isEnabled});panelCaller=null}
     private fun episodes(){
         val item=release?:return
-        openPanel("Эпизоды",episodesButton){content->
-            var target:View?=null
-            item.episodes.forEach{episode->
-                val position=prefs.getLong("position:${episode.id}",0)
-                val duration=prefs.getLong("duration:${episode.id}",0)
-                val status=when{episode.id==current?.id->"Сейчас";duration>0 && position>=duration-1000->"Просмотрено";position>0->"Продолжить · ${time(position)}";else->""}
-                val button=action(content,listOf(episode.label,status).filter{it.isNotBlank()}.joinToString("\n")){
-                    startEpisode(episode);closePanel()
-                }.apply{gravity=Gravity.CENTER_VERTICAL;maxLines=3;setPadding(dp(12),dp(8),dp(12),dp(8))}
-                content.addView(button,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(8)})
-                if(episode.id==current?.id)target=button
-            };target
+        cancelNext();handler.removeCallbacks(hide);panel?.let{root.removeView(it)};panelCaller=episodesButton
+        val body=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(16),dp(20),dp(16),dp(12));setBackgroundColor(0xF51A1A1A.toInt())}
+        body.addView(TextView(this).apply{label("Серии · ${item.episodes.size}",22f,WHITE,true)},LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=dp(12)})
+        val list=RecyclerView(this).apply{
+            tag="player-episodes";layoutManager=LinearLayoutManager(this@PlayerActivity);itemAnimator=null
+            adapter=PlayerEpisodeAdapter(item.episodes,current?.id,{id->prefs.getLong("position:$id",0) to prefs.getLong("duration:$id",0)}){episode->closePanel();startEpisode(episode)}
+        }
+        body.addView(list,LinearLayout.LayoutParams(-1,0,1f))
+        body.addView(action(body,"Вернуться к видео",icon=R.drawable.ic_close){closePanel()},LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(12)})
+        panel=body;controls.visibility=View.GONE;seekPreview.visibility=View.GONE
+        root.addView(body,FrameLayout.LayoutParams((resources.displayMetrics.widthPixels*.46f).toInt(),-1,Gravity.END))
+        val index=item.episodes.indexOfFirst{it.id==current?.id}.coerceAtLeast(0)
+        list.doOnNextLayout{if(panel===body)list.findViewHolderForAdapterPosition(index)?.itemView?.requestFocus()}
+        (list.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(index,dp(12));list.requestLayout()
+    }
+    private fun playerSettings(){
+        openPanel("Настройки воспроизведения",qualityButton){content->
+            fun choice(title:String,click:()->Unit){content.addView(action(content,title,click=click).apply{gravity=Gravity.START or Gravity.CENTER_VERTICAL},LinearLayout.LayoutParams(-1,dp(52)).apply{topMargin=dp(8)})}
+            choice("Качество · ${current?.streams?.getOrNull(quality)?.first.orEmpty()}"){qualities()}
+            choice("Скорость · ${options.getFloat("speed",1f)}×"){
+                openPanel("Скорость",qualityButton){values->
+                    var selected:View?=null
+                    listOf(.75f,1f,1.25f,1.5f,2f).forEach{speed->val button=action(values,"${if(speed==options.getFloat("speed",1f))"✓  "else""}${speed}×"){options.edit().putFloat("speed",speed).apply();player?.setPlaybackSpeed(speed);closePanel()};values.addView(button,LinearLayout.LayoutParams(-1,dp(50)).apply{topMargin=dp(8)});if(speed==options.getFloat("speed",1f))selected=button};selected
+                }
+            }
+            choice("Масштаб изображения"){
+                openPanel("Масштаб изображения",qualityButton){values->
+                    listOf("По размеру экрана" to androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT,"Заполнить с обрезкой" to androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM).forEach{(label,mode)->values.addView(action(values,label){options.edit().putInt("resize",mode).apply();video.resizeMode=mode;closePanel()},LinearLayout.LayoutParams(-1,dp(50)).apply{topMargin=dp(8)})};null
+                }
+            }
+            listOf("auto-next" to "Следующая серия автоматически","skip-opening" to "Автопропуск опенинга","skip-ending" to "Автопропуск эндинга").forEach{(key,label)->
+                val default=if(key=="auto-next")prefs.getBoolean("auto-next",true)else false
+                choice("$label · ${if(settings.enabled(key,default))"Вкл."else"Выкл."}"){settings.toggle(key,default);playerSettings()}
+            }
+            null
         }
     }
     private fun qualities(){
@@ -279,7 +329,22 @@ class PlayerActivity : ComponentActivity() {
         if(event.keyCode==KeyEvent.KEYCODE_BACK)return super.dispatchKeyEvent(event)
         if(panel!=null){
             val direction=when(event.keyCode){KeyEvent.KEYCODE_DPAD_LEFT->View.FOCUS_LEFT;KeyEvent.KEYCODE_DPAD_RIGHT->View.FOCUS_RIGHT;KeyEvent.KEYCODE_DPAD_UP->View.FOCUS_UP;KeyEvent.KEYCODE_DPAD_DOWN->View.FOCUS_DOWN;else->0}
-            if(direction!=0){val candidate=currentFocus?.focusSearch(direction);if(candidate==null || !insidePanel(candidate))return true}
+            if(direction!=0){
+                if(event.action!=KeyEvent.ACTION_DOWN)return true
+                val list=panel?.findViewWithTag<RecyclerView>("player-episodes")
+                val item=focused?.let{list?.findContainingItemView(it)}
+                if(list!=null && item!=null && direction in listOf(View.FOCUS_UP,View.FOCUS_DOWN)){
+                    val index=list.getChildAdapterPosition(item);val step=if(direction==View.FOCUS_DOWN)1 else -1
+                    val candidates=if(step>0)(index+1 until (list.adapter?.itemCount?:0))else(index-1 downTo 0)
+                    val target=candidates.firstOrNull{release?.episodes?.getOrNull(it)?.streams?.isNotEmpty()==true}
+                    if(target!=null){val view=list.findViewHolderForAdapterPosition(target)?.itemView;if(view!=null)view.requestFocus()else{list.doOnNextLayout{if(panel!=null)list.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()};list.scrollToPosition(target);list.requestLayout()}}
+                    else if(step>0)panel?.getFocusables(View.FOCUS_FORWARD)?.lastOrNull()?.requestFocus()
+                    return true
+                }
+                val candidate=focused?.focusSearch(direction)
+                if(candidate!=null && insidePanel(candidate))candidate.requestFocus()
+                return true
+            }
             return super.dispatchKeyEvent(event)
         }
         if(nextOffer!=null){
@@ -294,7 +359,7 @@ class PlayerActivity : ComponentActivity() {
             KeyEvent.KEYCODE_MEDIA_PLAY->{if(event.action==KeyEvent.ACTION_DOWN)player?.play();return true}
             KeyEvent.KEYCODE_MEDIA_PAUSE->{if(event.action==KeyEvent.ACTION_DOWN){player?.pause();save()};return true}
             KeyEvent.KEYCODE_MENU->{if(event.action==KeyEvent.ACTION_DOWN)episodes();return true}
-            KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN->{if(controls.visibility!=View.VISIBLE){if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0){revealKey=event.keyCode;showControls()};return true}}
+            KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN->{if(controls.visibility!=View.VISIBLE){if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0){revealKey=event.keyCode;if(event.keyCode in listOf(KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER))togglePause()else showControls()};return true}}
             KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT->{if(controls.visibility!=View.VISIBLE){if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0){showControls(seek);pendingSeek=remoteSeekTarget(player?.currentPosition?:0,player?.duration?:0,event.keyCode==KeyEvent.KEYCODE_DPAD_RIGHT,0)};return true}}
         }
         if(controls.visibility==View.VISIBLE && panel==null && nextOffer==null){
