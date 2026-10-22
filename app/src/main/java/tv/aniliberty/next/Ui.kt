@@ -333,7 +333,7 @@ class PageAdapter(
                     val updateLabel=if(!cataloguePoster){
                         val label=(box.getChildAt(4)as?TextView)?:TextView(view.context).also{box.addView(it)}
                         label.layoutParams=FrameLayout.LayoutParams(-1,view.dp(30),Gravity.BOTTOM).apply{bottomMargin=view.dp(6);marginStart=view.dp(8);marginEnd=view.dp(8)}
-                        label.label(relativeUpdate(release?.latestEpisode?.updatedAt?.ifBlank{release.updatedAt}?:release?.updatedAt.orEmpty()),10f,MUTED)
+                        label.label(updateTimestamp(release?.latestEpisode?.updatedAt?.ifBlank{release.updatedAt}?:release?.updatedAt.orEmpty()),10f,MUTED)
                         label.gravity=Gravity.CENTER;label.maxLines=2
                         label
                     }else null
