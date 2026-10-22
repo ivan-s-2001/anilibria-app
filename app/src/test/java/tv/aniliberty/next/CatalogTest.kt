@@ -35,6 +35,16 @@ class CatalogTest{
         assertEquals(3,first.total)
         assertEquals(listOf(1,2,3),mergeCatalogPages(first.releases,next.releases).map{it.id})
     }
+    @Test fun readsActualV1NestedPaginationInsteadOfTreatingFirstBatchAsLast(){
+        val first=parseCatalogPage("""{"data":[{"id":1}],"meta":{"pagination":{"total":1704,"count":30,"per_page":30,"current_page":1,"total_pages":57,"links":{"next":"/anime/catalog/releases?page=2"}}}}""",1)
+        assertTrue(first.more)
+        assertEquals(1704,first.total)
+        val last=parseCatalogPage("""{"data":[{"id":1704}],"meta":{"pagination":{"total":1704,"current_page":57,"total_pages":57,"links":{"previous":"?page=56"}}}}""",57)
+        assertFalse(last.more)
+        val empty=parseCatalogPage("""{"data":[],"meta":{"pagination":{"current_page":1,"total_pages":2}}}""",1)
+        assertFalse(empty.more)
+    }
+
     @Test fun episodeTotalComesFromServerEvenWhenEpisodeListIsNotIncluded(){
         val release=parseRelease(org.json.JSONObject("""{"id":1,"episodes_total":434}"""))
         assertEquals(434,release.totalEpisodes)

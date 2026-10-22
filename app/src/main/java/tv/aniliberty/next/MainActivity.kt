@@ -249,6 +249,16 @@ class MainActivity : ComponentActivity() {
                 if(state.screen is Screen.Catalog && state.moreError==null && dy>0 && grid.findLastVisibleItemPosition()>=adapter.itemCount-9)model.loadMoreCatalog()
             }
         })
+        list.viewTreeObserver.addOnGlobalFocusChangeListener{_,focus->
+            if(current is Screen.Catalog && !menuOpen && focus!=null){
+                val item=list.findContainingItemView(focus)
+                val position=item?.let{list.getChildAdapterPosition(it)}?:-1
+                val state=model.state.value
+                if(position>=0 && adapter.rows.getOrNull(position)?.kind==Kind.POSTER && position>=adapter.itemCount-9 && state.more && state.moreError==null){
+                    list.post{if(model.state.value.screen==state.screen && model.state.value.moreError==null)model.loadMoreCatalog()}
+                }
+            }
+        }
         list.adapter=adapter
         shell=LinearLayout(this).apply{setBackgroundColor(0xFF121212.toInt())}
         menu=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(12),dp(4),0);setBackgroundColor(0xFF212121.toInt())}

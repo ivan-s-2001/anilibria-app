@@ -37,8 +37,12 @@ fun parseCatalogChoices(body:String,years:Boolean=false):List<CatalogChoice>{
 fun parseCatalogPage(body:String,page:Int):CatalogPage{
     val json=JSONObject(body);val data=json.optJSONArray("data")?:JSONArray()
     val releases=(0 until data.length()).mapNotNull{data.optJSONObject(it)?.let(::parseRelease)}.distinctBy{it.id}
-    val meta=json.optJSONObject("meta")
-    val total=meta?.optInt("total",-1)?.takeIf{it>=0}
-    return CatalogPage(releases,meta!=null && meta.optInt("current_page",page)<meta.optInt("last_page",page),total)
+    val rootMeta=json.optJSONObject("meta")
+    val pagination=rootMeta?.optJSONObject("pagination")?:rootMeta
+    val total=pagination?.optInt("total",-1)?.takeIf{it>=0}
+    val current=pagination?.optInt("current_page",page)?:page
+    val pages=pagination?.optInt("total_pages",pagination.optInt("last_page",-1))?:-1
+    val hasNext=if(pages>=0)current<pages else pagination?.optJSONObject("links")?.optString("next")?.let{it.isNotBlank() && it!="null"}==true
+    return CatalogPage(releases,releases.isNotEmpty() && hasNext,total)
 }
 fun mergeCatalogPages(old:List<Release>,next:List<Release>)=(old+next).distinctBy{it.id}
