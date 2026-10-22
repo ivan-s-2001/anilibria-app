@@ -128,13 +128,14 @@ class ScreenAuditTest {
                 assertTrue(rows.any { it.key == "setting:skip-opening" })
                 assertFalse(rows.any { it.key.contains("fullscreen") })
             }
-            if (isAccountList(state.screen)) assertEquals(20, grid.spanCount)
+            if (isAccountList(state.screen))
+                assertEquals("Account list: ${state.screen}", 20, grid.spanCount)
             if ((state.screen as? Screen.Detail)?.tab in listOf(1, 2)) {
                 assertTrue(rows.any { it.kind == Kind.SHELF })
                 assertFalse(rows.any { it.kind == Kind.POSTER })
             }
             if (state.screen is Screen.Library || state.screen is Screen.Franchise)
-                assertEquals(20, grid.spanCount)
+                assertEquals("Wide screen: ${state.screen}", 20, grid.spanCount)
         }
         controller.pause().stop().destroy()
     }
