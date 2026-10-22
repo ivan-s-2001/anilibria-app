@@ -31,6 +31,13 @@ fun View.focusBackground(primary: Boolean = false, radiusDp:Int=6) {
         addState(intArrayOf(), shape(if (primary) RED else Color.TRANSPARENT, dp(radiusDp).toFloat()))
     }
 }
+/** Shared web catalogue/home control surface; focus never changes geometry. */
+fun View.webControlBackground() {
+    background=StateListDrawable().apply {
+        addState(intArrayOf(android.R.attr.state_focused),shape(0xFF292929.toInt(),dp(6).toFloat(),WHITE,dp(2)))
+        addState(intArrayOf(),shape(0xFF212121.toInt(),dp(6).toFloat()))
+    }
+}
 fun TextView.label(value: String, size: Float, color: Int = WHITE, bold: Boolean = false) {
     text = value; textSize = size; setTextColor(color)
     typeface = resources.getFont(if (bold) R.font.montserrat else R.font.inter)
@@ -38,7 +45,7 @@ fun TextView.label(value: String, size: Float, color: Int = WHITE, bold: Boolean
 fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int = 0, click: () -> Unit): TextView = TextView(parent.context).apply {
     label(title, 16f, WHITE, true); gravity = Gravity.CENTER
     isFocusable = true; isClickable = true; minimumHeight = dp(46)
-    setPadding(dp(16), 0, dp(16), 0); focusBackground(primary)
+    setPadding(dp(16), 0, dp(16), 0); if(primary)focusBackground(true)else webControlBackground()
     setTextColor(ColorStateList(arrayOf(intArrayOf(android.R.attr.state_focused), intArrayOf()), intArrayOf(if (primary) Color.BLACK else WHITE, WHITE)))
     if (icon != 0) {
         val drawable = context.getDrawable(icon)!!.mutate().apply { setBounds(0, 0, dp(20), dp(20)); setTintList(textColors) }
@@ -209,15 +216,12 @@ class PageAdapter(
                 val icon=box.getChildAt(0)as ImageView
                 icon.layoutParams=LinearLayout.LayoutParams(view.dp(32),view.dp(32))
                 icon.setImageResource(if(row.kind==Kind.REFRESH)R.drawable.ic_refresh else R.drawable.ic_arrow_right)
-                icon.setColorFilter(RED)
+                icon.setColorFilter(WHITE)
                 val caption=box.getChildAt(1)as TextView
                 caption.label(if(row.kind==Kind.REFRESH)row.title else "Открыть всё",14f,WHITE,true)
                 caption.gravity=Gravity.CENTER;caption.setSingleLine(true)
                 box.gravity=Gravity.CENTER;box.isFocusable=true;box.isClickable=row.click!=null
-                box.background=StateListDrawable().apply{
-                    addState(intArrayOf(android.R.attr.state_focused),shape(0xFF292929.toInt(),view.dp(12).toFloat(),WHITE,view.dp(2)))
-                    addState(intArrayOf(),shape(0xFF212121.toInt(),view.dp(12).toFloat()))
-                }
+                box.webControlBackground()
                 box.contentDescription=if(row.kind==Kind.REFRESH)row.title else "Открыть раздел ${row.title} полностью"
                 box.setOnClickListener(row.click?.let{callback->View.OnClickListener{callback()}})
                 box.isClickable=row.click!=null
@@ -235,10 +239,7 @@ class PageAdapter(
                     line.addView(action(line,title,icon=icon,click=callback).apply{
                         textSize=14f;setSingleLine();ellipsize=android.text.TextUtils.TruncateAt.END
                         if(index==0)gravity=Gravity.CENTER_VERTICAL or Gravity.START
-                        background=StateListDrawable().apply{
-                            addState(intArrayOf(android.R.attr.state_focused),shape(0xFF292929.toInt(),view.dp(6).toFloat(),WHITE,view.dp(2)))
-                            addState(intArrayOf(),shape(0xFF212121.toInt(),view.dp(6).toFloat()))
-                        }
+                        webControlBackground()
                     },LinearLayout.LayoutParams(if(index==0)view.dp(280)else -2,view.dp(48)).apply{marginEnd=view.dp(8)})
                 }
                 if(focused>=0)line.getChildAt(focused)?.requestFocus()
@@ -546,7 +547,7 @@ class PageAdapter(
                 refresh.setPadding(view.dp(7),view.dp(7),view.dp(7),view.dp(7))
                 if(row.selected==1)title.includeFontPadding=false
                 refresh.contentDescription="Обновить главную"
-                refresh.focusBackground(radiusDp=8)
+                refresh.webControlBackground()
                 refresh.setOnClickListener{row.click?.invoke()}
                 box.isFocusable=false;box.isClickable=false
             }
