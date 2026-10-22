@@ -1363,7 +1363,7 @@ class MainActivity : ComponentActivity() {
             "Если хотите поддержать проект, можете включить рекламу. Эти настройки действуют на ТВ и после входа сохраняются в аккаунте."
         )
         listOf(
-                Triple("support-video-ads", "Показывать видеорекламу", "Перед просмотром эпизодов"),
+                Triple("support-video-ads", "Показывать видеорекламу", "Перед просмотром видео"),
                 Triple(
                     "support-video-ads-always",
                     "Перед каждым эпизодом",
@@ -1376,20 +1376,54 @@ class MainActivity : ComponentActivity() {
                 ),
             )
             .forEach { (key, title, description) ->
+                val row =
+                    LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = android.view.Gravity.CENTER_VERTICAL
+                        minimumHeight = dp(88)
+                        setPadding(dp(12), dp(12), dp(12), dp(12))
+                        isFocusable = true
+                        contentDescription = "$title. $description"
+                        focusBackground()
+                    }
+                val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                labels.addView(
+                    TextView(this).apply {
+                        label(title, 16f, WHITE, true)
+                        includeFontPadding = false
+                    }
+                )
+                labels.addView(
+                    TextView(this).apply {
+                        label(description, 14f, MUTED)
+                        includeFontPadding = false
+                    },
+                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) },
+                )
+                row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
                 val toggle =
                     android.widget.Switch(this).apply {
-                        text = "$title\n$description"
-                        textSize = 15f
-                        setTextColor(WHITE)
                         isChecked = settings.enabled(key, false)
-                        isFocusable = true
-                        setPadding(dp(12), dp(12), dp(12), dp(12))
-                        focusBackground()
+                        isFocusable = false
+                        contentDescription = title
                         setOnCheckedChangeListener { _, value ->
                             if (settings.enabled(key, false) != value) settings.toggle(key, false)
+                            androidx.core.view.ViewCompat.setStateDescription(
+                                row,
+                                if (value) "Включено" else "Выключено",
+                            )
                         }
                     }
-                panel.body.addView(toggle, LinearLayout.LayoutParams(-1, dp(88)))
+                row.addView(
+                    toggle,
+                    LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(16) },
+                )
+                androidx.core.view.ViewCompat.setStateDescription(
+                    row,
+                    if (toggle.isChecked) "Включено" else "Выключено",
+                )
+                row.setOnClickListener { toggle.performClick() }
+                panel.body.addView(row, LinearLayout.LayoutParams(-1, -2))
             }
         panel.addAction("Продолжить", true) { panel.dismiss() }
         panel.setOnDismissListener {
@@ -3044,19 +3078,19 @@ class MainActivity : ComponentActivity() {
                         localToggle(
                             "support-video-ads",
                             "Показывать видеорекламу",
-                            "Перед просмотром эпизодов. В обычном режиме — не чаще раза в 30 минут.",
+                            "Перед просмотром видео",
                             false,
                         )
                         localToggle(
                             "support-video-ads-always",
                             "Перед каждым эпизодом",
-                            "Максимальная поддержка проекта. Работает при включённой видеорекламе.",
+                            "Максимальная поддержка проекта",
                             false,
                         )
                         localToggle(
                             "support-content-ads",
                             "Показывать контентную рекламу",
-                            "Баннеры и рекламные материалы. Выбор сохраняется и в аккаунте.",
+                            "Баннеры и рекламные материалы",
                             false,
                         )
                         rows += Row("settings-menu", Kind.HEADING, "Кнопки бокового меню")
