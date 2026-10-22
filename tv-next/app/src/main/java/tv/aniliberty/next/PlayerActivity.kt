@@ -779,15 +779,39 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
+    private fun enhancementSizes(): Pair<Anime4kSize, Anime4kSize>? {
+        val format = player?.videoFormat ?: return null
+        if (format.width <= 0 || format.height <= 0) return null
+        @Suppress("DEPRECATION") val screen = windowManager.defaultDisplay.mode
+        val input = Anime4kSize(format.width, format.height)
+        return input to
+            anime4kOutputSize(
+                input.width,
+                input.height,
+                screen.physicalWidth,
+                screen.physicalHeight,
+            )
+    }
+
+    private fun displayedEnhancementMode(): Anime4kMode {
+        val requested = Anime4kMode.fromKey(options.getString("anime4k", "off"))
+        val sizes = enhancementSizes() ?: return requested
+        return effectiveAnime4kMode(requested, sizes.first, sizes.second)
+    }
+
     private fun enhancementLabel(): String =
-        "Улучшение качества · ${Anime4kMode.fromKey(options.getString("anime4k", "off")).title}\nЭкспериментально"
+        "Улучшение качества · ${displayedEnhancementMode().title}\nЭкспериментально"
 
     private fun showEnhancementDialog() {
         if (enhancementDialog?.isShowing == true) return
-        val selected = Anime4kMode.fromKey(options.getString("anime4k", "off"))
+        val requested = Anime4kMode.fromKey(options.getString("anime4k", "off"))
+        val sizes = enhancementSizes()
+        val secondaryAvailable =
+            sizes != null &&
+                effectiveAnime4kMode(Anime4kMode.AA, sizes.first, sizes.second) == Anime4kMode.AA
         val dialog =
-            QualityEnhancementDialog(this, selected) { mode ->
-                if (mode != selected) {
+            QualityEnhancementDialog(this, displayedEnhancementMode(), secondaryAvailable) { mode ->
+                if (mode != requested) {
                     options.edit().putString("anime4k", mode.key).apply()
                     enhancementButton?.text = enhancementLabel()
                     val engine = player
