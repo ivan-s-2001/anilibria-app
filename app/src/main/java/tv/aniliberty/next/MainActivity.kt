@@ -358,6 +358,7 @@ class MainActivity : ComponentActivity() {
         var task:kotlinx.coroutines.Job?=null
         panel.addAction("Отмена"){task?.cancel();panel.dismiss()}
         panel.setOnCancelListener{task?.cancel()}
+        panel.show()
         task=lifecycleScope.launch{
             try{
                 val data=model.api.catalogReferences();catalogReferences=data;panel.dismiss()
@@ -373,7 +374,6 @@ class MainActivity : ComponentActivity() {
                 }else panel.dismiss()
             }
         }
-        panel.show()
     }
     private fun catalogFilters(screen:Screen.Catalog)=withCatalogReferences(screen){refs->
         CatalogFilterPanel(this,screen,refs){filters->applyCatalog(screen.copy(filters=filters,genre=null,title=null))}.show()
