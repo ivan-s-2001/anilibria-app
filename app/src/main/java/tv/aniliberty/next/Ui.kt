@@ -323,7 +323,14 @@ class PageAdapter(
                     content.gravity=Gravity.CENTER;content.setPadding(view.dp(10),view.dp(10),view.dp(10),view.dp(10))
                     title.gravity=Gravity.CENTER;title.maxLines=4
                     subtitle.gravity=Gravity.CENTER;subtitle.maxLines=4
-                    subtitle.text=listOf(release?.metadata.orEmpty(),release?.genres?.take(2)?.joinToString(" • ").orEmpty()).filter(String::isNotBlank).joinToString("\n")
+                    subtitle.text=listOf(release?.year.orEmpty(),release?.season.orEmpty(),release?.age.orEmpty()).filter(String::isNotBlank).joinToString(" · ")
+                    subtitle.maxLines=1
+                    val genresLine=(content.getChildAt(2)as?TextView)?:TextView(view.context).also{
+                        content.addView(it,LinearLayout.LayoutParams(-1,-2).apply{topMargin=view.dp(3)})
+                    }
+                    genresLine.label(release?.genres?.take(2)?.joinToString(" • ").orEmpty(),if(shelfMode)14f else 12f,MUTED)
+                    genresLine.gravity=Gravity.CENTER;genresLine.maxLines=1
+                    genresLine.ellipsize=android.text.TextUtils.TruncateAt.END
                     val episodeBadge=(box.getChildAt(3)as?TextView)?:TextView(view.context).also{
                         box.addView(it,FrameLayout.LayoutParams(-2,view.dp(28),Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply{topMargin=view.dp(10)})
                     }
@@ -353,9 +360,10 @@ class PageAdapter(
                     }
                     content.setPadding(view.dp(10),view.dp(44),view.dp(10),view.dp(12))
                     title.layoutParams=LinearLayout.LayoutParams(-1,0,1f)
-                    subtitle.maxLines=2
+                    subtitle.maxLines=1
                     fun focusPoster(focused:Boolean){
                         content.visibility=if(focused || cataloguePoster)View.VISIBLE else View.GONE
+                        genresLine.visibility=if(focused && genresLine.text.isNotBlank())View.VISIBLE else View.GONE
                         if(cataloguePoster){
                             box.getChildAt(1).apply{background=GenreShade();visibility=View.VISIBLE}
                             content.gravity=if(focused)Gravity.CENTER else Gravity.BOTTOM
