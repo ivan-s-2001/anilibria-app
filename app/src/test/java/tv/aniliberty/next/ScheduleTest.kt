@@ -62,4 +62,21 @@ class ScheduleTest {
         assertEquals(listOf(1,2),ids(true,false))
     }
 
+    @Test fun sourceButtonsKeepFocusAndCanBothBeActive(){
+        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        val controls=listOf("Поиск" to {},"Избранное" to {},"Коллекции" to {},"Сбросить" to {})
+        val row=Row("section-tools",Kind.CATALOG_BAR,controls=controls)
+        adapter.submit(listOf(row))
+        val holder=adapter.onCreateViewHolder(android.widget.FrameLayout(org.robolectric.RuntimeEnvironment.getApplication()),Kind.CATALOG_BAR.ordinal)
+        adapter.onBindViewHolder(holder,0)
+        val line=(holder.itemView as android.widget.HorizontalScrollView).getChildAt(0)as android.widget.LinearLayout
+        val favorites=line.getChildAt(1);favorites.requestFocus()
+        adapter.submit(listOf(row.copy(activeControls=setOf(1,2))))
+        adapter.onBindViewHolder(holder,0)
+        assertSame(favorites,line.getChildAt(1));assertTrue(favorites.hasFocus())
+        assertTrue(favorites.isSelected);assertTrue(line.getChildAt(2).isSelected)
+        adapter.submit(listOf(row));adapter.onBindViewHolder(holder,0)
+        assertFalse(favorites.isSelected);assertFalse(line.getChildAt(2).isSelected)
+    }
+
 }

@@ -291,7 +291,7 @@ class PageAdapter(
                 box.isClickable=row.click!=null
             }
             Kind.CATALOG_BAR -> {
-                fun decorate(button:View,index:Int){button.isSelected=index in row.activeControls;button.webControlBackground(button.isSelected);button.contentDescription=row.controls[index].first+if(button.isSelected)" · включено"else""}
+                fun decorate(button:View,index:Int){button.isSelected=index in row.activeControls;button.webControlBackground(button.isSelected);if(button is TextView)button.compoundDrawablesRelative.filterNotNull().forEach{it.setTintList(if(button.isSelected)ColorStateList.valueOf(RED)else button.textColors)};button.contentDescription=row.controls[index].first+if(button.isSelected)" · включено"else""}
                 fun controlIcon(index:Int):Int=when(row.controls[index].first){"Избранное"->R.drawable.ic_favorite;"Коллекции"->R.drawable.ic_library;"Сбросить"->R.drawable.ic_refresh;else->if(index==1)R.drawable.ic_filter else R.drawable.ic_sort}
                 val line=(view as HorizontalScrollView).getChildAt(0)as LinearLayout
                 view.layoutParams=view.layoutParams.apply{height=view.dp(60)}

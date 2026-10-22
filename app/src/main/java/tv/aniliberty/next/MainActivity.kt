@@ -1089,6 +1089,7 @@ class MainActivity : ComponentActivity() {
         val sameAccountHistory=current==Screen.AccountHistory && state.screen==Screen.AccountHistory && adapter.rows.any{it.key=="account-history-heading"}
         val sameHome=current==Screen.Home && state.screen==Screen.Home && adapter.rows.any{it.kind==Kind.SHELF}
         val retainedFocus = if(current==state.screen) list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String } else null
+        if(current!=state.screen){remoteClick.cancel();remotePendingKey=null;remoteFocusToken++;shelfMoveToken++;pendingShelf=null}
         current=state.screen
         val section=when(current){Screen.Profile,Screen.AccountSessions,is Screen.AccountSettings->3;Screen.AccountHistory->6;Screen.Settings->7;is Screen.Favorites->4;is Screen.Collections->5;Screen.Home->0;is Screen.Section->if((current as Screen.Section).kind==HomeSection.SCHEDULE)9 else 1;is Screen.Catalog,is Screen.Franchise->1;is Screen.Library->3;else->selectedSection}
         if(section!=selectedSection){selectedSection=section;buildMenu()}
