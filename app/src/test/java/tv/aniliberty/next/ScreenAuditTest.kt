@@ -39,7 +39,7 @@ class ScreenAuditTest {
             UiState(Screen.Franchise("one","Франшиза"),releases=listOf(release)),
             UiState(Screen.Section(HomeSection.GENRES),section=SectionData()),
             UiState(Screen.Section(HomeSection.LATEST),section=SectionData()),
-        )+(0..3).map{UiState(Screen.Detail(1,it),detail=release)}+
+        )+(0..3).map{UiState(Screen.Detail(1,it),detail=release,discovery=Discovery(listOf(FranchiseGroup("f","Франшиза",listOf(release))),listOf(release.copy(id=2))))}+
             UiState(Screen.Home,home=HomeData(null,emptyList(),listOf(emptyList(),emptyList(),emptyList()),emptyList(),emptyList(),emptyList()))
         states.forEach{state->
             model.state.value=state;shadowOf(Looper.getMainLooper()).idle()
@@ -59,6 +59,7 @@ class ScreenAuditTest {
                 assertFalse(rows.any{it.key.contains("fullscreen")})
             }
             if(isAccountList(state.screen))assertEquals(20,grid.spanCount)
+            if((state.screen as?Screen.Detail)?.tab in listOf(1,2)){assertTrue(rows.any{it.kind==Kind.SHELF});assertFalse(rows.any{it.kind==Kind.POSTER})}
             if(state.screen is Screen.Library || state.screen is Screen.Franchise)assertEquals(20,grid.spanCount)
         }
         controller.pause().stop().destroy()

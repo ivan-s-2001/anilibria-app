@@ -1268,22 +1268,22 @@ class MainActivity : ComponentActivity() {
                         1->{
                             val franchises=state.discovery?.franchises
                             when {
-                                state.discoveryLoading -> rows+=Row("related-loading",Kind.TEXT,"Загрузка франшизы…")
+                                state.discoveryLoading && franchises==null -> rows+=Row("related-loading",Kind.TEXT,"Загрузка франшизы…")
                                 franchises==null -> rows+=Row("related-retry",Kind.ACTION,"Не удалось загрузить франшизу · Повторить",click=model::retryDiscovery)
                                 franchises.isEmpty() -> rows+=Row("related-empty",Kind.TEXT,"Релиз не связан ни с одной франшизой")
                                 else -> franchises.forEach { group ->
-                                    rows+=Row("franchise-heading:${group.id}",Kind.HEADING,group.title,"Порядок просмотра · слева направо")
+                                    rows+=Row("franchise-heading:${group.id}",Kind.HEADING,group.title.ifBlank{"Связанные релизы"},"Порядок просмотра · слева направо")
                                     rows+=Row("franchise-order:${group.id}",Kind.SHELF,selected=7,cards=watchOrderCards(group.releases,"related:${group.id}"))
                                 }
                             }
                         }
                         2->{
-                            val similar=state.discovery?.recommendations
+                            val similar=state.discovery?.recommendations?.let{uniqueRecommendations(r.id,it,state.discovery.franchises.orEmpty())}
                             when {
-                                state.discoveryLoading->rows+=Row("similar-loading",Kind.TEXT,"Подбираем аниме…")
+                                state.discoveryLoading && similar==null->rows+=Row("similar-loading",Kind.TEXT,"Подбираем аниме…")
                                 similar==null->rows+=Row("similar-retry",Kind.ACTION,"Повторить загрузку рекомендаций",click=model::retryDiscovery)
                                 similar.isEmpty()->rows+=Row("similar-empty",Kind.TEXT,"Рекомендации пока отсутствуют")
-                                else->rows+=similar.map{Row("similar:${it.id}",Kind.POSTER,release=it)}
+                                else->rows+=Row("similar-shelf:${r.id}",Kind.SHELF,selected=7,cards=watchOrderCards(similar,"similar:${r.id}"))
                             }
                         }
                         3->{rows+=r.credits.groupBy{it.role}.map{(role,people)->Row("role:$role",Kind.TEXT,role,people.joinToString(" · "){it.name})};if(r.credits.isEmpty())rows+=Row("empty",Kind.TEXT,"Участники пока не указаны")}

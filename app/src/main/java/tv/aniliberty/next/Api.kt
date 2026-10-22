@@ -121,13 +121,14 @@ class Api {
         HomeSection.GENRES -> SectionData(features=features("/anime/genres",false).sortedBy{it.title.lowercase()})
         HomeSection.VIDEOS -> videos(page*30).let{SectionData(videos=it,more=it.size>=page*30)}
     }
-    suspend fun discovery(releaseId: Int): Discovery {
-        synchronized(discoveryCache) { discoveryCache[releaseId] }?.takeIf { android.os.SystemClock.elapsedRealtime()-it.first < 86400000 }?.let { return it.second }
+    suspend fun discovery(releaseId: Int,force:Boolean=false): Discovery {
+        synchronized(discoveryCache) { if(force)null else discoveryCache[releaseId] }?.takeIf { android.os.SystemClock.elapsedRealtime()-it.first < 86400000 }?.let { return it.second }
         val result = supervisorScope {
             suspend fun <T> optional(block: suspend () -> T): T? = try { block() } catch(e: CancellationException) { throw e } catch (_: Exception) { null }
             val groups = async { optional { parseFranchiseGroups(JSONArray(request("/anime/franchises/release/$releaseId"))) } }
             val recommendations = async { optional { uniqueRecommendations(releaseId,JSONArray(request("/anime/releases/recommended?release_id=$releaseId&limit=12")).objects().map(::parseRelease)) } }
-            Discovery(groups.await(), recommendations.await())
+            val related=groups.await()
+            Discovery(related,recommendations.await()?.let{uniqueRecommendations(releaseId,it,related.orEmpty())})
         }
         if(result.franchises != null && result.recommendations != null) synchronized(discoveryCache) {
             if(discoveryCache.size>=32)discoveryCache.remove(discoveryCache.keys.first())
@@ -182,10 +183,16 @@ data class ExternalIds(val shikimori: Int? = null, val mal: Int? = null)
 data class Rating(val source: String, val value: Double, val votes: Int?)
 data class FranchiseGroup(val id: String, val title: String, val releases: List<Release>)
 data class Discovery(val franchises: List<FranchiseGroup>?, val recommendations: List<Release>?)
-fun uniqueRecommendations(currentId: Int, releases: List<Release>): List<Release> = releases.filter { it.id != currentId }.distinctBy { it.id }
-fun parseFranchiseGroups(json: JSONArray): List<FranchiseGroup> = json.objects().map { group ->
-    FranchiseGroup(group.text("id"), group.text("name"), group.optJSONArray("franchise_releases").objects().sortedBy { it.optInt("sort_order") }.mapNotNull { it.optJSONObject("release")?.let(::parseRelease) }.distinctBy { it.id })
+fun uniqueRecommendations(currentId: Int, releases: List<Release>,franchises:List<FranchiseGroup> = emptyList()): List<Release> {
+    val related=franchises.flatMap{it.releases}.map{it.id}.toSet()+currentId
+    return releases.filter { it.id>0 && it.id !in related }.distinctBy { it.id }
 }
+internal fun mergeDiscovery(previous:Discovery?,next:Discovery)=Discovery(next.franchises?:previous?.franchises,next.recommendations?:previous?.recommendations).let{value->
+    value.copy(recommendations=value.recommendations?.let{uniqueRecommendations(-1,it,value.franchises.orEmpty())})
+}
+fun parseFranchiseGroups(json: JSONArray): List<FranchiseGroup> = json.objects().map { group ->
+    FranchiseGroup(group.text("id"), group.text("name"), group.optJSONArray("franchise_releases").objects().sortedBy { it.optDouble("sort_order",Double.MAX_VALUE) }.mapNotNull { it.optJSONObject("release")?.let(::parseRelease) }.distinctBy { it.id })
+}.filter{it.id.isNotBlank() && it.releases.isNotEmpty()}.distinctBy{it.id}
 
 
 enum class HomeSection(val title:String){

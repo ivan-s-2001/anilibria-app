@@ -148,8 +148,8 @@ class TvModel : ViewModel() {
         job?.cancel()
         state.value=state.value.copy(discoveryLoading=true)
         job=viewModelScope.launch {
-            val result=api.discovery(screen.id)
-            if((state.value.screen as? Screen.Detail)?.id==screen.id)state.value=state.value.copy(discovery=result,discoveryLoading=false)
+            val result=api.discovery(screen.id,force=true)
+            if((state.value.screen as? Screen.Detail)?.id==screen.id)state.value=state.value.copy(discovery=mergeDiscovery(state.value.discovery,result),discoveryLoading=false)
         }
     }
     fun retry() { (state.value.screen as?Screen.Catalog)?.let{catalogCache.remove(it)}; (state.value.screen as?Screen.Section)?.let{sectionCache.remove(it)}; if (state.value.screen == Screen.Home) homeCache = null; open(state.value.screen, false) }

@@ -33,4 +33,21 @@ class DiscoveryTest {
         assertNull(missing.externalIds.shikimori);assertNull(missing.externalIds.mal)
         assertTrue(missing.ratings.isEmpty())
     }
+    @Test fun similarExcludesCurrentReleaseAndAllFranchiseParts(){
+        fun release(id:Int)=parseRelease(JSONObject().put("id",id))
+        val group=FranchiseGroup("f","Story",listOf(release(1),release(2)))
+        assertEquals(listOf(3,4),uniqueRecommendations(1,listOf(1,2,3,3,4).map(::release),listOf(group)).map{it.id})
+    }
+    @Test fun retryRetainsSuccessfulSectionsAndReconcilesRecommendations(){
+        fun release(id:Int)=parseRelease(JSONObject().put("id",id))
+        val previous=Discovery(null,listOf(release(2),release(3)))
+        val next=Discovery(listOf(FranchiseGroup("f","Story",listOf(release(2)))),null)
+        val merged=mergeDiscovery(previous,next)
+        assertEquals(listOf(3),merged.recommendations!!.map{it.id})
+        assertEquals("f",merged.franchises!!.single().id)
+    }
+    @Test fun emptyFranchiseEntriesDoNotCreateBlankShelves(){
+        assertTrue(parseFranchiseGroups(JSONArray("""[{"id":"empty","franchise_releases":[]}]""")).isEmpty())
+    }
+
 }
