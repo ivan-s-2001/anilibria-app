@@ -564,8 +564,25 @@ class MainActivity : ComponentActivity() {
     private fun watchOrderCards(items:List<Release>,key:String)=items.distinctBy{it.id}.map{item->
         Row("$key:${item.id}",Kind.POSTER,release=item,selected=2)
     }
+    private val franchisePreviews=mutableMapOf<String,List<Release>>()
+    private val franchisePreviewErrors=mutableSetOf<String>()
+    private val franchisePreviewJobs=mutableMapOf<String,kotlinx.coroutines.Job>()
+    private fun loadFranchisePreview(id:String){
+        if(franchisePreviews.containsKey(id) || id in franchisePreviewErrors || franchisePreviewJobs[id]?.isActive==true)return
+        franchisePreviewJobs.filterKeys{it!=id}.values.forEach{it.cancel()}
+        franchisePreviewJobs.keys.filter{it!=id}.toList().forEach{franchisePreviewJobs.remove(it)}
+        franchisePreviewJobs[id]=lifecycleScope.launch{
+            kotlinx.coroutines.delay(250)
+            try{val parts=model.api.franchise(id);if(franchisePreviews.size>=32)franchisePreviews.remove(franchisePreviews.keys.first());franchisePreviews[id]=parts;franchisePreviewErrors.remove(id)}
+            catch(e:kotlinx.coroutines.CancellationException){throw e}
+            catch(_:Exception){franchisePreviewErrors.add(id)}
+            render(model.state.value)
+        }
+    }
     private fun featureCards(items:List<Feature>,kind:HomeSection)=items.map{feature->
-        Row("${kind.name}:${feature.id}",if(kind==HomeSection.GENRES)Kind.GENRE else Kind.FRANCHISE,feature.title,feature.subtitle,image=feature.image,click={
+        Row("${kind.name}:${feature.id}",if(kind==HomeSection.GENRES)Kind.GENRE else Kind.FRANCHISE,feature.title,feature.subtitle,image=feature.image,
+            items=franchisePreviews[feature.id].orEmpty(),selected=if(feature.id in franchisePreviewErrors)-1 else if(franchisePreviews.containsKey(feature.id) && franchisePreviews[feature.id].isNullOrEmpty())-2 else 0,
+            focusLoad=if(kind==HomeSection.FRANCHISES)({loadFranchisePreview(feature.id)})else null,click={
             rememberFocus()
             if(kind==HomeSection.FRANCHISES)model.open(Screen.Franchise(feature.id,feature.title))
             else model.open(Screen.Catalog(genre=feature.id.toIntOrNull(),title=feature.title))

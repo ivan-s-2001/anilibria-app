@@ -55,7 +55,7 @@ fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int
 }
 
 enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH, CONTINUE, CATALOG_BAR }
-data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList(),val homeStyle:Boolean=false,val queryChanged:((String)->Unit)?=null,val searchDone:(()->Unit)?=null)
+data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList(),val focusLoad:(()->Unit)?=null,val homeStyle:Boolean=false,val queryChanged:((String)->Unit)?=null,val searchDone:(()->Unit)?=null)
 
 class PageAdapter(
     private val navigate: (Int) -> Unit,
@@ -175,8 +175,10 @@ class PageAdapter(
                     val width=View.MeasureSpec.getSize(widthMeasureSpec)
                     if(Kind.entries[type]==Kind.FRANCHISE && !shelfMode && getTag(R.id.shelf_key)==true && width>0){
                         val imageWidth=(width*150f/312f).toInt()
-                        getChildAt(0)?.let{image->if(image.layoutParams.width!=imageWidth)image.layoutParams=image.layoutParams.apply{this.width=imageWidth}}
-                        getChildAt(2)?.let{content->val params=content.layoutParams as FrameLayout.LayoutParams;if(params.marginStart!=imageWidth)content.layoutParams=params.apply{marginStart=imageWidth}}
+                        if(!hasFocus()){
+                            getChildAt(0)?.let{image->if(image.layoutParams.width!=imageWidth)image.layoutParams=image.layoutParams.apply{this.width=imageWidth}}
+                            getChildAt(2)?.let{content->val params=content.layoutParams as FrameLayout.LayoutParams;if(params.marginStart!=imageWidth)content.layoutParams=params.apply{marginStart=imageWidth}}
+                        }
                         super.onMeasure(widthMeasureSpec,View.MeasureSpec.makeMeasureSpec((width*190f/312f).toInt(),View.MeasureSpec.EXACTLY))
                     }else super.onMeasure(widthMeasureSpec,heightMeasureSpec)
                 }
@@ -421,9 +423,35 @@ class PageAdapter(
                     meta.layoutParams=LinearLayout.LayoutParams(-1,0,1f).apply{topMargin=view.dp(10)}
                 }
                 meta.visibility=if(row.subtitle.isBlank())View.GONE else View.VISIBLE
+                val baseImage=FrameLayout.LayoutParams(image.layoutParams as FrameLayout.LayoutParams)
+                val baseContent=FrameLayout.LayoutParams(content.layoutParams as FrameLayout.LayoutParams)
+                val composition=(content.getChildAt(2)as?LinearLayout)?:LinearLayout(view.context).apply{orientation=LinearLayout.VERTICAL;isFocusable=false;content.addView(this,LinearLayout.LayoutParams(-1,-2))}
+                composition.removeAllViews()
+                if(!genre){
+                    val names=if(row.items.isNotEmpty())row.items.mapIndexed{index,item->"${index+1}. ${item.title}"}else listOf(if(row.selected==-1)"Состав недоступен"else if(row.selected==-2)"Состав пока не указан"else "Загрузка состава…")
+                    names.forEach{name->composition.addView(TextView(view.context).apply{label(name,if(row.items.size>9)11f else 13f,WHITE);setSingleLine();ellipsize=android.text.TextUtils.TruncateAt.END;isFocusable=false;includeFontPadding=false},LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=view.dp(3)})}
+                }
+                fun featureFocus(focused:Boolean){
+                    image.colorFilter=if(focused)android.graphics.ColorMatrixColorFilter(floatArrayOf(.15f,0f,0f,0f,0f,0f,.15f,0f,0f,0f,0f,0f,.15f,0f,0f,0f,0f,0f,1f,0f))else null
+                    composition.visibility=if(focused && !genre)View.VISIBLE else View.GONE
+                    if(!genre && focused){
+                        image.layoutParams=FrameLayout.LayoutParams(-1,-1)
+                        content.layoutParams=FrameLayout.LayoutParams(-1,-1)
+                        content.setBackgroundColor(Color.TRANSPARENT)
+                        content.gravity=Gravity.CENTER_VERTICAL
+                        title.visibility=View.GONE;meta.visibility=View.GONE
+                    }else{
+                        image.layoutParams=FrameLayout.LayoutParams(baseImage)
+                        content.layoutParams=FrameLayout.LayoutParams(baseContent)
+                        content.setBackgroundColor(if(genre || franchisePage)Color.TRANSPARENT else 0xFF212121.toInt())
+                        title.visibility=View.VISIBLE;meta.visibility=if(row.subtitle.isBlank())View.GONE else View.VISIBLE
+                    }
+                }
                 box.contentDescription=listOf(row.title,row.subtitle).filter(String::isNotBlank).joinToString(". ")
                 box.setOnClickListener{row.click?.invoke()}
-                box.setOnFocusChangeListener{_,focused->box.animate().scaleX(if(focused && !shelfMode)1.025f else 1f).scaleY(if(focused && !shelfMode)1.025f else 1f).setDuration(140).start()}
+                featureFocus(box.hasFocus())
+                box.setOnFocusChangeListener{_,focused->featureFocus(focused);if(focused && !genre)row.focusLoad?.invoke()}
+                if(box.hasFocus() && !genre)row.focusLoad?.invoke()
             }
             Kind.SPOTLIGHT,Kind.FEATURE,Kind.POSTER,Kind.CONTINUE -> {
                 val homeCard=shelfMode || row.homeStyle
@@ -603,6 +631,19 @@ class PageAdapter(
                         focusContinue(focused)
                         box.animate().scaleX(if(focused && !homeCard)1.025f else 1f).scaleY(if(focused && !homeCard)1.025f else 1f).setDuration(140).start()
                     }
+                }
+                if(row.kind==Kind.FEATURE){
+                    image.layoutParams=FrameLayout.LayoutParams(-1,-1)
+                    box.getChildAt(1).apply{background=GenreShade();visibility=View.VISIBLE}
+                    content.layoutParams=FrameLayout.LayoutParams(-1,-1)
+                    content.gravity=Gravity.CENTER;content.setPadding(view.dp(14),view.dp(14),view.dp(14),view.dp(14))
+                    title.maxLines=6;title.gravity=Gravity.CENTER
+                    subtitle.maxLines=4;subtitle.gravity=Gravity.CENTER;subtitle.text=row.subtitle
+                    fun videoFocus(focused:Boolean){
+                        image.colorFilter=if(focused)android.graphics.ColorMatrixColorFilter(floatArrayOf(.15f,0f,0f,0f,0f,0f,.15f,0f,0f,0f,0f,0f,.15f,0f,0f,0f,0f,0f,1f,0f))else null
+                        content.visibility=if(focused)View.VISIBLE else View.GONE
+                    }
+                    videoFocus(box.hasFocus());box.setOnFocusChangeListener{_,focused->videoFocus(focused)}
                 }
                 box.contentDescription=listOf(release?.title?:row.title,short).filter(String::isNotBlank).joinToString(". ")
                 box.setOnClickListener{if(row.click!=null)row.click.invoke()else if(release!=null)details(release)}

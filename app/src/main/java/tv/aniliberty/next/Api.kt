@@ -210,7 +210,7 @@ fun parseHomeVideos(body:String):List<HomeVideo>{
         val youtubeId=item.text("video_id").takeIf{Regex("[A-Za-z0-9_-]{11}").matches(it)}
         val url=direct?:if(origin?.optJSONObject("type")?.text("value")?.startsWith("YOUTUBE")==true && youtubeId!=null)"https://www.youtube.com/watch?v=$youtubeId"else ""
         HomeVideo(item.text("id"),item.text("title"),
-            listOf(origin?.text("title").orEmpty(),item.text("views").takeIf{it.isNotBlank()}?.let{"$it просмотров"}.orEmpty()).filter(String::isNotBlank).joinToString(" · "),
+            listOf(origin?.text("title").orEmpty(),item.text("views").takeIf{it.isNotBlank()}?.let{"$it просмотров"}.orEmpty(),item.text("comments").takeIf{it.isNotBlank()}?.let{"$it комментариев"}.orEmpty(),updateTimestamp(item.text("created_at"))).filter(String::isNotBlank).joinToString(" · "),
             item.optJSONObject("image")?.image(),url)
     }.distinctBy{it.id}
 }

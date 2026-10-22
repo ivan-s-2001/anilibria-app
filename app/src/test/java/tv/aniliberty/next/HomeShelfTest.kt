@@ -13,6 +13,36 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[30],application=Application::class)
 class HomeShelfTest {
+    @Test fun genreAndVideoDarkenOnlyWhileFocusedAndVideoRevealsInfo(){
+        for(kind in listOf(Kind.GENRE,Kind.FEATURE)){
+            val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
+            adapter.submit(listOf(Row("preview",kind,"Название","Данные")))
+            val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),kind.ordinal)
+            adapter.onBindViewHolder(holder,0)
+            val card=holder.itemView as FrameLayout
+            val image=card.getChildAt(0)as android.widget.ImageView
+            assertNull(image.colorFilter)
+            card.requestFocus();assertNotNull(image.colorFilter)
+            if(kind==Kind.FEATURE)assertEquals(android.view.View.VISIBLE,card.getChildAt(2).visibility)
+            card.clearFocus();assertNull(image.colorFilter)
+            if(kind==Kind.FEATURE)assertEquals(android.view.View.GONE,card.getChildAt(2).visibility)
+        }
+    }
+    @Test fun franchiseCompositionHasOneNumberedLinePerPartOnFocus(){
+        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
+        val parts=(1..3).map{parseRelease(org.json.JSONObject().put("id",it).put("name",org.json.JSONObject().put("main","Часть $it")))}
+        adapter.submit(listOf(Row("franchise",Kind.FRANCHISE,"Франшиза",items=parts)))
+        val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.FRANCHISE.ordinal)
+        adapter.onBindViewHolder(holder,0)
+        val card=holder.itemView as FrameLayout
+        val content=card.getChildAt(2)as android.widget.LinearLayout
+        val lines=content.getChildAt(2)as android.widget.LinearLayout
+        assertEquals(android.view.View.GONE,lines.visibility)
+        card.requestFocus()
+        assertEquals(android.view.View.VISIBLE,lines.visibility)
+        assertEquals(3,lines.childCount)
+        for(index in 0..2){val line=lines.getChildAt(index)as android.widget.TextView;assertEquals("${index+1}. Часть ${index+1}",line.text.toString());assertEquals(1,line.maxLines)}
+    }
     @Test fun franchiseDirectoryKeepsHomeAspectWhenColumnWidthChanges(){
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
         adapter.submit(listOf(Row("franchise",Kind.FRANCHISE,"Франшиза",homeStyle=true)))
