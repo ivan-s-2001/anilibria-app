@@ -331,6 +331,26 @@ class PageAdapter(
                     title.gravity=Gravity.START;subtitle.gravity=Gravity.START
                     if(poster)box.layoutParams=box.layoutParams.apply{height=view.cardDp(270)}
                 }
+                if(continuing){
+                    image.layoutParams=FrameLayout.LayoutParams(-1,-1)
+                    box.getChildAt(1).apply{background=GenreShade();visibility=View.VISIBLE}
+                    content.layoutParams=FrameLayout.LayoutParams(-1,-1)
+                    content.gravity=Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                    content.setPadding(view.dp(12),view.dp(12),view.dp(12),view.dp(16))
+                    title.gravity=Gravity.CENTER;title.maxLines=3
+                    subtitle.gravity=Gravity.CENTER;subtitle.maxLines=5;subtitle.text=row.subtitle
+                    (box.getChildAt(3)as android.widget.ProgressBar).layoutParams=FrameLayout.LayoutParams(-1,view.dp(4),Gravity.BOTTOM)
+                    fun focusContinue(focused:Boolean){
+                        title.visibility=View.VISIBLE
+                        subtitle.visibility=if(focused)View.VISIBLE else View.GONE
+                        image.colorFilter=if(focused)android.graphics.ColorMatrixColorFilter(floatArrayOf(.2f,0f,0f,0f,0f,0f,.2f,0f,0f,0f,0f,0f,.2f,0f,0f,0f,0f,0f,1f,0f))else null
+                    }
+                    focusContinue(box.hasFocus())
+                    box.setOnFocusChangeListener{_,focused->
+                        focusContinue(focused)
+                        box.animate().scaleX(if(focused)1.025f else 1f).scaleY(if(focused)1.025f else 1f).setDuration(140).start()
+                    }
+                }
                 box.contentDescription=listOf(release?.title?:row.title,short).filter(String::isNotBlank).joinToString(". ")
                 box.setOnClickListener{if(row.click!=null)row.click.invoke()else if(release!=null)details(release)}
                 box.setOnLongClickListener(if(release!=null)View.OnLongClickListener{quickActions(release);true}else null)

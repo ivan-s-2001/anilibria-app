@@ -147,7 +147,20 @@ class HomeShelfTest {
         val card=holder.itemView as FrameLayout
         assertEquals(250,(card.getChildAt(3)as android.widget.ProgressBar).progress)
         val caption=card.getChildAt(2)as android.widget.LinearLayout
-        assertTrue((caption.getChildAt(1)as android.widget.TextView).text.contains("12.5"))
+        val title=caption.getChildAt(0)as android.widget.TextView
+        val information=caption.getChildAt(1)as android.widget.TextView
+        assertEquals("Тайтл",title.text.toString())
+        assertEquals(android.view.View.VISIBLE,title.visibility)
+        assertEquals(android.view.View.GONE,information.visibility)
+        assertTrue(information.text.contains("12.5"))
+        card.requestFocus()
+        assertEquals(android.view.View.VISIBLE,title.visibility)
+        assertEquals(android.view.View.VISIBLE,information.visibility)
+        assertNotNull((card.getChildAt(0)as android.widget.ImageView).colorFilter)
+        card.clearFocus()
+        assertEquals(android.view.View.VISIBLE,title.visibility)
+        assertEquals(android.view.View.GONE,information.visibility)
+        assertNull((card.getChildAt(0)as android.widget.ImageView).colorFilter)
         card.performClick();assertEquals("uuid-12.5",uuid)
     }
 
