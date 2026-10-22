@@ -61,10 +61,15 @@ class Api {
         val promotions = async { optional { JSONObject(request("/media/promotions")).optJSONArray("data").objects().filter { !it.optBoolean("is_ad") && it.optJSONObject("release") != null }.map { Promotion(it.text("id"), it.optJSONObject("image")?.image(), parseRelease(it.getJSONObject("release"))) } } }
         val latest = async { latest() }
         val schedule = async { optional { val json = JSONObject(request("/anime/schedule/now")); listOf("yesterday", "today", "tomorrow").map { day -> json.optJSONArray(day).objects().mapNotNull { entry -> entry.optJSONObject("release")?.let { release -> entry.optJSONObject("published_release_episode")?.let { release.put("latest_episode",it) }; parseRelease(release) } } } } }
-        val franchises = async { optional { features("/anime/franchises/random?limit=9",true) } }
-        val genres = async { optional { features("/anime/genres/random?limit=9",false) } }
+        val franchises = async { optional { randomFeatures(HomeSection.FRANCHISES) } }
+        val genres = async { optional { randomFeatures(HomeSection.GENRES) } }
         val videos = async { optional { videos(9) } }
         HomeData(promotions.await(),latest.await(),schedule.await(),franchises.await(),genres.await(),videos.await())
+    }
+    suspend fun randomFeatures(section:HomeSection):List<Feature> = when(section){
+        HomeSection.GENRES->features("/anime/genres/random?limit=3",false)
+        HomeSection.FRANCHISES->features("/anime/franchises/random?limit=3",true)
+        else->error("Этот раздел не поддерживает случайную подборку")
     }
     private suspend fun features(path:String,franchise:Boolean):List<Feature> = JSONArray(request(path)).objects().map { feature ->
         val subtitle=if(franchise)listOf(
@@ -143,3 +148,9 @@ enum class HomeSection(val title:String){
 data class SectionData(val releases:List<Release> = emptyList(),val features:List<Feature> = emptyList(),val videos:List<HomeVideo> = emptyList(),val more:Boolean=false)
 
 data class TorrentLink(val title:String,val description:String,val magnet:String?)
+
+fun replaceHomeFeatures(home:HomeData,section:HomeSection,features:List<Feature>):HomeData = when(section){
+    HomeSection.GENRES->home.copy(genres=features.take(3))
+    HomeSection.FRANCHISES->home.copy(franchises=features.take(3))
+    else->error("Раздел не является случайной подборкой")
+}

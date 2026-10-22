@@ -15,7 +15,7 @@ sealed interface Screen {
     data class Franchise(val id: String, val title: String) : Screen
     data class Detail(val id: Int, val tab: Int = 0) : Screen
 }
-data class UiState(val screen: Screen = Screen.Welcome, val loading: Boolean = false, val error: String? = null, val releases: List<Release> = emptyList(), val detail: Release? = null, val more: Boolean = false, val home: HomeData? = null, val homeDay: Int = 1, val discovery: Discovery? = null, val discoveryLoading: Boolean = false, val section:SectionData?=null)
+data class UiState(val screen: Screen = Screen.Welcome, val loading: Boolean = false, val error: String? = null, val releases: List<Release> = emptyList(), val detail: Release? = null, val more: Boolean = false, val home: HomeData? = null, val homeDay: Int = 1, val discovery: Discovery? = null, val discoveryLoading: Boolean = false, val section:SectionData?=null,val refreshing:Set<HomeSection> = emptySet(),val refreshErrors:Set<HomeSection> = emptySet())
 class TvModel : ViewModel() {
     val api = Api()
     val state = MutableStateFlow(UiState())
@@ -23,10 +23,13 @@ class TvModel : ViewModel() {
     private var job: Job? = null
     private var homeCache: HomeData? = null
     private val sectionCache=linkedMapOf<Screen.Section,SectionData>()
+    private var navigationGeneration=0
+    private val featureJobs=mutableMapOf<HomeSection,Job>()
     private var homeLoadedAt = 0L
     private var selectedHomeDay = 1
     fun open(screen: Screen, remember: Boolean = true) {
         if (remember && state.value.screen != Screen.Welcome && screen != state.value.screen) stack.add(state.value.screen)
+        navigationGeneration++;featureJobs.values.forEach{it.cancel()};featureJobs.clear()
         job?.cancel()
         if (screen == Screen.Home && homeCache != null) {
             state.value = UiState(screen, home = homeCache, homeDay = selectedHomeDay)
@@ -60,6 +63,25 @@ class TvModel : ViewModel() {
                 }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { state.value = UiState(screen, error = e.message ?: "Не удалось загрузить данные") }
+        }
+    }
+    fun refreshFeatures(kind:HomeSection){
+        if(kind !in setOf(HomeSection.GENRES,HomeSection.FRANCHISES))return
+        if(state.value.screen!=Screen.Home || kind in state.value.refreshing)return
+        val generation=navigationGeneration
+        state.value=state.value.copy(refreshing=state.value.refreshing+kind,refreshErrors=state.value.refreshErrors-kind)
+        featureJobs[kind]=viewModelScope.launch {
+            try{
+                val items=api.randomFeatures(kind)
+                if(navigationGeneration==generation && state.value.screen==Screen.Home){
+                    val home=state.value.home?:return@launch
+                    val updated=replaceHomeFeatures(home,kind,items)
+                    homeCache=updated
+                    state.value=state.value.copy(home=updated,refreshing=state.value.refreshing-kind)
+                }
+            }catch(e:CancellationException){throw e}
+            catch(_:Exception){if(navigationGeneration==generation && state.value.screen==Screen.Home)state.value=state.value.copy(refreshing=state.value.refreshing-kind,refreshErrors=state.value.refreshErrors+kind)}
+            finally{if(navigationGeneration==generation)featureJobs.remove(kind)}
         }
     }
     fun homeDay(index: Int) { selectedHomeDay = index; state.value = state.value.copy(homeDay = index) }

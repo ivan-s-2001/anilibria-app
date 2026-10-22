@@ -47,7 +47,7 @@ fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int
     setOnClickListener { click() }
 }
 
-enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE }
+enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH }
 data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList())
 
 class PageAdapter(
@@ -160,15 +160,15 @@ class PageAdapter(
                 (shelf.adapter as PageAdapter).submit(cards)
                 restoreShelf(shelf,false)
             }
-            Kind.MORE -> {
+            Kind.MORE,Kind.REFRESH -> {
                 val text=view as TextView
                 text.layoutParams=text.layoutParams.apply{if(shelfMode){width=view.dp(when(row.selected){1->232;2->172;3->312;else->144});height=view.dp(when(row.selected){1->204;2->236;3->190;4->206;else->270})}}
-                text.label("Все\n${row.title}",16f,WHITE,true)
-                val arrow=view.context.getDrawable(R.drawable.ic_arrow_right)!!.mutate().apply{setBounds(0,0,view.dp(32),view.dp(32));setTint(WHITE)}
+                text.label(if(row.kind==Kind.REFRESH)row.title else "Открыть все\n${row.title}",16f,WHITE,true)
+                val arrow=view.context.getDrawable(if(row.kind==Kind.REFRESH)R.drawable.ic_refresh else R.drawable.ic_arrow_right)!!.mutate().apply{setBounds(0,0,view.dp(32),view.dp(32));setTint(WHITE)}
                 text.setCompoundDrawables(null,arrow,null,null);text.compoundDrawablePadding=view.dp(12)
-                text.gravity=Gravity.CENTER;text.isFocusable=true;text.isClickable=true
-                text.focusBackground();text.contentDescription="Открыть раздел ${row.title} полностью"
-                text.setOnClickListener{row.click?.invoke()}
+                text.gravity=Gravity.CENTER;text.isFocusable=true;text.isClickable=row.click!=null
+                text.focusBackground();text.contentDescription=if(row.kind==Kind.REFRESH)row.title else "Открыть раздел ${row.title} полностью"
+                text.setOnClickListener(row.click?.let{callback->View.OnClickListener{callback()}});text.isClickable=row.click!=null
             }
             Kind.DAYS -> {
                 val line=(view as HorizontalScrollView).getChildAt(0) as LinearLayout;line.removeAllViews()
@@ -383,3 +383,11 @@ private class GenreShade:android.graphics.drawable.Drawable(){
     override fun setColorFilter(filter:android.graphics.ColorFilter?){paint.colorFilter=filter;invalidateSelf()}
     @Deprecated("Deprecated in Java") override fun getOpacity()=android.graphics.PixelFormat.TRANSLUCENT
 }
+
+
+/** Discovery previews are three items plus two independently focusable actions. */
+fun discoveryShelfCards(key:String,title:String,items:List<Row>,style:Int,busy:Boolean=false,failed:Boolean=false,refresh:()->Unit,openAll:()->Unit):List<Row> =
+    items.take(3)+listOf(
+        Row("$key:refresh",Kind.REFRESH,if(busy)"Обновление…"else if(failed)"Повторить обновление"else"Обновить",selected=style,click=if(busy)null else refresh),
+        Row("$key:all",Kind.MORE,title,selected=style,click=openAll)
+    )

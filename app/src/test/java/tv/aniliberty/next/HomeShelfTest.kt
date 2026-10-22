@@ -84,4 +84,31 @@ class HomeShelfTest {
         assertEquals(height,card.layoutParams.height)
     }
 
+    @Test fun discoveryContainsThreeCardsRefreshAndAll(){
+        var refreshed=false;var opened=false
+        val source=(1..9).map{Row("genre:$it",Kind.GENRE,"Жанр $it")}
+        val cards=discoveryShelfCards("genres","Жанры",source,2,refresh={refreshed=true},openAll={opened=true})
+        assertEquals(5,cards.size)
+        assertEquals(listOf("genre:1","genre:2","genre:3"),cards.take(3).map{it.key})
+        assertEquals(Kind.REFRESH,cards[3].kind);assertEquals(Kind.MORE,cards[4].kind)
+        cards[3].click!!.invoke();assertTrue(refreshed);assertFalse(opened)
+        cards[4].click!!.invoke();assertTrue(opened)
+    }
+    @Test fun busyDiscoveryKeepsOldCardsAndFullSectionAvailable(){
+        val source=listOf(Row("genre:7",Kind.GENRE,"Фэнтези"))
+        val cards=discoveryShelfCards("genres","Жанры",source,2,busy=true,refresh={},openAll={})
+        assertEquals("genre:7",cards.first().key)
+        assertNull(cards[1].click);assertNotNull(cards[2].click)
+    }
+    @Test fun refreshChangesOnlyTheRequestedHomeCollection(){
+        val old=listOf(Feature("old","Старое","",null))
+        val home=HomeData(null,emptyList(),null,old,old,emptyList())
+        val updated=replaceHomeFeatures(home,HomeSection.GENRES,(1..5).map{Feature("$it","Жанр $it","",null)})
+        assertEquals(3,updated.genres!!.size)
+        assertSame(home.franchises,updated.franchises)
+        assertSame(home.latest,updated.latest)
+        assertSame(home.videos,updated.videos)
+        assertSame(old,home.genres)
+    }
+
 }

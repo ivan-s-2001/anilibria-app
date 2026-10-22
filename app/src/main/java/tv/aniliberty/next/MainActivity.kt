@@ -201,7 +201,11 @@ class MainActivity : ComponentActivity() {
     private fun videoCards(items:List<HomeVideo>)=items.map{video->Row("video:${video.id}",Kind.FEATURE,video.title,video.subtitle,image=video.image,click={openLink(video.url.takeIf{it.startsWith("https://")})})}
     private fun homeShelf(kind:HomeSection,items:List<Row>,wide:Boolean=false,key:String=kind.name):Row {
         val style=when(kind){HomeSection.LATEST,HomeSection.SCHEDULE->4;HomeSection.GENRES->2;HomeSection.FRANCHISES->3;else->if(wide)1 else 0}
-        return Row("shelf:$key",Kind.SHELF,selected=style,cards=shelfCards(key,kind.title,items,wide,style){openSection(kind)})
+        val state=model.state.value
+        val cards=if(kind==HomeSection.GENRES||kind==HomeSection.FRANCHISES)
+            discoveryShelfCards(key,kind.title,items,style,kind in state.refreshing,kind in state.refreshErrors,{model.refreshFeatures(kind)},{openSection(kind)})
+        else shelfCards(key,kind.title,items,wide,style){openSection(kind)}
+        return Row("shelf:$key",Kind.SHELF,selected=style,cards=cards)
     }
     private fun render(state:UiState){
         val retainedFocus = if(current==state.screen) list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String } else null
@@ -230,11 +234,9 @@ class MainActivity : ComponentActivity() {
                     if(schedule==null)rows+=Row("schedule-retry",Kind.ACTION,"Не удалось загрузить расписание · Повторить",click=model::retry)
                     else rows+=homeShelf(HomeSection.SCHEDULE,releaseCards(schedule,"schedule:${state.homeDay}"),key="schedule:${state.homeDay}")
                     rows+=Row("franchises-heading",Kind.HEADING,"Франшизы")
-                    if(home.franchises==null)rows+=Row("franchises-retry",Kind.ACTION,"Не удалось загрузить франшизы · Повторить",click=model::retry)
-                    else rows+=homeShelf(HomeSection.FRANCHISES,featureCards(home.franchises,HomeSection.FRANCHISES),true)
+                    rows+=homeShelf(HomeSection.FRANCHISES,featureCards(home.franchises.orEmpty(),HomeSection.FRANCHISES),true)
                     rows+=Row("genres-heading",Kind.HEADING,"Жанры")
-                    if(home.genres==null)rows+=Row("genres-retry",Kind.ACTION,"Не удалось загрузить жанры · Повторить",click=model::retry)
-                    else rows+=homeShelf(HomeSection.GENRES,featureCards(home.genres,HomeSection.GENRES),true)
+                    rows+=homeShelf(HomeSection.GENRES,featureCards(home.genres.orEmpty(),HomeSection.GENRES),true)
                     rows+=Row("videos-heading",Kind.HEADING,"Видео команды")
                     if(home.videos==null)rows+=Row("videos-retry",Kind.ACTION,"Не удалось загрузить видео · Повторить",click=model::retry)
                     else rows+=homeShelf(HomeSection.VIDEOS,videoCards(home.videos),true)
