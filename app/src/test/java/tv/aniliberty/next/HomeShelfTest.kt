@@ -87,6 +87,21 @@ class HomeShelfTest {
         assertFalse(card.getChildAt(4).isFocusable)
     }
 
+    @Test fun catalogueKeepsTitleVisibleAndShowsReleaseActionsOnFocus(){
+        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        val release=parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Название"},"year":2026}"""))
+        adapter.submit(listOf(Row("catalogue:1",Kind.POSTER,release=release)))
+        val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.POSTER.ordinal)
+        adapter.onBindViewHolder(holder,0)
+        val card=holder.itemView as FrameLayout
+        assertEquals(android.view.View.VISIBLE,card.getChildAt(2).visibility)
+        assertEquals(android.view.View.GONE,card.getChildAt(4).visibility)
+        card.requestFocus()
+        assertEquals(android.view.View.VISIBLE,card.getChildAt(4).visibility)
+        assertEquals("Подробнее",(card.getChildAt(4)as android.widget.TextView).text.toString())
+        assertNotNull((card.getChildAt(0)as android.widget.ImageView).colorFilter)
+    }
+
     @Test fun discoveryContainsFourCardsRefreshAndAll(){
         var refreshed=false;var opened=false
         val source=(1..9).map{Row("genre:$it",Kind.GENRE,"Жанр $it")}

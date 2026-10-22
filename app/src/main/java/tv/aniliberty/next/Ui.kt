@@ -278,7 +278,8 @@ class PageAdapter(
                 val release=row.release
                 val continuing=row.kind==Kind.CONTINUE
                 val poster=row.kind==Kind.POSTER
-                val webPoster=poster && row.selected==1
+                val webPoster=poster
+                val cataloguePoster=poster && row.selected!=1
                 val spotlight=row.kind==Kind.SPOTLIGHT
                 val image=box.getChildAt(0)as ImageView
                 image.layoutParams=FrameLayout.LayoutParams(-1,if(poster)view.cardDp(198)else if(spotlight)-1 else view.cardDp(if(continuing)150 else 130),Gravity.TOP)
@@ -312,7 +313,7 @@ class PageAdapter(
                     box.animate().scaleX(if(focused)1.025f else 1f).scaleY(if(focused)1.025f else 1f).setDuration(140).start()
                 }
                 if(webPoster){
-                    box.layoutParams=box.layoutParams.apply{height=view.cardDp(206)}
+                    box.layoutParams=box.layoutParams.apply{height=view.cardDp(if(cataloguePoster)270 else 206)}
                     image.layoutParams=FrameLayout.LayoutParams(-1,-1)
                     box.getChildAt(1).visibility=View.GONE
                     content.layoutParams=FrameLayout.LayoutParams(-1,-1)
@@ -323,13 +324,13 @@ class PageAdapter(
                     val episodeBadge=(box.getChildAt(3)as?TextView)?:TextView(view.context).also{
                         box.addView(it,FrameLayout.LayoutParams(-2,view.dp(28),Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply{topMargin=view.dp(10)})
                     }
-                    episodeBadge.label(release?.latestEpisode?.let{"${number(it.ordinal)} эпизод"}?:"Релиз",12f,WHITE,true)
+                    episodeBadge.label(if(cataloguePoster)release?.type?.takeIf{it.isNotBlank()}?:"Аниме"else release?.latestEpisode?.let{"${number(it.ordinal)} эпизод"}?:"Релиз",12f,WHITE,true)
                     episodeBadge.gravity=Gravity.CENTER;episodeBadge.setPadding(view.dp(10),0,view.dp(10),0)
                     episodeBadge.background=shape(0x1AFFFFFF,view.dp(6).toFloat());episodeBadge.isFocusable=false
                     val watchHint=(box.getChildAt(4)as?TextView)?:TextView(view.context).also{
                         box.addView(it,FrameLayout.LayoutParams(-2,view.dp(30),Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply{bottomMargin=view.dp(10)})
                     }
-                    watchHint.label("Смотреть",12f,WHITE,true)
+                    watchHint.label(if(cataloguePoster)"Подробнее"else"Смотреть",12f,WHITE,true)
                     watchHint.gravity=Gravity.CENTER;watchHint.setPadding(view.dp(10),0,view.dp(10),0)
                     watchHint.background=shape(0x1AFFFFFF,view.dp(6).toFloat());watchHint.isFocusable=false
                     val icon=view.context.getDrawable(R.drawable.ic_play)!!.mutate().apply{setTint(WHITE);setBounds(0,0,view.dp(14),view.dp(14))}
@@ -338,7 +339,15 @@ class PageAdapter(
                     title.layoutParams=LinearLayout.LayoutParams(-1,0,1f)
                     subtitle.maxLines=3
                     fun focusPoster(focused:Boolean){
-                        content.visibility=if(focused)View.VISIBLE else View.GONE
+                        content.visibility=if(focused || cataloguePoster)View.VISIBLE else View.GONE
+                        if(cataloguePoster){
+                            box.getChildAt(1).apply{background=GenreShade();visibility=View.VISIBLE}
+                            content.gravity=if(focused)Gravity.CENTER else Gravity.BOTTOM
+                            content.setPadding(view.dp(10),view.dp(if(focused)44 else 10),view.dp(10),view.dp(if(focused)46 else 12))
+                            title.layoutParams=LinearLayout.LayoutParams(-1,if(focused)0 else -2,if(focused)1f else 0f)
+                            title.maxLines=if(focused)4 else 3
+                            subtitle.visibility=if(focused)View.VISIBLE else View.GONE
+                        }
                         episodeBadge.visibility=if(focused)View.VISIBLE else View.GONE
                         watchHint.visibility=if(focused)View.VISIBLE else View.GONE
                         image.colorFilter=if(focused)android.graphics.ColorMatrixColorFilter(floatArrayOf(.045f,0f,0f,0f,12.75f,0f,.045f,0f,0f,12.75f,0f,0f,.045f,0f,12.75f,0f,0f,0f,1f,0f))else null
