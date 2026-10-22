@@ -643,8 +643,6 @@ class PageAdapter(
         return object : RecyclerView.ViewHolder(view) {}
     }
 
-    // Native Material theme with ComponentActivity; AppCompat is only an IMA dependency.
-    @android.annotation.SuppressLint("AppCompatCustomView")
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         val row = rows[position]
         val view = holder.itemView
@@ -1547,7 +1545,7 @@ class PageAdapter(
                 val continuing = row.kind == Kind.CONTINUE
                 val poster = row.kind == Kind.POSTER
                 val webPoster = poster
-                val schedulePoster = poster && row.selected == 3
+                val schedulePoster = poster && row.selected in listOf(1, 3)
                 val cataloguePoster = poster && row.selected !in listOf(1, 3)
                 val image = box.getChildAt(0) as ImageView
                 image.layoutParams =
@@ -1726,7 +1724,7 @@ class PageAdapter(
                                     marginEnd = view.dp(8)
                                 }
                             label.label(
-                                updateTimestamp(
+                                relativeUpdateLabel(
                                     release?.latestEpisode?.updatedAt?.ifBlank { release.updatedAt }
                                         ?: release?.updatedAt.orEmpty()
                                 ),

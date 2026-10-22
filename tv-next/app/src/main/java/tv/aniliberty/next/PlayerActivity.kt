@@ -21,13 +21,10 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.ima.ImaAdsLoader
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -59,21 +56,6 @@ class PlayerActivity : ComponentActivity() {
     private var panelChild = false
     private var panelCaller: View? = null
     private var player: ExoPlayer? = null
-    private val supportAds by lazy { SupportAds(this) }
-    private var adsLoader: ImaAdsLoader? = null
-    private var campaignRequest: kotlinx.coroutines.Deferred<List<VastCampaign>>? = null
-    private var loadedCampaigns: List<VastCampaign> = emptyList()
-    private var adLoading = false
-    private var adTimeout: Runnable? = null
-    private val imaSettings by lazy {
-        com.google.ads.interactivemedia.v3.api.ImaSdkFactory.getInstance()
-            .createImaSdkSettings()
-            .apply { language = "ru" }
-    }
-    private var adStartJob: kotlinx.coroutines.Job? = null
-    private val adAttempts = mutableSetOf<String>()
-    private var adGeneration = 0
-    private lateinit var adLabel: TextView
     private var release: Release? = null
     private var current: Episode? = null
     private var quality = 0
@@ -107,13 +89,7 @@ class PlayerActivity : ComponentActivity() {
                 if (engine != null) {
                     val duration = engine.duration.coerceAtLeast(0)
                     val position = pendingSeek ?: engine.currentPosition
-                    if (
-                        engine.isPlaying &&
-                            !adLoading &&
-                            !engine.isPlayingAd &&
-                            pendingSeek == null &&
-                            panel == null
-                    ) {
+                    if (engine.isPlaying && pendingSeek == null && panel == null) {
                         val episode = current
                         listOf("opening" to episode?.opening, "ending" to episode?.ending)
                             .forEach { (key, range) ->
@@ -162,24 +138,9 @@ class PlayerActivity : ComponentActivity() {
         super.onCreate(state)
         quality = state?.getInt("quality") ?: 0
         desiredPlay = state?.getBoolean("playing") ?: true
-        adAttempts.addAll(state?.getStringArrayList("ad-attempts").orEmpty())
-        if (supportAds.shouldRequest()) {
-            com.google.ads.interactivemedia.v3.api.ImaSdkFactory.getInstance()
-                .initialize(this, imaSettings)
-            requestAdCampaigns()
-        }
         root = FrameLayout(this).apply { setBackgroundColor(android.graphics.Color.BLACK) }
         video = PlayerView(this).apply { useController = false }
         root.addView(video, FrameLayout.LayoutParams(-1, -1))
-        adLabel =
-            TextView(this).apply {
-                label("Реклама", 12f, WHITE)
-                setPadding(dp(12), dp(8), dp(12), dp(8))
-                setBackgroundColor(0xAA000000.toInt())
-                isFocusable = false
-                visibility = View.GONE
-            }
-        root.addView(adLabel, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START))
         buffering =
             android.widget.ProgressBar(this).apply {
                 isFocusable = false
@@ -349,7 +310,6 @@ class PlayerActivity : ComponentActivity() {
 
     private fun manualSkipRange(): SkipSegment? {
         val engine = player ?: return null
-        if (adLoading || engine.isPlayingAd) return null
         val episode = current ?: return null
         return listOf("opening" to episode.opening, "ending" to episode.ending)
             .firstNotNullOfOrNull { (key, range) ->
@@ -385,12 +345,6 @@ class PlayerActivity : ComponentActivity() {
     private fun updateChrome() {
         if (!::chrome.isInitialized) return
         val engine = player
-        if (adLoading || engine?.isPlayingAd == true) {
-            controls.visibility = View.GONE
-            skipPrompt.visibility = View.GONE
-            seekPreview.visibility = View.GONE
-            return
-        }
         val duration = engine?.duration?.coerceAtLeast(0) ?: 0
         val position = pendingSeek ?: engine?.currentPosition ?: 0
         chrome.update(position, duration, pendingSeek != null, engine?.isPlaying == true)
@@ -455,7 +409,6 @@ class PlayerActivity : ComponentActivity() {
     }
 
     private fun showControls(focus: View? = null) {
-        if (adLoading || player?.isPlayingAd == true) return
         controls.visibility = View.VISIBLE
         skipPrompt.visibility = View.GONE
         (focus ?: pause).requestFocus()
@@ -482,91 +435,11 @@ class PlayerActivity : ComponentActivity() {
         if (panel == null && nextOffer == null) showControls() else updateChrome()
     }
 
-    private fun requestAdCampaigns(): kotlinx.coroutines.Deferred<List<VastCampaign>> {
-        return lifecycleScope
-            .async {
-                try {
-                    supportAds.campaigns().also { loadedCampaigns = it }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    supportAds.status(
-                        "Не удалось получить список рекламы: ${e.javaClass.simpleName}"
-                    )
-                    emptyList()
-                }
-            }
-            .also { campaignRequest = it }
-    }
-
-    private fun cancelAdTimeout() {
-        adTimeout?.let { handler.removeCallbacks(it) }
-        adTimeout = null
-    }
-
     private fun startEpisode(
         episode: Episode,
         requestedQuality: Int = 0,
         play: Boolean = true,
         positionOverride: Long? = null,
-    ) {
-        adStartJob?.cancel()
-        cancelAdTimeout()
-        val generation = ++adGeneration
-        if (!play || !supportAds.shouldRequest() || episode.id in adAttempts) {
-            startEpisodeContent(episode, requestedQuality, play, positionOverride)
-            return
-        }
-        save()
-        adsLoader?.setPlayer(null)
-        video.player = null
-        player?.release()
-        player = null
-        current = episode
-        quality = requestedQuality
-        desiredPlay = play
-        adLoading = true
-        buffering.visibility = View.VISIBLE
-        val request =
-            campaignRequest?.takeIf { !it.isCompleted || loadedCampaigns.isNotEmpty() }
-                ?: requestAdCampaigns()
-        adStartJob =
-            lifecycleScope.launch {
-                val campaigns = awaitAdCampaigns(request)
-                if (stopped || generation != adGeneration) return@launch
-                val queue = AdCampaignQueue(campaigns.shuffled())
-                val first = queue.next()
-                if (first == null) {
-                    supportAds.status("Список рекламы пуст или не получен за 8 секунд")
-                    Toast.makeText(
-                            this@PlayerActivity,
-                            "Реклама пока недоступна. Запускаем эпизод.",
-                            Toast.LENGTH_SHORT,
-                        )
-                        .show()
-                } else {
-                    adAttempts.add(episode.id)
-                    val timeout = Runnable {
-                        if (!stopped && generation == adGeneration && !queue.started) {
-                            adAttempts.add(episode.id)
-                            supportAds.status("Истекло общее время загрузки рекламы")
-                            startEpisodeContent(episode, requestedQuality, play, positionOverride)
-                        }
-                    }
-                    adTimeout = timeout
-                    handler.postDelayed(timeout, queue.remainingMs)
-                }
-                startEpisodeContent(episode, requestedQuality, play, positionOverride, first, queue)
-            }
-    }
-
-    private fun startEpisodeContent(
-        episode: Episode,
-        requestedQuality: Int = 0,
-        play: Boolean = true,
-        positionOverride: Long? = null,
-        campaign: VastCampaign? = null,
-        adQueue: AdCampaignQueue? = null,
     ) {
         val selected = requestedQuality.takeIf { it in episode.streams.indices } ?: 0
         val stream =
@@ -580,83 +453,11 @@ class PlayerActivity : ComponentActivity() {
         buffering.visibility = View.VISIBLE
         save()
         cancelNext()
-        adsLoader?.setPlayer(null)
         player?.release()
-        adsLoader?.release()
-        adsLoader = null
         current = episode
         quality = selected
         desiredPlay = play
-        val ad = campaign?.takeIf { supportAds.enabled }
-        adLoading = ad != null
-        if (ad == null) cancelAdTimeout()
-        val saved = prefs.getLong("position:${episode.id}", 0)
-        val duration = prefs.getLong("duration:${episode.id}", 0)
-        val resumePosition =
-            positionOverride ?: if (duration > 0 && saved >= duration - 1000) 0 else saved
-        var adShown = false
-        var fallbackPending = false
-        lateinit var engine: ExoPlayer
-        fun nextAd(reason: String) {
-            if (fallbackPending || adShown || player !== engine || stopped) return
-            fallbackPending = true
-            supportAds.status("Источник ${ad?.id}: $reason")
-            engine.pause()
-            handler.post {
-                if (player !== engine || stopped) return@post
-                val next = adQueue?.next()
-                if (next == null) {
-                    adAttempts.add(episode.id)
-                    supportAds.status("Доступные источники не выдали рекламу. $reason")
-                    Toast.makeText(
-                            this@PlayerActivity,
-                            "Реклама пока недоступна. Запускаем эпизод.",
-                            Toast.LENGTH_SHORT,
-                        )
-                        .show()
-                }
-                startEpisodeContent(episode, selected, play, resumePosition, next, adQueue)
-            }
-        }
-        val loader =
-            ad?.let {
-                supportAds.status("Загружаем рекламу: ${it.id}")
-                ImaAdsLoader.Builder(this)
-                    .setImaSdkSettings(imaSettings)
-                    .setVastLoadTimeoutMs(10000)
-                    .setMediaLoadTimeoutMs(10000)
-                    .setAdPreloadTimeoutMs(12000)
-                    .setPlayAdBeforeStartPosition(true)
-                    .setFocusSkipButtonWhenAvailable(true)
-                    .setAdErrorListener { event -> nextAd(event.error.errorCode.toString()) }
-                    .setAdEventListener { event ->
-                        if (player !== engine || stopped) return@setAdEventListener
-                        when (event.type) {
-                            com.google.ads.interactivemedia.v3.api.AdEvent.AdEventType.STARTED -> {
-                                adShown = true
-                                adAttempts.add(episode.id)
-                                adLoading = false
-                                adQueue?.markStarted()
-                                cancelAdTimeout()
-                                supportAds.shown()
-                                supportAds.status("Реклама воспроизводится: ${ad?.id.orEmpty()}")
-                            }
-                            com.google.ads.interactivemedia.v3.api.AdEvent.AdEventType
-                                .CONTENT_RESUME_REQUESTED -> {
-                                if (!fallbackPending) {
-                                    if (!adShown) nextAd("Ролик не выдан") else adLoading = false
-                                }
-                            }
-                            else -> Unit
-                        }
-                    }
-                    .build()
-            }
-        adsLoader = loader
-        val sources = DefaultMediaSourceFactory(this)
-        if (loader != null) sources.setLocalAdInsertionComponents({ loader }, video)
-        engine = ExoPlayer.Builder(this).setMediaSourceFactory(sources).build()
-        loader?.setPlayer(engine)
+        val engine = ExoPlayer.Builder(this).build()
         player = engine
         video.player = engine
         title.text = release?.title.orEmpty()
@@ -677,36 +478,6 @@ class PlayerActivity : ComponentActivity() {
         engine.addListener(
             object : Player.Listener {
                 override fun onEvents(player: Player, events: Player.Events) {
-                    if (this@PlayerActivity.player === engine) {
-                        buffering.visibility =
-                            if (
-                                engine.playbackState == Player.STATE_BUFFERING ||
-                                    (adLoading && !engine.isPlayingAd)
-                            )
-                                View.VISIBLE
-                            else View.GONE
-                        adLabel.visibility = if (engine.isPlayingAd) View.VISIBLE else View.GONE
-                        if (engine.isPlayingAd) {
-                            adLabel.text =
-                                listOf(
-                                        "Реклама",
-                                        ad?.advertiser.orEmpty(),
-                                        ad?.erid
-                                            ?.takeIf { it.isNotBlank() }
-                                            ?.let { "erid: $it" }
-                                            .orEmpty(),
-                                    )
-                                    .filter { it.isNotBlank() }
-                                    .joinToString(" · ")
-                            controls.visibility = View.GONE
-                            skipPrompt.visibility = View.GONE
-                            seekPreview.visibility = View.GONE
-                            pendingSeek = null
-                            remoteClick.cancel()
-                        }
-                        val speed = if (engine.isPlayingAd) 1f else options.getFloat("speed", 1f)
-                        if (engine.playbackParameters.speed != speed) engine.setPlaybackSpeed(speed)
-                    }
                     if (this@PlayerActivity.player === engine)
                         video.keepScreenOn =
                             engine.playWhenReady &&
@@ -716,17 +487,6 @@ class PlayerActivity : ComponentActivity() {
 
                 override fun onPlayerError(error: PlaybackException) {
                     if (player !== engine || stopped) return
-                    if (adLoading || engine.isPlayingAd) {
-                        if (adShown)
-                            startEpisodeContent(
-                                episode,
-                                quality,
-                                desiredPlay,
-                                engine.contentPosition,
-                            )
-                        else nextAd(error.errorCodeName)
-                        return
-                    }
                     save()
                     cancelNext()
                     showControls()
@@ -742,32 +502,27 @@ class PlayerActivity : ComponentActivity() {
                 override fun onPlaybackStateChanged(state: Int) {
                     if (player !== engine) return
                     buffering.visibility =
-                        if (state == Player.STATE_BUFFERING || adLoading) View.VISIBLE
-                        else View.GONE
-                    if (state == Player.STATE_ENDED && !adLoading && !engine.isPlayingAd) {
+                        if (state == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
+                    if (state == Player.STATE_ENDED) {
                         save()
                         offerNext()
                     }
                 }
             }
         )
-        val media = MediaItem.Builder().setUri(stream.second)
-        if (ad != null)
-            media.setAdsConfiguration(
-                MediaItem.AdsConfiguration.Builder(android.net.Uri.parse(ad.url))
-                    .setAdsId(episode.id)
-                    .build()
-            )
-        engine.setMediaItem(media.build())
+        engine.setMediaItem(MediaItem.fromUri(stream.second))
         engine.prepare()
-        engine.seekTo(resumePosition)
+        val saved = prefs.getLong("position:${episode.id}", 0)
+        val duration = prefs.getLong("duration:${episode.id}", 0)
+        engine.seekTo(
+            positionOverride ?: if (duration > 0 && saved >= duration - 1000) 0 else saved
+        )
         engine.playWhenReady = play
         if (panel == null) hideControls()
     }
 
     private fun save() {
         val engine = player ?: return
-        if (adLoading || engine.isPlayingAd) return
         val episode = current ?: return
         val item = release ?: return
         val duration = engine.duration.takeIf { it > 0 } ?: episode.duration * 1000
@@ -1078,7 +833,6 @@ class PlayerActivity : ComponentActivity() {
         "GestureBackNavigation",
     ) // Back is delegated to the registered OnBackPressedCallback.
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (player?.isPlayingAd == true) return super.dispatchKeyEvent(event)
         if (remoteRepeat.discard(event)) return true
         if (event.action == KeyEvent.ACTION_UP && event.keyCode == revealKey) {
             revealKey = -1
@@ -1360,32 +1114,20 @@ class PlayerActivity : ComponentActivity() {
         errorPanel?.dismiss()
         errorPanel = null
         stopped = true
-        adGeneration++
-        adStartJob?.cancel()
-        cancelAdTimeout()
-        if (!adLoading) desiredPlay = player?.playWhenReady ?: desiredPlay
+        desiredPlay = player?.playWhenReady ?: desiredPlay
         save()
         cancelNext()
         handler.removeCallbacksAndMessages(null)
         video.player = null
-        adsLoader?.setPlayer(null)
         player?.release()
         player = null
-        adsLoader?.release()
-        adsLoader = null
-        adLabel.visibility = View.GONE
-        adLoading = false
         super.onStop()
     }
 
     override fun onSaveInstanceState(out: Bundle) {
-        out.putStringArrayList("ad-attempts", ArrayList(adAttempts))
         out.putString("episode", current?.id)
         out.putInt("quality", quality)
-        out.putBoolean(
-            "playing",
-            if (adLoading) desiredPlay else player?.playWhenReady ?: desiredPlay,
-        )
+        out.putBoolean("playing", player?.playWhenReady ?: desiredPlay)
         super.onSaveInstanceState(out)
     }
 }
