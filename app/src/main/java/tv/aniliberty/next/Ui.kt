@@ -1794,8 +1794,10 @@ class PageAdapter(
                     title.layoutParams = LinearLayout.LayoutParams(-1, 0, 1f)
                     subtitle.maxLines = 1
                     fun focusPoster(focused: Boolean) {
-                        box.findViewWithTag<TextView>("favorite-count")?.visibility =
-                            if (!schedulePoster && ((focused && release?.favoriteCount != null) || cataloguePoster || row.isFavorite))
+                        box.findViewWithTag<TextView>("favorite-count")?.visibility = View.GONE
+                        box.findViewWithTag<TextView>("schedule-favorites")?.visibility = View.GONE
+                        box.findViewWithTag<LinearLayout>("poster-meta-badge")?.visibility =
+                            if (focused || cataloguePoster || schedulePoster || row.isFavorite || row.collectionType != null)
                                 View.VISIBLE
                             else View.GONE
                         content.visibility = if (focused) View.VISIBLE else View.GONE
@@ -1973,37 +1975,59 @@ class PageAdapter(
                             release?.favoriteCount?.let { "В избранном у $it пользователей" }
                                 ?: "Количество добавлений в избранное неизвестно"
                     }
-                    val collectionBadge =
-                        box.findViewWithTag<TextView>("collection-status")
-                            ?: TextView(view.context).also {
-                                it.tag = "collection-status"
+                    val posterBadge =
+                        box.findViewWithTag<LinearLayout>("poster-meta-badge")
+                            ?: LinearLayout(view.context).also {
+                                it.tag = "poster-meta-badge"
                                 box.addView(it)
                             }
-                    collectionBadge.layoutParams =
-                        FrameLayout.LayoutParams(view.dp(28), view.dp(28), Gravity.TOP or Gravity.START)
-                            .apply {
-                                topMargin = view.dp(42)
-                                marginStart = view.dp(8)
-                            }
-                    collectionBadge.text = ""
-                    collectionBadge.gravity = Gravity.CENTER
-                    collectionBadge.background = shape(0xCC181818.toInt(), view.dp(6).toFloat())
-                    collectionBadge.isFocusable = false
-                    collectionBadge.setCompoundDrawablesRelative(
-                        row.collectionType?.let { type ->
-                            view.context.getDrawable(type.icon)?.mutate()?.apply {
-                                setTint(type.color)
-                                setBounds(0, 0, view.dp(18), view.dp(18))
-                            }
+                    posterBadge.layoutParams =
+                        FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply {
+                            topMargin = view.dp(10)
+                            marginStart = view.dp(8)
+                        }
+                    posterBadge.orientation = LinearLayout.VERTICAL
+                    posterBadge.gravity = Gravity.CENTER_HORIZONTAL
+                    posterBadge.setPadding(view.dp(8), view.dp(6), view.dp(8), view.dp(6))
+                    posterBadge.background = shape(0xCC181818.toInt(), view.dp(6).toFloat())
+                    posterBadge.isFocusable = false
+                    posterBadge.removeAllViews()
+                    posterBadge.addView(
+                        TextView(view.context).apply {
+                            label(release?.favoriteCount?.let(::compactCount) ?: "—", 12f, WHITE, true)
+                            gravity = Gravity.CENTER
+                            includeFontPadding = false
+                            compoundDrawablePadding = view.dp(4)
+                            setCompoundDrawablesRelative(
+                                view.context.getDrawable(R.drawable.ic_favorite)?.mutate()?.apply {
+                                    setTint(if (row.isFavorite) CollectionVisuals.FAVORITE_COLOR else WHITE)
+                                    setBounds(0, 0, view.dp(14), view.dp(14))
+                                },
+                                null,
+                                null,
+                                null,
+                            )
                         },
-                        null,
-                        null,
-                        null,
+                        LinearLayout.LayoutParams(-2, -2),
                     )
-                    collectionBadge.contentDescription =
-                        row.collectionType?.let { "Коллекция: ${it.title}" }.orEmpty()
-                    collectionBadge.visibility =
-                        if (row.collectionType != null) View.VISIBLE else View.GONE
+                    row.collectionType?.let { type ->
+                        posterBadge.addView(
+                            ImageView(view.context).apply {
+                                setImageResource(type.icon)
+                                setColorFilter(type.color)
+                                contentDescription = "Коллекция: ${type.title}"
+                                isFocusable = false
+                            },
+                            LinearLayout.LayoutParams(view.dp(20), view.dp(20)).apply {
+                                topMargin = view.dp(5)
+                            },
+                        )
+                    }
+                    posterBadge.contentDescription =
+                        listOfNotNull(
+                            release?.favoriteCount?.let { "В избранном у $it пользователей" },
+                            row.collectionType?.let { "Коллекция: ${it.title}" },
+                        ).joinToString(". ")
                     focusPoster(box.hasFocus())
                     box.setOnFocusChangeListener { _, focused ->
                         focusPoster(focused)
