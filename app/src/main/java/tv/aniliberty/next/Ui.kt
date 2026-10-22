@@ -56,8 +56,8 @@ fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int
     setOnClickListener { click() }
 }
 
-enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH, CONTINUE, CATALOG_BAR }
-data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList(),val composition:List<String>?=null,val focusLoad:(()->Unit)?=null,val homeStyle:Boolean=false,val queryChanged:((String)->Unit)?=null,val searchDone:(()->Unit)?=null,val favoriteTitle:String?=null,val episodeProgress:Pair<Long,Long>?=null)
+enum class Kind { PROFILE, NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH, CONTINUE, CATALOG_BAR }
+data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList(),val composition:List<String>?=null,val focusLoad:(()->Unit)?=null,val homeStyle:Boolean=false,val queryChanged:((String)->Unit)?=null,val searchDone:(()->Unit)?=null,val favoriteTitle:String?=null,val episodeProgress:Pair<Long,Long>?=null,val profile:AccountProfile?=null)
 
 class PageAdapter(
     private val navigate: (Int) -> Unit,
@@ -168,6 +168,7 @@ class PageAdapter(
                 overScrollMode=View.OVER_SCROLL_NEVER
                 clipToPadding=false;itemAnimator=null;setPadding(dp(4),dp(4),dp(4),dp(4))
             }
+            Kind.PROFILE -> LinearLayout(context).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(0,dp(16),0,dp(20));addView(ImageView(context),LinearLayout.LayoutParams(dp(88),dp(88)));addView(TextView(context),LinearLayout.LayoutParams(0,-2,1f).apply{marginStart=dp(20)})}
             Kind.HERO -> LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
             Kind.HEADING -> LinearLayout(context).apply {
                 orientation=LinearLayout.VERTICAL;setPadding(0,dp(8),0,dp(4))
@@ -228,6 +229,11 @@ class PageAdapter(
             } else false
         }
         when (row.kind) {
+            Kind.PROFILE->{
+                val box=view as LinearLayout;val profile=row.profile
+                (box.getChildAt(0)as ImageView).apply{scaleType=ImageView.ScaleType.CENTER_CROP;background=shape(0xFF292929.toInt(),dp(44).toFloat());clipToOutline=true;load(profile?.avatar?:R.drawable.ic_aniliberty);isFocusable=false;contentDescription=profile?.name?:"Гость"}
+                (box.getChildAt(1)as TextView).apply{label(listOf(profile?.name?:"Гость",profile?.login?.takeIf{it!=profile?.name}.orEmpty(),profile?.email.orEmpty(),profile?.createdAt?.let{updateTimestamp(it).substringBefore(" ").takeIf{date->date.isNotBlank()}?.let{date->"В AniLiberty с $date"}}.orEmpty()).filter{it.isNotBlank()}.joinToString("\n"),18f,WHITE,true);isFocusable=false}
+            }
             Kind.SHELF -> {
                 val shelf=view as RecyclerView
                 val oldKey=shelf.getTag(R.id.shelf_key) as? String
@@ -439,9 +445,6 @@ class PageAdapter(
                 }
                 if(r.ratings.isEmpty() && r.ongoing==null && r.favoriteCount==null)ratings.parent.let{(it as View).visibility=View.GONE}
                 val episode=resumeEpisode(r.episodes,lastEpisode(r.id),progress)
-                if(r.blocked)text("Просмотр ограничен правообладателем или регионом",13f,MUTED)
-                else if(episode==null)text("Серии ещё не опубликованы",13f,MUTED)
-                else if(episode.streams.isEmpty())text("Поток для выбранной серии пока недоступен",13f,MUTED)
                 info.addView(View(view.context).apply{tag="title-bottom-spacer"},LinearLayout.LayoutParams(-1,0,1f))
                 updateTimestamp(r.updatedAt).takeIf{it.isNotBlank()}?.let{text("Обновлено $it",12f,MUTED,false,1)}
                 val age=Regex("[0-9]+").find(r.age)?.value.orEmpty()
@@ -749,12 +752,12 @@ class PageAdapter(
                     load(e.preview){if(watched.first<=0){allowHardware(false);size(192,108);transformations(SpoilerBlurTransformation())}}
                 }
                 val completed=watched.second>0 && watched.first>=watched.second-1000
-                val episodeTitle=if(e.name.isBlank())e.label else "${number(e.ordinal)} · ${e.name}"
+                val episodeTitle=listOf(row.title,if(e.name.isBlank())e.label else "${number(e.ordinal)} · ${e.name}").filter{it.isNotBlank()}.joinToString("\n")
                 val duration=if(e.duration>0)"%d:%02d".format(e.duration/60,e.duration%60)else ""
                 val status=when{e.streams.isEmpty()->"Пока недоступно";completed->"Просмотрено";watched.first>0->"Продолжить";else->""}
                 (box.getChildAt(2)as TextView).apply{label(listOf(episodeTitle,listOf(duration,status).filter{it.isNotBlank()}.joinToString(" · ")).filter{it.isNotBlank()}.joinToString("\n"),16f,WHITE,true);maxLines=4;ellipsize=android.text.TextUtils.TruncateAt.END}
                 (box.getChildAt(3)as android.widget.ProgressBar).progress=if(watched.second>0)(watched.first*1000/watched.second).toInt().coerceIn(0,1000)else 0
-                box.contentDescription=listOf(episodeTitle,duration,status).filter{it.isNotBlank()}.joinToString(". ");box.setOnClickListener{play(e)}
+                box.contentDescription=listOf(episodeTitle,duration,status).filter{it.isNotBlank()}.joinToString(". ");box.setOnClickListener{row.click?.invoke()?:play(e)}
                 box.setOnLongClickListener(row.longClick?.let{callback->View.OnLongClickListener{callback();true}})
                 box.isLongClickable=row.longClick!=null
             }

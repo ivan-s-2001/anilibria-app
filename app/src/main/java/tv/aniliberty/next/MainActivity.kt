@@ -145,7 +145,7 @@ class MainActivity : ComponentActivity() {
             val size=outer.adapter?.itemCount?:0
             if(!forward && index==0){if(event.repeatCount==0)openMenu();return true}
             if(forward && index>=size-1)return true
-            return false // RecyclerView handles movement inside its own horizontal row.
+            super.dispatchKeyEvent(event);return true // Keep horizontal navigation inside the nested shelf.
         }
         val target=detailGridTarget(adapter.rows,position,direction)
         if(target!=null){focusDetail(target);return true}
@@ -383,6 +383,7 @@ class MainActivity : ComponentActivity() {
         list.addOnScrollListener(object:RecyclerView.OnScrollListener(){
             override fun onScrolled(view:RecyclerView,dx:Int,dy:Int){
                 val state=model.state.value
+                if(current==Screen.AccountHistory && dy>0 && grid.findLastVisibleItemPosition()>=adapter.itemCount-6 && accountHistoryError==null)loadAccountHistory()
                 if(state.moreError==null && dy>0 && grid.findLastVisibleItemPosition()>=adapter.itemCount-9){
                     if(state.screen is Screen.Catalog)model.loadMoreCatalog()
                     else if(state.screen is Screen.Section)model.loadMoreSection()
@@ -574,7 +575,7 @@ class MainActivity : ComponentActivity() {
     }
     private fun login(){
         AccountPanel(this,lifecycleScope,account){
-            accountHistoryJob?.cancel();lastHistoryHydration=0L;accountLoadedAt=0L
+            accountHistoryJob?.cancel();accountHistoryLoadJob?.cancel();accountHistoryItems=emptyList();accountHistoryPage=0;profileError=null;lastHistoryHydration=0L;accountLoadedAt=0L
             Toast.makeText(this,"Вход выполнен · ${account.session.name}",Toast.LENGTH_SHORT).show()
             rememberFocus();render(model.state.value);refreshAccount(force=true,after={offerLocalHistory()})
         }.start()
@@ -582,13 +583,16 @@ class MainActivity : ComponentActivity() {
     private fun refreshAccount(force:Boolean=false,after:(()->Unit)?=null){
         if(!account.signedIn || accountJob?.isActive==true)return
         if(!force && System.currentTimeMillis()-accountLoadedAt<60000)return
+        profileSyncing=true;profileError=null
+        if(current==Screen.Profile)render(model.state.value)
         accountJob=lifecycleScope.launch{
             try{
                 account.refresh();accountLoadedAt=System.currentTimeMillis()
                 account.loadProgress()
                 rememberFocus();render(model.state.value);after?.invoke();startAccountHistorySync()
             }catch(e:kotlinx.coroutines.CancellationException){throw e}
-            catch(_:Exception){ /* Cached lists remain available; explicit actions offer retry. */ }
+            catch(e:Exception){profileError=e.message?:"Проверьте соединение"}
+            finally{profileSyncing=false;if(current==Screen.Profile)render(model.state.value)}
         }
     }
     private fun startAccountHistorySync(){
@@ -629,31 +633,56 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+    private var profileError:String?=null
+    private var profileSyncing=false
+    private var accountHistoryItems:List<AccountViewedEpisode> = emptyList()
+    private var accountHistoryPage=0
+    private var accountHistoryMore=false
+    private var accountHistoryLoading=false
+    private var accountHistoryError:String?=null
+    private var accountHistoryLoadJob:kotlinx.coroutines.Job?=null
     private fun library(){
-        if(!account.signedIn){
-            val panel=TvSidePanel(this,"Моё")
-            panel.message("Избранное, коллекции и прогресс доступны после входа в аккаунт AniLiberty.")
-            panel.addChoice("Войти в аккаунт",icon=R.drawable.ic_library){panel.dismiss();login()}
-            panel.addChoice("Библиотека на этом ТВ",icon=R.drawable.ic_favorite){panel.dismiss();localLibrary()}
-            panel.addAction("Закрыть"){panel.dismiss()};panel.show();return
-        }
-        if(account.lists==null){accountAction(done={library()}){account.refresh()};return}
+        rememberFocus();model.open(Screen.Profile)
+        if(account.signedIn)refreshAccount(force=true)
+    }
+    private fun accountList(type:CollectionType?){
+        if(account.lists==null){accountAction(done={accountList(type)}){account.refresh()};return}
         val lists=account.lists!!
-        val panel=TvSidePanel(this,account.session.name)
-        fun open(ids:List<Int>,title:String){panel.dismiss();rememberFocus();model.open(Screen.Library(ids,title))}
-        panel.addChoice("Избранное · ${lists.favorites.size}",icon=R.drawable.ic_favorite){open(lists.favorites.toList(),"Избранное")}
-        CollectionType.entries.forEach{type->val ids=lists.collections.filterValues{it==type}.keys.toList();panel.addChoice("${type.title} · ${ids.size}",icon=R.drawable.ic_library){open(ids,type.title)}}
-        panel.addAction("Занести локальную историю в аккаунт"){panel.dismiss();offerLocalHistory()}
-        panel.addAction("Обновить"){panel.dismiss();accountAction(done={library()}){account.refresh();account.loadProgress()}}
-        panel.addAction("Выйти из аккаунта"){
-            panel.dismiss()
-            TvSidePanel(this,"Выйти из аккаунта?").apply{
-                message("Данные аккаунта останутся на сайте. Приложение переключится на гостевую библиотеку этого ТВ.")
-                addAction("Выйти"){dismiss();accountAction(done={accountHistoryJob?.cancel();lastHistoryHydration=0;model.open(Screen.Home)}){account.logout()}}
-                addAction("Отмена"){dismiss()};show()
+        val ids=if(type==null)lists.favorites.toList()else lists.collections.filterValues{it==type}.keys.toList()
+        rememberFocus();model.open(Screen.Library(ids,type?.title?:"Избранное"))
+    }
+    private fun confirmLogout(){
+        TvSidePanel(this,"Выйти из аккаунта?").apply{
+            message("Данные аккаунта останутся на сайте. Приложение переключится на гостевую историю этого ТВ.")
+            addAction("Выйти"){
+                dismiss();accountHistoryLoadJob?.cancel();accountHistoryJob?.cancel()
+                accountAction(done={lastHistoryHydration=0;accountHistoryItems=emptyList();accountHistoryPage=0;model.open(Screen.Profile,false)}){account.logout()}
+            }
+            addAction("Отмена"){dismiss()};show()
+        }
+    }
+    private fun openAccountHistory(){
+        rememberFocus();model.open(Screen.AccountHistory);loadAccountHistory(reset=true)
+    }
+    private fun loadAccountHistory(reset:Boolean=false){
+        if(!account.signedIn || accountHistoryLoading || (!reset && !accountHistoryMore))return
+        val user=account.session.userId
+        if(reset){accountHistoryItems=emptyList();accountHistoryPage=0}
+        accountHistoryLoading=true;accountHistoryError=null
+        if(current==Screen.AccountHistory)render(model.state.value)
+        accountHistoryLoadJob=lifecycleScope.launch{
+            try{
+                val next=account.history(accountHistoryPage+1)
+                if(account.session.userId!=user)return@launch
+                accountHistoryItems=(accountHistoryItems+next.items).distinctBy{it.episode.id}
+                accountHistoryPage++;accountHistoryMore=next.more
+            }catch(e:kotlinx.coroutines.CancellationException){throw e}
+            catch(e:Exception){accountHistoryError=e.message?:"Не удалось загрузить историю"}
+            finally{
+                accountHistoryLoading=false
+                if(current==Screen.AccountHistory)render(model.state.value)
             }
         }
-        panel.addAction("Закрыть"){panel.dismiss()};panel.show()
     }
     private fun offerLocalHistory(){
         val local=localTimecodes(getSharedPreferences("viewing",MODE_PRIVATE))
@@ -892,10 +921,12 @@ class MainActivity : ComponentActivity() {
         val sameDetail=(current as?Screen.Detail)?.id==(state.screen as?Screen.Detail)?.id && current is Screen.Detail && adapter.rows.any{it.kind==Kind.HERO}
         val sameCatalog=current is Screen.Catalog && (current==state.screen || catalogSearchEditing) && adapter.rows.any{it.kind==Kind.CATALOG_BAR}
         val sameSection=current is Screen.Section && current==state.screen && adapter.rows.any{it.key=="section-heading"}
+        val sameProfile=current==Screen.Profile && state.screen==Screen.Profile
+        val sameAccountHistory=current==Screen.AccountHistory && state.screen==Screen.AccountHistory
         val sameHome=current==Screen.Home && state.screen==Screen.Home && adapter.rows.any{it.kind==Kind.SHELF}
         val retainedFocus = if(current==state.screen) list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String } else null
         current=state.screen
-        val section=when(current){Screen.Home->0;is Screen.Catalog,is Screen.Section,is Screen.Franchise->1;is Screen.Library->3;else->selectedSection}
+        val section=when(current){Screen.Profile,Screen.AccountHistory->3;Screen.Home->0;is Screen.Catalog,is Screen.Section,is Screen.Franchise->1;is Screen.Library->3;else->selectedSection}
         if(section!=selectedSection){selectedSection=section;buildMenu()}
         homeMenuLayout()
         val spans=if(current is Screen.Catalog || current is Screen.Section || current is Screen.Library || current is Screen.Franchise)20 else 15
@@ -974,6 +1005,45 @@ class MainActivity : ComponentActivity() {
                     if(cards.isEmpty())rows+=Row("section-empty",Kind.TEXT,if(query.isNotBlank())"Ничего не найдено"else "Пока ничего нет")
                 }
 
+                Screen.Profile->{
+                    rows+=Row("profile-heading",Kind.HEADING,"Профиль",selected=1)
+                    rows+=Row("profile-identity",Kind.PROFILE,profile=account.session.profile())
+                    if(account.signedIn){
+                        if(profileSyncing)rows+=Row("profile-sync",Kind.TEXT,"Синхронизация…")
+                        profileError?.let{rows+=Row("profile-error",Kind.TEXT,"Не удалось обновить аккаунт",it)}
+                        if(account.session.profile()?.banned==true)rows+=Row("profile-ban",Kind.TEXT,"Аккаунт ограничен","Подробности доступны в профиле на сайте.")
+                        val lists=account.lists
+                        rows+=Row("profile-favorites",Kind.ACTION,"Избранное${lists?.let{" · ${it.favorites.size}"}.orEmpty()}",click={accountList(null)})
+                        CollectionType.entries.forEach{type->rows+=Row("profile-collection:${type.name}",Kind.ACTION,type.title+(lists?.let{" · ${it.collections.values.count{v->v==type}}"}.orEmpty()),click={accountList(type)})}
+                        rows+=Row("profile-history",Kind.ACTION,"История просмотра",click={openAccountHistory()})
+                        rows+=Row("profile-import",Kind.ACTION,"Занести локальную историю в аккаунт",click={offerLocalHistory()})
+                        val queued=pending(prefs).size
+                        if(queued>0)rows+=Row("profile-pending",Kind.TEXT,"Ожидают синхронизации: $queued серий","Прогресс сохранён на этом ТВ.")
+                        rows+=Row("profile-refresh",Kind.ACTION,"Синхронизировать",click={refreshAccount(force=true)})
+                        rows+=Row("profile-site",Kind.ACTION,"Настройки аккаунта на сайте",click={openLink("https://www.aniliberty.top")})
+                        rows+=Row("profile-relogin",Kind.ACTION,"Войти в другой аккаунт",click={login()})
+                        rows+=Row("profile-logout",Kind.ACTION,"Выйти из аккаунта",click={confirmLogout()})
+                    }else{
+                        rows+=Row("profile-guest",Kind.TEXT,"История сохраняется на этом ТВ","Войдите для доступа к избранному, коллекциям и прогрессу аккаунта.")
+                        rows+=Row("profile-login",Kind.ACTION,"Войти по QR-коду",click={login()})
+                        rows+=Row("profile-local",Kind.ACTION,"Библиотека на этом ТВ",click={localLibrary()})
+                    }
+                }
+                Screen.AccountHistory->{
+                    rows+=Row("account-history-heading",Kind.HEADING,"История просмотра",selected=1)
+                    rows+=Row("account-history-refresh",Kind.ACTION,"Обновить историю",click={loadAccountHistory(reset=true)})
+                    rows+=accountHistoryItems.map{item->
+                        val duration=(item.episode.duration*1000).coerceAtLeast(1)
+                        val position=if(item.time.watched)duration else(item.time.seconds*1000).toLong()
+                        Row("account-history:${item.episode.id}",Kind.EPISODE,title=item.release.title,release=item.release,episode=item.episode,episodeProgress=position to duration,click={
+                            rememberFocus();startActivity(Intent(this,PlayerActivity::class.java).putExtra("release",item.release.id).putExtra("episode",item.episode.id))
+                        })
+                    }
+                    if(accountHistoryLoading)rows+=Row("account-history-loading",Kind.TEXT,"Загрузка истории…")
+                    else if(accountHistoryError!=null)rows+=Row("account-history-retry",Kind.ACTION,"Повторить загрузку",accountHistoryError.orEmpty(),click={loadAccountHistory(reset=accountHistoryPage==0)})
+                    else if(accountHistoryItems.isEmpty())rows+=Row("account-history-empty",Kind.TEXT,"Вы ещё ничего не смотрели")
+                    else if(accountHistoryMore)rows+=Row("account-history-more",Kind.ACTION,"Загрузить ещё",click={loadAccountHistory()})
+                }
                 is Screen.Library->{
                     rows+=Row("library-heading",Kind.HEADING,screen.title,selected=1)
                     rows+=state.releases.map{Row("library:${it.id}",Kind.POSTER,release=it,selected=2)}
@@ -1014,6 +1084,7 @@ class MainActivity : ComponentActivity() {
                         if(description.isNotBlank())add("Описание" to {TvSidePanel(this@MainActivity,"Описание").apply{message(description);addAction("Закрыть"){dismiss()};show()};Unit})
                         add("Ещё" to {showDetailMore(r)})
                     })
+                    if(r.blocked)rows+=Row("release-restriction",Kind.TEXT,"Просмотр ограничен правообладателем или регионом")
                     rows+=Row("tabs",Kind.TABS,title=r.episodes.size.toString(),selected=screen.tab)
                     when(screen.tab){
                         0->{rows+=r.episodes.map{Row("episode:${it.id}",Kind.EPISODE,episode=it,episodeProgress=prefs.getLong("position:${it.id}",0) to prefs.getLong("duration:${it.id}",0),longClick={episodeActions(r,it)})};if(r.episodes.isEmpty())rows+=Row("empty",Kind.TEXT,"Эпизоды пока недоступны")}
@@ -1065,7 +1136,7 @@ class MainActivity : ComponentActivity() {
             if(menuOpen || !list.hasWindowFocus())return
             if(enterContent){enterContent=false;enterDetailContent();return}
             if(keepDetailTabFocus)return
-            if(sameDetail && detailAddress()!=null)return
+            if(sameDetail && detailAddress()?.let{address->rows.any{it.key==address.row}}==true)return
             val screen=state.screen
             val bookmark=detailBookmarks[screen.id to screen.tab]
             val index=rows.indexOfFirst{it.key==bookmark?.row}.takeIf{it>=0}?:rows.indexOfFirst{it.kind==Kind.HERO}
@@ -1106,10 +1177,10 @@ class MainActivity : ComponentActivity() {
             if(index>=0&&!state.loading){list.doOnNextLayout{
                 if(current!=state.screen || (current==Screen.Home && menuOpen))return@doOnNextLayout
                 val item=list.findViewHolderForAdapterPosition(index)?.itemView
-                if((!sameHome && !sameCatalog && !sameSection) || list.findFocus()==null)focusItem(item)
+                if((!sameHome && !sameCatalog && !sameSection && !sameProfile && !sameAccountHistory) || list.findFocus()==null)focusItem(item)
             };val scroll=scrollMemory[screenKey(state.screen)]
                 val anchor=scroll?.first?.let{saved->rows.indexOfFirst{it.key==saved}.takeIf{it>=0}}
-                if(!sameHome && !sameCatalog && !sameSection)grid.scrollToPositionWithOffset(anchor?:if(key==null)0 else index,scroll?.second?:if(key==null)0 else list.dp(12))}
+                if(!sameHome && !sameCatalog && !sameSection && !sameProfile && !sameAccountHistory)grid.scrollToPositionWithOffset(anchor?:if(key==null)0 else index,scroll?.second?:if(key==null)0 else list.dp(12))}
         }
     }
 }

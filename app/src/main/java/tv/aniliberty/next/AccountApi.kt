@@ -10,7 +10,7 @@ import java.net.URI
 enum class CollectionType(val title:String){
     PLANNED("В планах"),WATCHING("Смотрю"),WATCHED("Просмотрено"),POSTPONED("Отложено"),ABANDONED("Брошено")
 }
-data class AccountProfile(val id:Int,val name:String)
+data class AccountProfile(val id:Int,val name:String,val login:String="",val email:String="",val avatar:String?=null,val createdAt:String="",val banned:Boolean=false)
 data class AccountLists(val favorites:Set<Int>,val collections:Map<Int,CollectionType>)
 data class AccountTimecode(val episodeId:String,val seconds:Double,val watched:Boolean)
 data class AccountHistoryItem(val releaseId:Int,val episodeId:String,val updatedAt:Long)
@@ -41,8 +41,8 @@ class AccountApi(private val transport:AccountTransport=AccountHttpTransport()){
     }
     suspend fun deviceLogin(deviceId:String,code:String):String = JSONObject(transport.request("/accounts/otp/login","POST",JSONObject().put("device_id",deviceId).put("code",code.toInt()).toString(),null)).getString("token").also{require(it.isNotBlank())}
     suspend fun profile(token:String):AccountProfile {
-        val json=JSONObject(transport.request("/accounts/users/me/profile?include=id,nickname,login","GET",null,token))
-        return AccountProfile(json.getInt("id"),json.optString("nickname").ifBlank{json.optString("login").ifBlank{"Аккаунт AniLiberty"}})
+        val json=JSONObject(transport.request("/accounts/users/me/profile?exclude=torrents","GET",null,token))
+        return parseAccountProfile(json)
     }
     suspend fun lists(token:String):AccountLists {
         val favorites=parseFavoriteIds(transport.request("/accounts/users/me/favorites/ids","GET",null,token))
@@ -61,6 +61,7 @@ class AccountApi(private val transport:AccountTransport=AccountHttpTransport()){
         val body=JSONArray();values.forEach{v->body.put(JSONObject().put("release_episode_id",v.episodeId).put("time",v.seconds.coerceAtLeast(0.0)).put("is_watched",v.watched))}
         transport.request("/accounts/users/me/views/timecodes","POST",body.toString(),token)
     }
+    suspend fun history(token:String,page:Int=1):AccountHistoryPage = parseAccountHistoryPage(transport.request("/accounts/users/me/views/history?limit=30&page=$page","GET",null,token),page)
     suspend fun recentHistory(token:String):List<AccountHistoryItem> = parseAccountHistory(transport.request("/accounts/users/me/views/history?limit=30","GET",null,token))
     suspend fun logout(token:String){transport.request("/accounts/users/auth/logout","POST",null,token)}
     private fun releaseBody(id:Int)=JSONArray().put(JSONObject().put("release_id",id))
@@ -91,4 +92,23 @@ internal fun parseAccountHistory(body:String):List<AccountHistoryItem>{
         val updated=runCatching{java.time.OffsetDateTime.parse(item.optString("updated_at")).toInstant().toEpochMilli()}.getOrDefault(0)
         if(release>0 && id.isNotBlank())AccountHistoryItem(release,id,updated)else null
     }.sortedByDescending{it.updatedAt}
+}
+
+internal fun parseAccountProfile(json:JSONObject)=AccountProfile(json.getInt("id"),json.optString("nickname").ifBlank{json.optString("login").ifBlank{"Аккаунт AniLiberty"}},json.optString("login"),json.optString("email"),json.optJSONObject("avatar")?.let{imageUrl(it.optJSONObject("optimized")?.optString("preview"))?:imageUrl(it.optString("preview"))},json.optString("created_at"),json.optBoolean("is_banned"))
+data class AccountViewedEpisode(val release:Release,val episode:Episode,val time:AccountTimecode,val updatedAt:String)
+data class AccountHistoryPage(val items:List<AccountViewedEpisode>,val more:Boolean)
+internal fun parseAccountHistoryPage(body:String,page:Int):AccountHistoryPage {
+    val json=JSONObject(body);val data=json.optJSONArray("data")?:JSONArray()
+    val items=(0 until data.length()).mapNotNull{i->
+        val entry=data.optJSONObject(i)?:return@mapNotNull null
+        val e=entry.optJSONObject("release_episode")?:return@mapNotNull null
+        val r=e.optJSONObject("release")?:return@mapNotNull null
+        val release=runCatching{parseRelease(JSONObject(r.toString()).put("episodes",JSONArray().put(e)))}.getOrNull()?:return@mapNotNull null
+        val episode=release.episodes.firstOrNull()?:return@mapNotNull null
+        AccountViewedEpisode(release,episode,AccountTimecode(episode.id,entry.optDouble("time",0.0).coerceAtLeast(0.0),entry.optBoolean("is_watched")),entry.optString("updated_at"))
+    }
+    require(data.length()==0 || items.isNotEmpty()){"Не удалось прочитать серии в истории аккаунта"}
+    val pagination=json.optJSONObject("meta")?.optJSONObject("pagination")
+    val pages=pagination?.optInt("total_pages",-1)?:-1
+    return AccountHistoryPage(items,if(pages>=0)page<pages else data.length()>=30)
 }

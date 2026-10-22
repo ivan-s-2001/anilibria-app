@@ -64,6 +64,13 @@ class AccountApiTest {
         assertEquals(1,items.size);assertEquals(42,items.single().releaseId);assertEquals("uuid",items.single().episodeId)
         assertTrue(items.single().updatedAt>0)
     }
+    @Test fun profileIncludesIdentityAndHistoryPageIncludesPlayableEpisodeContext(){
+        val profile=parseAccountProfile(JSONObject("""{"id":42,"nickname":"Иван","login":"ivan","email":"user@example.test","created_at":"2020-01-01T00:00:00Z","avatar":{"preview":"/avatar.webp"}}"""))
+        assertEquals("Иван",profile.name);assertEquals("ivan",profile.login);assertEquals("user@example.test",profile.email);assertNotNull(profile.avatar)
+        val page=parseAccountHistoryPage("""{"data":[{"time":12.5,"is_watched":false,"release_episode":{"id":"uuid","ordinal":2,"duration":1200,"release":{"id":42,"name":{"main":"Тайтл"}}}}],"meta":{"pagination":{"total_pages":2}}}""",1)
+        assertEquals(42,page.items.single().release.id);assertEquals("uuid",page.items.single().episode.id)
+        assertEquals(12.5,page.items.single().time.seconds,.001);assertTrue(page.more)
+    }
     @Test fun guestAndAccountPlaybackAreIsolatedAndUnsentQueueIsDurable(){
         val context=RuntimeEnvironment.getApplication()
         val session=context.getSharedPreferences("account-session",Context.MODE_PRIVATE)

@@ -54,7 +54,9 @@ class DetailFocusTest {
         val before=hero.top
         render(state.copy(discoveryLoading=true))
         val rebound=list.findViewHolderForAdapterPosition(0)!!.itemView.findViewWithTag<View>("hero-action:${R.drawable.ic_favorite}")
-        assertSame(favorite,rebound);assertTrue(rebound.hasFocus());assertEquals(before,list.findViewHolderForAdapterPosition(0)!!.itemView.top)
+        assertSame("Action view identity",favorite,rebound)
+        assertTrue("Focus after update: ${list.findFocus()?.tag}",rebound.hasFocus())
+        assertEquals("Viewport anchor",before,list.findViewHolderForAdapterPosition(0)!!.itemView.top)
         key(KeyEvent.KEYCODE_DPAD_DOWN)
         assertEquals("detail-tab:0",list.findFocus()?.tag)
         key(KeyEvent.KEYCODE_DPAD_UP)

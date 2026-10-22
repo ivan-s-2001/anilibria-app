@@ -12,6 +12,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 /** The phone authorizes on the official website. TV only receives its own OTP session. */
@@ -37,18 +38,30 @@ class AccountPanel(context:Context,private val scope:CoroutineScope,private val 
                 val status=TextView(context).apply{label("Ожидаем подтверждение на телефоне…",14f,MUTED);gravity=Gravity.CENTER}
                 body.addView(status)
                 val deadline=android.os.SystemClock.elapsedRealtime()+code.remainingSeconds*1000L
-                while(android.os.SystemClock.elapsedRealtime()<deadline){
-                    delay(5000)
-                    try{
-                        val token=account.api.deviceLogin(device,code.code)
-                        account.connect(token)
-                        dismiss();connected();return@launch
-                    }catch(e:AccountHttpException){
-                        if(e.status==404)break
-                        if(e.status!=401)throw e
+                val token=coroutineScope{
+                    var progress="Ожидаем подтверждение на телефоне…"
+                    val ticker=launch{
+                        while(true){
+                            val seconds=((deadline-android.os.SystemClock.elapsedRealtime())/1000).coerceAtLeast(0)
+                            status.text="$progress\nКод действует ещё $seconds с"
+                            delay(1000)
+                        }
                     }
-                    val seconds=((deadline-android.os.SystemClock.elapsedRealtime())/1000).coerceAtLeast(0)
-                    status.text="Ожидаем подтверждение · ${seconds} с"
+                    try{awaitDeviceLogin(deadline,status={progress=it}){account.api.deviceLogin(device,code.code)}}finally{ticker.cancel()}
+                }
+                if(token!=null){
+                    status.text="Подтверждено. Загружаем профиль…"
+                    suspend fun finishLogin(){account.connect(token);dismiss();connected()}
+                    try{finishLogin();return@launch}
+                    catch(e:CancellationException){throw e}
+                    catch(_:Exception){
+                        status.text="Устройство подтверждено. Не удалось загрузить профиль. Можно повторить без нового кода."
+                        footer.removeAllViews()
+                        addAction("Завершить вход",true){
+                            task=scope.launch{try{finishLogin()}catch(e:CancellationException){throw e}catch(_:Exception){status.text="Профиль пока недоступен. Проверьте соединение и повторите."}}
+                        }
+                        addAction("Закрыть"){dismiss()};footer.getChildAt(0)?.requestFocus();return@launch
+                    }
                 }
                 message("Срок действия кода истёк. Получите новый код.")
             }catch(e:CancellationException){throw e}

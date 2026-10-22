@@ -10,6 +10,8 @@ import kotlinx.coroutines.launch
 sealed interface Screen {
     data object Welcome : Screen
     data object Home : Screen
+    data object Profile : Screen
+    data object AccountHistory : Screen
     data class Library(val ids:List<Int>,val title:String="Моя библиотека"):Screen
     data class Catalog(val query: String = "", val page: Int = 1, val genre: Int? = null, val title: String? = null,val filters:CatalogFilter=CatalogFilter()) : Screen
     data class Section(val kind:HomeSection,val page:Int=1):Screen

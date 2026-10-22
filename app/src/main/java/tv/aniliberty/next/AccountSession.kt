@@ -21,6 +21,7 @@ class AccountSession(context:Context){
     private val prefs=context.getSharedPreferences("account-session",Context.MODE_PRIVATE)
     val userId:Int? get()=prefs.getInt("user",0).takeIf{it>0}
     val name:String get()=prefs.getString("name","").orEmpty()
+    fun profile():AccountProfile?=runCatching{prefs.getString("profile",null)?.let{parseAccountProfile(JSONObject(it))}}.getOrNull()
     val deviceId:String get()=prefs.getString("device",null)?:UUID.randomUUID().toString().also{prefs.edit().putString("device",it).apply()}
     private fun key():SecretKey {
         val store=KeyStore.getInstance("AndroidKeyStore").apply{load(null)}
@@ -38,8 +39,14 @@ class AccountSession(context:Context){
         val cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.ENCRYPT_MODE,key())
         val packed=Base64.encodeToString(cipher.iv,Base64.NO_WRAP)+":"+Base64.encodeToString(cipher.doFinal(token.toByteArray(Charsets.UTF_8)),Base64.NO_WRAP)
         prefs.edit().putString("session",packed).putInt("user",profile.id).putString("name",profile.name).apply()
+        saveProfile(profile)
     }
-    fun clear(){prefs.edit().remove("session").remove("user").remove("name").apply()}
+    fun saveProfile(profile:AccountProfile){
+        val json=JSONObject().put("id",profile.id).put("nickname",profile.name).put("login",profile.login).put("email",profile.email).put("created_at",profile.createdAt).put("is_banned",profile.banned)
+        profile.avatar?.let{json.put("avatar",JSONObject().put("preview",it))}
+        prefs.edit().putString("profile",json.toString()).putString("name",profile.name).apply()
+    }
+    fun clear(){prefs.edit().remove("session").remove("user").remove("name").remove("profile").apply()}
 }
 fun playbackPreferences(context:Context):SharedPreferences {
     val id=AccountSession(context).userId
@@ -71,8 +78,8 @@ class AccountRepository(private val context:Context,val api:AccountApi=AccountAp
         session.save(value,profile);lists=loaded;saveLists();remote=emptyMap();appliedProgress.clear()
     }
     suspend fun refresh(){
-        val value=token();val loaded=api.lists(value)
-        if(session.token()==value){lists=loaded;saveLists()}
+        val value=token();val profile=api.profile(value);val loaded=api.lists(value)
+        if(session.token()==value){session.saveProfile(profile);lists=loaded;saveLists()}
     }
     suspend fun favorite(id:Int,added:Boolean){
         val value=token();api.favorite(value,id,added)
@@ -118,6 +125,7 @@ class AccountRepository(private val context:Context,val api:AccountApi=AccountAp
             }
         }
     }
+    suspend fun history(page:Int=1):AccountHistoryPage = api.history(token(),page)
     suspend fun recentHistory():List<AccountHistoryItem> = api.recentHistory(token())
     suspend fun localImportPlan():List<AccountTimecode> {
         loadProgress()

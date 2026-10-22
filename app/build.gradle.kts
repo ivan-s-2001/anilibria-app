@@ -10,7 +10,7 @@ android {
         versionName = "0.1.0"
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
-    testOptions { unitTests.isIncludeAndroidResources = true }
+    testOptions { unitTests.isIncludeAndroidResources = true; unitTests.all { it.testLogging.exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL } }
 }
 dependencies {
     implementation("androidx.activity:activity-ktx:1.11.0")
