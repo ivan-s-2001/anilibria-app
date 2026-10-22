@@ -817,7 +817,7 @@ class PageAdapter(
             Kind.TEXT,Kind.ACTION -> {
                 val t=view as TextView
                 t.label(listOf(row.title,row.subtitle).filter(String::isNotBlank).joinToString("\n"),16f,if(row.kind==Kind.TEXT)MUTED else WHITE)
-                t.setPadding(0,view.dp(8),0,view.dp(8));t.isFocusable=row.click!=null || inContent;t.isClickable=row.click!=null
+                t.setPadding(view.dp(16),view.dp(8),view.dp(16),view.dp(8));t.isFocusable=row.click!=null || inContent;t.isClickable=row.click!=null
                 t.background=null
                 if(t.isFocusable)t.webControlBackground()
                 if(row.click!=null){t.webControlBackground();t.setPadding(view.dp(12),view.dp(10),view.dp(12),view.dp(10))}
