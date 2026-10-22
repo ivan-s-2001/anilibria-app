@@ -1696,7 +1696,9 @@ class PageAdapter(
                             }
                     episodeBadge.label(
                         if (schedulePoster) scheduleEpisodeLabel(release)
-                        else if (cataloguePoster) release?.type?.ifBlank { "Аниме" } ?: "Аниме"
+                        else if (cataloguePoster)
+                            release?.latestEpisode?.let { "${number(it.ordinal)} эпизод" }
+                                ?: "Релиз"
                         else
                             release?.latestEpisode?.let { "${number(it.ordinal)} эпизод" }
                                 ?: "Релиз",
@@ -1708,7 +1710,7 @@ class PageAdapter(
                     episodeBadge.setPadding(view.dp(10), 0, view.dp(10), 0)
                     episodeBadge.background =
                         shape(
-                            if (schedulePoster) 0xCC181818.toInt() else 0x1AFFFFFF,
+                            if (schedulePoster || cataloguePoster) 0xCC181818.toInt() else 0x1AFFFFFF,
                             view.dp(6).toFloat(),
                         )
                     episodeBadge.isFocusable = false
@@ -1743,9 +1745,12 @@ class PageAdapter(
                                 FrameLayout.LayoutParams(
                                         -2,
                                         view.dp(28),
-                                        Gravity.TOP or Gravity.CENTER_HORIZONTAL,
+                                        Gravity.TOP or Gravity.END,
                                     )
-                                    .apply { topMargin = view.dp(10) }
+                                    .apply {
+                                        topMargin = view.dp(10)
+                                        marginEnd = view.dp(8)
+                                    }
                             val status =
                                 (box.getChildAt(4) as? TextView)
                                     ?: TextView(view.context).also { box.addView(it) }
@@ -1764,7 +1769,7 @@ class PageAdapter(
                             status.includeFontPadding = false
                             status.background = null
                             status.isFocusable = false
-                            status
+                            status.apply { visibility = View.GONE }
                         } else {
                             episodeBadge.layoutParams =
                                 FrameLayout.LayoutParams(
@@ -1783,7 +1788,7 @@ class PageAdapter(
                     subtitle.maxLines = 1
                     fun focusPoster(focused: Boolean) {
                         box.findViewWithTag<TextView>("favorite-count")?.visibility =
-                            if (focused && !schedulePoster && release?.favoriteCount != null)
+                            if ((focused && !schedulePoster && release?.favoriteCount != null) || cataloguePoster)
                                 View.VISIBLE
                             else View.GONE
                         content.visibility = if (focused) View.VISIBLE else View.GONE
@@ -1812,9 +1817,9 @@ class PageAdapter(
                             subtitle.visibility = if (focused) View.VISIBLE else View.GONE
                         }
                         episodeBadge.visibility =
-                            if (focused || schedulePoster) View.VISIBLE else View.GONE
+                            if (focused || schedulePoster || cataloguePoster) View.VISIBLE else View.GONE
                         statusBadge?.visibility =
-                            if (focused && release?.ongoing != null) View.VISIBLE else View.GONE
+                            View.GONE
                         updateLabel?.visibility =
                             if (focused && updateLabel.text.isNotBlank()) View.VISIBLE
                             else View.GONE
@@ -1856,7 +1861,7 @@ class PageAdapter(
                                 )
                             else null
                     }
-                    if (row.selected == 2) {
+                    if (row.selected == 2 && !cataloguePoster) {
                         val count =
                             box.findViewWithTag<TextView>("episode-count")
                                 ?: TextView(view.context).also {
@@ -1890,21 +1895,21 @@ class PageAdapter(
                                 box.addView(it)
                             }
                     favorites.layoutParams =
-                        FrameLayout.LayoutParams(-2, view.dp(24), Gravity.TOP or Gravity.START)
+                        FrameLayout.LayoutParams(-2, view.dp(if (cataloguePoster) 28 else 24), Gravity.TOP or Gravity.START)
                             .apply {
                                 topMargin = view.dp(10)
                                 marginStart = view.dp(8)
                             }
                     favorites.label(
-                        release?.favoriteCount?.let(::compactCount).orEmpty(),
-                        10f,
+                        release?.favoriteCount?.let(::compactCount) ?: if (cataloguePoster) "—" else "",
+                        if (cataloguePoster) 12f else 10f,
                         WHITE,
                         true,
                     )
                     favorites.gravity = Gravity.CENTER_VERTICAL
                     favorites.includeFontPadding = false
                     favorites.isFocusable = false
-                    favorites.setPadding(view.dp(6), 0, view.dp(6), 0)
+                    favorites.setPadding(view.dp(if (cataloguePoster) 8 else 6), 0, view.dp(if (cataloguePoster) 8 else 6), 0)
                     favorites.compoundDrawablePadding = view.dp(3)
                     favorites.setCompoundDrawablesRelative(
                         view.context.getDrawable(R.drawable.ic_favorite)?.apply {
@@ -1914,7 +1919,11 @@ class PageAdapter(
                         null,
                         null,
                     )
-                    favorites.background = shape(0x1AFFFFFF, view.dp(4).toFloat())
+                    favorites.background =
+                        shape(
+                            if (cataloguePoster) 0xCC181818.toInt() else 0x1AFFFFFF,
+                            view.dp(if (cataloguePoster) 6 else 4).toFloat(),
+                        )
                     favorites.contentDescription =
                         release?.favoriteCount?.let { "В избранном у $it пользователей" }.orEmpty()
                     box.findViewWithTag<TextView>("schedule-favorites")?.visibility =
