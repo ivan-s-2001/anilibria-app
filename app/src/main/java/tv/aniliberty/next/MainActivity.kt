@@ -424,6 +424,27 @@ class MainActivity : ComponentActivity() {
         prefs.edit().putString("library",next.toString()).apply()
         Toast.makeText(this,if(found)"Удалено из библиотеки"else"Добавлено в библиотеку",Toast.LENGTH_SHORT).show()
     }
+    private fun continueActions(item:ContinueEpisode){
+        val panel=TvSidePanel(this,item.releaseTitle)
+        panel.message(listOf(item.episodeTitle,if(item.nextUp)"Следующая серия"else "Прогресс просмотра сохранён").joinToString("\n"))
+        panel.addChoice(if(item.nextUp)"Смотреть следующую серию"else "Продолжить",icon=R.drawable.ic_play){
+            panel.dismiss();playContinue(item)
+        }
+        panel.addChoice("Открыть тайтл",icon=R.drawable.ic_catalog){
+            panel.dismiss();rememberFocus();model.open(Screen.Detail(item.releaseId))
+        }
+        panel.addChoice("Убрать из продолжения",icon=R.drawable.ic_close){
+            panel.dismiss();history.dismiss(item.releaseId)
+            adapter.resetShelf("shelf:continue",true)
+            render(model.state.value)
+        }
+        panel.body.addView(android.widget.TextView(this).apply{
+            label("Появится снова при открытии тайтла или выходе новой серии.",13f,MUTED)
+            setPadding(0,dp(12),0,0)
+        })
+        panel.addAction("Отмена"){panel.dismiss()}
+        panel.show()
+    }
     private fun quickActions(item:Release){
         val resume=prefs.getString("last:${item.id}",null)!=null
         val library=JSONArray(prefs.getString("library","[]"))
@@ -560,10 +581,7 @@ class MainActivity : ComponentActivity() {
                         val cards=unfinished.map{item->
                             val status=when{item.nextUp->"Следующая серия";item.duration>0->"Осталось ${(item.remaining+59999)/60000} мин";else->"Продолжить"}
                             Row("continue:${item.releaseId}:${item.episodeId}",Kind.CONTINUE,item.releaseTitle,"${item.episodeTitle}\n$status",image=item.preview,watching=item,click={playContinue(item)},longClick={
-                                AlertDialog.Builder(this).setTitle(item.releaseTitle).setItems(arrayOf("Убрать из продолжения")){_,_->
-                                    history.dismiss(item.releaseId)
-                                    render(model.state.value)
-                                }.setNegativeButton("Отмена",null).show()
+                                continueActions(item)
                             })
                         }
                         rows+=Row("shelf:continue",Kind.SHELF,selected=5,cards=cards)

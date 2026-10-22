@@ -30,8 +30,8 @@ open class TvSidePanel(context:Context,title:String):Dialog(context){
     }
     fun addAction(text:String,primary:Boolean=false,callback:()->Unit):TextView =
         action(footer,text,primary=primary,click=callback).also{footer.addView(it,LinearLayout.LayoutParams(-1,dp(46)).apply{topMargin=dp(8)})}
-    fun addChoice(text:String,selected:Boolean=false,callback:()->Unit):TextView =
-        action(body,if(selected)"✓  $text"else text,click=callback).apply{
+    fun addChoice(text:String,selected:Boolean=false,icon:Int=0,callback:()->Unit):TextView =
+        action(body,if(selected)"✓  $text"else text,icon=icon,click=callback).apply{
             textSize=16f;maxLines=3;setPadding(dp(12),dp(12),dp(12),dp(12))
             body.addView(this,LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=dp(8)})
         }
