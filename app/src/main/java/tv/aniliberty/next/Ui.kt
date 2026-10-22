@@ -390,7 +390,7 @@ class PageAdapter(
                     background=shape(0xFF212121.toInt(),dp(8).toFloat());clipToOutline=true
                     contentDescription=r.title;isFocusable=false
                 },LinearLayout.LayoutParams(view.dp(190),view.dp(272)))
-                val info=LinearLayout(view.context).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(24),0,0,0)}
+                val info=LinearLayout(view.context).apply{orientation=LinearLayout.VERTICAL;minimumHeight=dp(272);setPadding(dp(24),0,0,0)}
                 box.addView(info,LinearLayout.LayoutParams(0,-2,1f))
                 fun text(value:String,size:Float,color:Int=WHITE,bold:Boolean=false,lines:Int=2){
                     if(value.isBlank())return
@@ -422,11 +422,15 @@ class PageAdapter(
                     },LinearLayout.LayoutParams(-2,view.dp(32)))
                 }
                 if(r.ratings.isEmpty() && r.ongoing==null)ratings.parent.let{(it as View).visibility=View.GONE}
+                val episode=resumeEpisode(r.episodes,lastEpisode(r.id),progress)
+                if(r.blocked)text("Просмотр ограничен правообладателем или регионом",13f,MUTED)
+                else if(episode==null)text("Серии ещё не опубликованы",13f,MUTED)
+                else if(episode.streams.isEmpty())text("Поток для выбранной серии пока недоступен",13f,MUTED)
+                info.addView(View(view.context).apply{tag="title-bottom-spacer"},LinearLayout.LayoutParams(-1,0,1f))
                 val age=Regex("[0-9]+").find(r.age)?.value.orEmpty()
                 text(listOf(r.year,r.season,r.type,age).filter{it.isNotBlank()}.joinToString(" · "),14f,MUTED,false,1)
                 text(r.genres.joinToString(" · "),14f,WHITE,false,2)
-                val episode=resumeEpisode(r.episodes,lastEpisode(r.id),progress)
-                val controls=LinearLayout(view.context).apply{gravity=Gravity.CENTER_VERTICAL}
+                val controls=LinearLayout(view.context).apply{gravity=Gravity.BOTTOM}
                 info.addView(HorizontalScrollView(view.context).apply{isHorizontalScrollBarEnabled=false;addView(controls)},LinearLayout.LayoutParams(-1,view.dp(48)).apply{topMargin=view.dp(4)})
                 fun button(label:String,icon:Int,primary:Boolean=false,description:String=label,click:()->Unit){
                     controls.addView(action(controls,label,primary,icon,click).apply{textSize=14f;contentDescription=description},LinearLayout.LayoutParams(-2,view.dp(46)).apply{marginEnd=view.dp(8)})
@@ -438,9 +442,6 @@ class PageAdapter(
                 }
                 button(if(row.selected==1)"В библиотеке"else"В библиотеку",R.drawable.ic_favorite,description=if(row.selected==1)"Убрать из библиотеки"else"Добавить в библиотеку"){favorite(r)}
                 row.controls.forEach{(label,callback)->button(label,if(label=="Описание")R.drawable.ic_comments else R.drawable.ic_settings,click=callback)}
-                if(r.blocked)text("Просмотр ограничен правообладателем или регионом",13f,MUTED)
-                else if(episode==null)text("Серии ещё не опубликованы",13f,MUTED)
-                else if(episode.streams.isEmpty())text("Поток для выбранной серии пока недоступен",13f,MUTED)
             }
             Kind.GENRE,Kind.FRANCHISE -> {
                 val box=view as FrameLayout

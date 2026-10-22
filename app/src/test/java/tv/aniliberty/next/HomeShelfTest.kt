@@ -25,8 +25,14 @@ class HomeShelfTest {
         val ratings=(info.getChildAt(2)as android.widget.HorizontalScrollView).getChildAt(0)as android.widget.LinearLayout
         assertEquals(3,ratings.childCount)
         assertEquals("Онгоинг",(ratings.getChildAt(2)as android.widget.TextView).text.toString())
-        val metadata=(info.getChildAt(3)as android.widget.TextView).text.toString()
+        val metadata=(0 until info.childCount).mapNotNull{info.getChildAt(it)as?android.widget.TextView}.first{it.text.toString().endsWith("18")}.text.toString()
         assertTrue(metadata.endsWith("18"));assertFalse(metadata.contains("+"))
+        val hero=holder.itemView
+        hero.measure(android.view.View.MeasureSpec.makeMeasureSpec(960,android.view.View.MeasureSpec.EXACTLY),android.view.View.MeasureSpec.makeMeasureSpec(0,android.view.View.MeasureSpec.UNSPECIFIED))
+        hero.layout(0,0,hero.measuredWidth,hero.measuredHeight)
+        val poster=(hero as android.widget.LinearLayout).getChildAt(0)
+        val controls=info.getChildAt(info.childCount-1)
+        assertEquals(poster.bottom,info.top+controls.bottom)
         assertFalse((0 until info.childCount).mapNotNull{info.getChildAt(it)as?android.widget.TextView}.any{it.text.contains("СКРЫТОЕ")})
     }
     @Test fun detailTabsKeepFocusOnSelectionAndEnterContentOnlyOnDown(){
