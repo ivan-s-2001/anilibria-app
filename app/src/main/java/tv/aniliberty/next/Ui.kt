@@ -2107,10 +2107,12 @@ class PageAdapter(
                     badge.background = shape(0x1AFFFFFF, view.dp(6).toFloat())
                     badge.isFocusable = false
                     subtitle.text =
-                        listOf(item.episodeName, row.subtitle.substringAfter("\n", ""))
-                            .filter(String::isNotBlank)
-                            .joinToString("\n")
-                    if (subtitle.text.isBlank()) subtitle.text = "Эпизод ${number(item.ordinal)}"
+                        when {
+                            item.nextUp -> "Следующая серия"
+                            item.duration > 0 ->
+                                "Осталось ${(item.remaining + 59_999L) / 60_000L} мин"
+                            else -> "Продолжить"
+                        }
                     subtitle.maxLines = 2
                     subtitle.textSize = 12f
                     fun focusContinue(focused: Boolean) {
