@@ -270,7 +270,7 @@ class MainActivity : ComponentActivity() {
         };list.layoutManager=grid
         adapter=PageAdapter(::navigate,::selectTab,::play,::favorite,{rememberFocus();model.open(Screen.Detail(it.id))},
             { id -> prefs.getLong("position:$id",0) to prefs.getLong("duration:$id",0) },
-            { id -> prefs.getString("last:$id",null) },::returnToTabs, { index -> enterDay=true;val previous=model.state.value;model.homeDay(index);if(previous==model.state.value)render(model.state.value) },::quickActions)
+            { id -> prefs.getString("last:$id",null) },::returnToTabs, { index -> enterDay=true;val previous=model.state.value;model.homeDay(index);if(previous==model.state.value)render(model.state.value) },::quickActions,enterTab=::enterSelectedTab)
         grid.spanSizeLookup=object:GridLayoutManager.SpanSizeLookup(){override fun getSpanSize(position:Int)=when(adapter.rows.getOrNull(position)?.kind){Kind.POSTER->if(current is Screen.Catalog || current is Screen.Section || current is Screen.Library || current is Screen.Franchise)5 else 3;Kind.GENRE->if(current is Screen.Section)5 else 3;Kind.FRANCHISE->if((current as?Screen.Section)?.kind==HomeSection.FRANCHISES)10 else 5;Kind.EPISODE,Kind.FEATURE->5;else->grid.spanCount}}
         list.addOnScrollListener(object:RecyclerView.OnScrollListener(){
             override fun onScrolled(view:RecyclerView,dx:Int,dy:Int){
@@ -527,7 +527,8 @@ class MainActivity : ComponentActivity() {
         rememberFocus()
         startActivity(Intent(this,PlayerActivity::class.java).putExtra("release",release.id).putExtra("episode",episode.id))
     }
-    private fun selectTab(index:Int){enterContent=true;val previous=model.state.value;model.tab(index);if(previous==model.state.value)render(model.state.value)}
+    private fun selectTab(index:Int){enterContent=false;val previous=model.state.value;model.tab(index);if(previous==model.state.value)render(model.state.value)}
+    private fun enterSelectedTab(index:Int){enterContent=true;val previous=model.state.value;model.tab(index);if(previous==model.state.value)render(model.state.value)}
     private fun returnToTabs(){
         if(adapter.tabStart<0)return
         val position=adapter.tabStart
@@ -792,7 +793,9 @@ class MainActivity : ComponentActivity() {
             else->emptyList()
         }
         preloadFranchises.take(12).forEach{loadFranchisePreview(it.id)}
+        val keepDetailTabFocus=current is Screen.Detail && !enterContent && list.findFocus()?.let{list.findContainingItemView(it)?.tag}=="tabs"
         adapter.submit(rows)
+        if(keepDetailTabFocus)return
         if(current==Screen.Home && menuOpen)return
         if(catalogSearchEditing && (current is Screen.Catalog || current is Screen.Section))return
         if(enterCatalogResults && (current is Screen.Catalog || current is Screen.Section) && !state.loading){

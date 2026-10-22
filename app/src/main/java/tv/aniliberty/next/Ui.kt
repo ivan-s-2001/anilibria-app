@@ -69,6 +69,7 @@ class PageAdapter(
     private val day: (Int) -> Unit = {},
     private val quickActions: (Release) -> Unit = {},
     private val shelfMode: Boolean = false,
+    private val enterTab:(Int)->Unit=tab,
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     private var visibleShelfCards=0f
     private val stableKeys=mutableMapOf<String,Long>()
@@ -228,7 +229,7 @@ class PageAdapter(
             Kind.SHELF -> {
                 val shelf=view as RecyclerView
                 val oldKey=shelf.getTag(R.id.shelf_key) as? String
-                if(oldKey!=row.key){shelf.adapter=PageAdapter(navigate,tab,play,favorite,details,progress,lastEpisode,returnToTabs,day,quickActions,true);shelf.scrollToPosition(0)}
+                if(oldKey!=row.key){shelf.adapter=PageAdapter(navigate,tab,play,favorite,details,progress,lastEpisode,returnToTabs,day,quickActions,true,enterTab);shelf.scrollToPosition(0)}
                 shelf.setTag(R.id.shelf_key,row.key)
                 shelf.layoutParams=shelf.layoutParams.apply{height=view.dp((when(row.selected){1->220;2->252;3->206;4->222;5->166;else->286}*1.18f).toInt())}
                 val cards=if(row.cards.isNotEmpty())row.cards else row.items.map{Row("${row.key}:release:${it.id}",Kind.POSTER,release=it)}
@@ -354,22 +355,29 @@ class PageAdapter(
                 }
             }
             Kind.TABS -> {
-                val line = (view as HorizontalScrollView).getChildAt(0) as LinearLayout; line.removeAllViews()
-                val labels = listOf("Серии${row.title.takeIf{it.isNotBlank()}?.let{" · $it"}.orEmpty()}", "Франшиза", "Похожее", "Команда")
-                val icons = listOf(R.drawable.ic_episodes, R.drawable.ic_related, R.drawable.ic_favorite, R.drawable.ic_team)
-                labels.forEachIndexed { i, text ->
-                    val item = action(line,text,icon=icons[i],click={tab(i)})
-                    item.textSize=15f; item.setTextColor(if(i==row.selected)RED else MUTED)
-                    item.setOnFocusChangeListener { _, focused -> item.setTextColor(if(focused)WHITE else if(i==row.selected)RED else MUTED) }
-                    item.webControlBackground()
-                    item.setOnKeyListener { _, key, event ->
-                        if(key==KeyEvent.KEYCODE_DPAD_DOWN) { if(event.action==KeyEvent.ACTION_UP)tab(i);true } else false
+                val line=(view as HorizontalScrollView).getChildAt(0)as LinearLayout
+                val labels=listOf("Серии${row.title.takeIf{it.isNotBlank()}?.let{" · $it"}.orEmpty()}","Связанные","Похожее","Команда")
+                val icons=listOf(R.drawable.ic_episodes,R.drawable.ic_related,R.drawable.ic_favorite,R.drawable.ic_team)
+                if(line.childCount!=labels.size){
+                    line.removeAllViews()
+                    labels.forEachIndexed{i,label->
+                        val button=action(line,label,icon=icons[i],click={tab(i)}).apply{
+                            textSize=15f
+                            setOnKeyListener{_,key,event->if(key==KeyEvent.KEYCODE_DPAD_DOWN){if(event.action==KeyEvent.ACTION_UP)enterTab(i);true}else false}
+                        }
+                        line.addView(LinearLayout(view.context).apply{
+                            orientation=LinearLayout.VERTICAL
+                            addView(button,LinearLayout.LayoutParams(-2,view.dp(42)))
+                            addView(View(view.context),LinearLayout.LayoutParams(-1,view.dp(2)))
+                        },LinearLayout.LayoutParams(-2,-2).apply{marginEnd=view.dp(8)})
                     }
-                    line.addView(LinearLayout(view.context).apply {
-                        orientation=LinearLayout.VERTICAL
-                        addView(item,LinearLayout.LayoutParams(-2,view.dp(42)))
-                        addView(View(view.context).apply { setBackgroundColor(if(i==row.selected)RED else Color.TRANSPARENT) },LinearLayout.LayoutParams(-1,view.dp(2)))
-                    },LinearLayout.LayoutParams(-2,-2).apply{marginEnd=view.dp(8)})
+                }
+                labels.forEachIndexed{i,label->
+                    val wrapper=line.getChildAt(i)as LinearLayout
+                    val button=wrapper.getChildAt(0)as TextView
+                    button.text=label;button.setTextColor(if(button.hasFocus())WHITE else if(i==row.selected)RED else MUTED)
+                    button.setOnFocusChangeListener{_,focused->button.setTextColor(if(focused)WHITE else if(i==row.selected)RED else MUTED)}
+                    wrapper.getChildAt(1).setBackgroundColor(if(i==row.selected)RED else Color.TRANSPARENT)
                 }
             }
             Kind.HERO -> {
@@ -379,7 +387,7 @@ class PageAdapter(
                     scaleType=ImageView.ScaleType.FIT_CENTER;load(r.poster)
                     background=shape(0xFF212121.toInt(),dp(8).toFloat());clipToOutline=true
                     contentDescription=r.title;isFocusable=false
-                },LinearLayout.LayoutParams(view.dp(156),view.dp(224)))
+                },LinearLayout.LayoutParams(view.dp(190),view.dp(272)))
                 val info=LinearLayout(view.context).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(24),0,0,0)}
                 box.addView(info,LinearLayout.LayoutParams(0,-2,1f))
                 fun text(value:String,size:Float,color:Int=WHITE,bold:Boolean=false,lines:Int=2){

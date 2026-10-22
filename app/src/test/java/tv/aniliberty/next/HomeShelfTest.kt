@@ -13,6 +13,23 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[30],application=Application::class)
 class HomeShelfTest {
+    @Test fun detailTabsKeepFocusOnSelectionAndEnterContentOnlyOnDown(){
+        var selected=-1;var entered=-1
+        val adapter=PageAdapter({},{selected=it},{},{},{},{0L to 0L},{null},{},enterTab={entered=it})
+        adapter.submit(listOf(Row("tabs",Kind.TABS,title="12")))
+        val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.TABS.ordinal)
+        adapter.onBindViewHolder(holder,0)
+        val line=(holder.itemView as android.widget.HorizontalScrollView).getChildAt(0)as android.widget.LinearLayout
+        val button=(line.getChildAt(1)as android.widget.LinearLayout).getChildAt(0)as android.widget.TextView
+        button.requestFocus();button.performClick()
+        assertEquals(1,selected);assertEquals(-1,entered)
+        adapter.submit(listOf(Row("tabs",Kind.TABS,title="12",selected=1)))
+        adapter.onBindViewHolder(holder,0)
+        assertSame(button,(line.getChildAt(1)as android.widget.LinearLayout).getChildAt(0))
+        assertTrue(button.hasFocus());assertEquals("Связанные",button.text.toString())
+        button.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP,android.view.KeyEvent.KEYCODE_DPAD_DOWN))
+        assertEquals(1,entered)
+    }
     @Test fun videoCardAlwaysKeepsSixteenByNine(){
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
         adapter.submit(listOf(Row("video",Kind.FEATURE,"Ролик")))
