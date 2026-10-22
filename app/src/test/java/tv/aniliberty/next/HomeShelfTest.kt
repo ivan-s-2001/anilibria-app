@@ -97,8 +97,11 @@ class HomeShelfTest {
         assertEquals(android.view.View.GONE,card.getChildAt(3).visibility)
         card.requestFocus()
         assertEquals(android.view.View.VISIBLE,card.getChildAt(3).visibility)
-        assertEquals(4,card.childCount)
-        assertTrue((card.getChildAt(3)as android.widget.TextView).text.contains("Онгоинг"))
+        assertEquals(5,card.childCount)
+        val status=card.getChildAt(4)as android.widget.TextView
+        assertEquals("Онгоинг",status.text.toString())
+        assertEquals(android.view.View.VISIBLE,status.visibility)
+        assertNotSame(card.getChildAt(3).background,status.background)
         assertEquals(false,parseRelease(org.json.JSONObject("""{"id":2,"is_ongoing":false}""")).ongoing)
         assertNull(parseRelease(org.json.JSONObject("""{"id":3}""")).ongoing)
         assertNotNull((card.getChildAt(0)as android.widget.ImageView).colorFilter)

@@ -290,6 +290,9 @@ class PageAdapter(
                 box.getChildAt(1).visibility=if(spotlight)View.VISIBLE else View.GONE
                 title.label(release?.title?:row.title,if(spotlight)30f else if(shelfMode)17f else 14f,WHITE,true)
                 title.maxLines=2
+                title.breakStrategy=android.text.Layout.BREAK_STRATEGY_BALANCED
+                title.hyphenationFrequency=android.text.Layout.HYPHENATION_FREQUENCY_NONE
+                if(poster || continuing)androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(title,12,if(shelfMode)17 else 14,1,android.util.TypedValue.COMPLEX_UNIT_SP)
                 val short=if(release!=null)listOf(release.year,release.type,release.latestEpisode?.let{"Эп. ${number(it.ordinal)}"}.orEmpty()).filter(String::isNotBlank).joinToString(" · ")else row.subtitle
                 val full=if(release!=null)listOf(release.metadata,release.genres.take(2).joinToString(" · ")).filter(String::isNotBlank).joinToString(" · ")else row.subtitle
                 subtitle.label(if(box.hasFocus())full else short,if(shelfMode)14f else 12f,MUTED)
@@ -324,9 +327,24 @@ class PageAdapter(
                     val episodeBadge=(box.getChildAt(3)as?TextView)?:TextView(view.context).also{
                         box.addView(it,FrameLayout.LayoutParams(-2,view.dp(28),Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply{topMargin=view.dp(10)})
                     }
-                    episodeBadge.label(if(cataloguePoster)listOf(release?.type.orEmpty(),when(release?.ongoing){true->"Онгоинг";false->"Завершён";null->""}).filter(String::isNotBlank).joinToString(" · ").ifBlank{"Аниме"}else release?.latestEpisode?.let{"${number(it.ordinal)} эпизод"}?:"Релиз",12f,WHITE,true)
+                    episodeBadge.label(if(cataloguePoster)release?.type?.ifBlank{"Аниме"}?:"Аниме"else release?.latestEpisode?.let{"${number(it.ordinal)} эпизод"}?:"Релиз",12f,WHITE,true)
                     episodeBadge.gravity=Gravity.CENTER;episodeBadge.setPadding(view.dp(10),0,view.dp(10),0)
                     episodeBadge.background=shape(0x1AFFFFFF,view.dp(6).toFloat());episodeBadge.isFocusable=false
+                    val statusBadge=if(cataloguePoster){
+                        episodeBadge.textSize=10f
+                        episodeBadge.layoutParams=FrameLayout.LayoutParams(-2,view.dp(26),Gravity.TOP or Gravity.START).apply{topMargin=view.dp(10);marginStart=view.dp(8)}
+                        val status=(box.getChildAt(4)as?TextView)?:TextView(view.context).also{box.addView(it)}
+                        status.layoutParams=FrameLayout.LayoutParams(-2,view.dp(26),Gravity.TOP or Gravity.END).apply{topMargin=view.dp(10);marginEnd=view.dp(8)}
+                        status.label(if(release?.ongoing==true)"Онгоинг"else"Завершён",10f,WHITE,true)
+                        status.gravity=Gravity.CENTER;status.setPadding(view.dp(7),0,view.dp(7),0)
+                        status.background=shape(view.context.getColor(if(release?.ongoing==true)R.color.al_success else R.color.al_accent),view.dp(4).toFloat())
+                        status.isFocusable=false
+                        status
+                    }else{
+                        episodeBadge.layoutParams=FrameLayout.LayoutParams(-2,view.dp(28),Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply{topMargin=view.dp(10)}
+                        box.getChildAt(4)?.visibility=View.GONE
+                        null
+                    }
                     content.setPadding(view.dp(10),view.dp(44),view.dp(10),view.dp(12))
                     title.layoutParams=LinearLayout.LayoutParams(-1,0,1f)
                     subtitle.maxLines=3
@@ -341,6 +359,7 @@ class PageAdapter(
                             subtitle.visibility=if(focused)View.VISIBLE else View.GONE
                         }
                         episodeBadge.visibility=if(focused)View.VISIBLE else View.GONE
+                        statusBadge?.visibility=if(focused && release?.ongoing!=null)View.VISIBLE else View.GONE
                         image.colorFilter=if(focused)android.graphics.ColorMatrixColorFilter(floatArrayOf(.045f,0f,0f,0f,12.75f,0f,.045f,0f,0f,12.75f,0f,0f,.045f,0f,12.75f,0f,0f,0f,1f,0f))else null
                     }
                     focusPoster(box.hasFocus())
@@ -378,7 +397,7 @@ class PageAdapter(
                     subtitle.maxLines=2;subtitle.textSize=12f
                     fun focusContinue(focused:Boolean){
                         title.visibility=View.VISIBLE
-                        title.maxLines=2
+                        title.maxLines=if(focused)3 else 2
                         title.layoutParams=LinearLayout.LayoutParams(-1,if(focused)0 else -2,if(focused)1f else 0f)
                         content.setPadding(view.dp(12),view.dp(if(focused)38 else 12),view.dp(12),view.dp(16))
                         badge.visibility=if(focused)View.VISIBLE else View.GONE
