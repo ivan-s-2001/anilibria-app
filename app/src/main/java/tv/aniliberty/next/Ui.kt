@@ -330,6 +330,13 @@ class PageAdapter(
                     episodeBadge.label(if(cataloguePoster)release?.type?.ifBlank{"Аниме"}?:"Аниме"else release?.latestEpisode?.let{"${number(it.ordinal)} эпизод"}?:"Релиз",12f,WHITE,true)
                     episodeBadge.gravity=Gravity.CENTER;episodeBadge.setPadding(view.dp(10),0,view.dp(10),0)
                     episodeBadge.background=shape(0x1AFFFFFF,view.dp(6).toFloat());episodeBadge.isFocusable=false
+                    val updateLabel=if(!cataloguePoster){
+                        val label=(box.getChildAt(4)as?TextView)?:TextView(view.context).also{box.addView(it)}
+                        label.layoutParams=FrameLayout.LayoutParams(-1,view.dp(30),Gravity.BOTTOM).apply{bottomMargin=view.dp(6);marginStart=view.dp(8);marginEnd=view.dp(8)}
+                        label.label(relativeUpdate(release?.latestEpisode?.updatedAt?.ifBlank{release.updatedAt}?:release?.updatedAt.orEmpty()),10f,MUTED)
+                        label.gravity=Gravity.CENTER;label.maxLines=2
+                        label
+                    }else null
                     val statusBadge=if(cataloguePoster){
                         episodeBadge.textSize=10f
                         episodeBadge.layoutParams=FrameLayout.LayoutParams(-2,view.dp(26),Gravity.TOP or Gravity.START).apply{topMargin=view.dp(10);marginStart=view.dp(8)}
@@ -342,7 +349,6 @@ class PageAdapter(
                         status
                     }else{
                         episodeBadge.layoutParams=FrameLayout.LayoutParams(-2,view.dp(28),Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply{topMargin=view.dp(10)}
-                        box.getChildAt(4)?.visibility=View.GONE
                         null
                     }
                     content.setPadding(view.dp(10),view.dp(44),view.dp(10),view.dp(12))
@@ -360,6 +366,8 @@ class PageAdapter(
                         }
                         episodeBadge.visibility=if(focused)View.VISIBLE else View.GONE
                         statusBadge?.visibility=if(focused && release?.ongoing!=null)View.VISIBLE else View.GONE
+                        updateLabel?.visibility=if(focused && updateLabel.text.isNotBlank())View.VISIBLE else View.GONE
+                        if(!cataloguePoster)content.setPadding(view.dp(10),view.dp(44),view.dp(10),view.dp(if(updateLabel?.text?.isNotBlank()==true)38 else 12))
                         image.colorFilter=if(focused)android.graphics.ColorMatrixColorFilter(floatArrayOf(.045f,0f,0f,0f,12.75f,0f,.045f,0f,0f,12.75f,0f,0f,.045f,0f,12.75f,0f,0f,0f,1f,0f))else null
                     }
                     focusPoster(box.hasFocus())

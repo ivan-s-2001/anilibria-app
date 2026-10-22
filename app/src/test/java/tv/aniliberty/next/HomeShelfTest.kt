@@ -83,7 +83,8 @@ class HomeShelfTest {
         assertNotNull((card.getChildAt(0)as android.widget.ImageView).colorFilter)
         assertEquals(height,card.layoutParams.height)
         assertEquals(android.view.View.VISIBLE,card.getChildAt(3).visibility)
-        assertEquals(4,card.childCount)
+        assertEquals(5,card.childCount)
+        assertEquals(android.view.View.GONE,card.getChildAt(4).visibility)
     }
 
     @Test fun catalogueKeepsTitleVisibleAndShowsBadgeOnFocus(){

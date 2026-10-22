@@ -12,11 +12,11 @@ import java.net.URI
 import java.net.URLEncoder
 
 /** Domain identifiers are v1 identifiers. Episode UUIDs are never derived from positions. */
-data class Episode(val id: String, val ordinal: Double, val name: String, val preview: String?, val duration: Long, val streams: List<Pair<String, String>>, val order: Double) {
+data class Episode(val id: String, val ordinal: Double, val name: String, val preview: String?, val duration: Long, val streams: List<Pair<String, String>>, val order: Double, val updatedAt:String = "") {
     val label: String get() = name.ifBlank { "Эпизод ${number(ordinal)}" }
 }
 data class Credit(val role: String, val name: String)
-data class Release(val id: Int, val alias: String, val title: String, val english: String, val poster: String?, val year: String, val season: String, val type: String, val age: String, val genres: List<String>, val description: String, val episodes: List<Episode>, val credits: List<Credit>, val blocked: Boolean, val latestEpisode: Episode? = null, val externalIds: ExternalIds = ExternalIds(), val ratings: List<Rating> = emptyList(), val ongoing:Boolean? = null) {
+data class Release(val id: Int, val alias: String, val title: String, val english: String, val poster: String?, val year: String, val season: String, val type: String, val age: String, val genres: List<String>, val description: String, val episodes: List<Episode>, val credits: List<Credit>, val blocked: Boolean, val latestEpisode: Episode? = null, val externalIds: ExternalIds = ExternalIds(), val ratings: List<Rating> = emptyList(), val ongoing:Boolean? = null, val updatedAt:String = "") {
     val metadata: String get() = listOf(year, season, type, age).filter(String::isNotBlank).joinToString(" · ")
 }
 fun number(value: Double): String = java.math.BigDecimal.valueOf(value).stripTrailingZeros().toPlainString()
@@ -34,14 +34,14 @@ fun parseRelease(json: JSONObject): Release {
         if (id.isBlank() || !ordinal.isFinite()) null else Episode(id, ordinal, e.text("name"), e.optJSONObject("preview")?.image(), e.optLong("duration", 0).coerceAtLeast(0),
             listOf("1080p" to "hls_1080", "720p" to "hls_720", "480p" to "hls_480").mapNotNull { (quality, key) ->
                 e.text(key).takeIf { it.startsWith("https://") }?.let { quality to it }
-            }, e.optDouble("sort_order", ordinal))
+            }, e.optDouble("sort_order", ordinal),e.text("updated_at"))
     }.sortedWith(compareBy<Episode> { it.order }.thenBy { it.ordinal })
     return Release(json.getInt("id"), json.text("alias"), json.optJSONObject("name")?.text("main").orEmpty(), json.optJSONObject("name")?.text("english").orEmpty(), json.optJSONObject("poster")?.image(), json.text("year"), json.display("season"), json.display("type"), json.display("age_rating"), json.optJSONArray("genres").objects().map { it.text("name") }, json.text("description"), episodes,
         json.optJSONArray("members").objects().map { Credit(it.display("role"), it.text("nickname")) },
         json.optBoolean("is_blocked_by_geo") || json.optBoolean("is_blocked_by_copyrights"),
         json.optJSONObject("latest_episode")?.let { parseRelease(JSONObject().put("id",json.getInt("id")).put("episodes",JSONArray().put(it))).episodes.firstOrNull() },
         ExternalIds(json.optJSONObject("shikimori")?.optInt("id")?.takeIf { it > 0 },json.optJSONObject("mal")?.optInt("id")?.takeIf { it > 0 }),
-        listOf("Shikimori" to "shikimori", "MyAnimeList" to "mal").mapNotNull { (source,key) -> json.optJSONObject(key)?.let { site -> site.optDouble("rating",Double.NaN).takeIf { it.isFinite() && it in 1.0..10.0 }?.let { Rating(source,it,site.optInt("votes").takeIf { it > 0 }) } } }).copy(ongoing=if(json.has("is_ongoing") && !json.isNull("is_ongoing"))json.getBoolean("is_ongoing")else null)
+        listOf("Shikimori" to "shikimori", "MyAnimeList" to "mal").mapNotNull { (source,key) -> json.optJSONObject(key)?.let { site -> site.optDouble("rating",Double.NaN).takeIf { it.isFinite() && it in 1.0..10.0 }?.let { Rating(source,it,site.optInt("votes").takeIf { it > 0 }) } } }).copy(ongoing=if(json.has("is_ongoing") && !json.isNull("is_ongoing"))json.getBoolean("is_ongoing")else null,updatedAt=json.text("updated_at"))
 }
 
 class Api {
