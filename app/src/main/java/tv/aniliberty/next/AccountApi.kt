@@ -45,6 +45,12 @@ class AccountHttpTransport:AccountTransport {
     }
 }
 class AccountApi(private val transport:AccountTransport=AccountHttpTransport()){
+    suspend fun login(login: String, password: String): String {
+        require(login.isNotBlank() && password.isNotEmpty()) { "Введите логин и пароль" }
+        return JSONObject(transport.request("/accounts/users/auth/login", "POST",
+            JSONObject().put("login", login.trim()).put("password", password).toString(), null))
+            .getString("token").also { require(it.isNotBlank()) { "Сервис не вернул токен" } }
+    }
     suspend fun deviceCode(deviceId:String):DeviceCode {
         val json=JSONObject(transport.request("/accounts/otp/get","POST",JSONObject().put("device_id",deviceId).toString(),null))
         val code=json.getJSONObject("otp").getString("code")

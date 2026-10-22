@@ -68,6 +68,7 @@ class MainActivity : ComponentActivity() {
             else->if(item.isFocusable)item.requestFocus()else if(item is ViewGroup)item.getFocusables(View.FOCUS_FORWARD).firstOrNull()?.requestFocus()
         }
     }
+    private lateinit var startup: StartupScreen
     private var current: Screen = Screen.Welcome
     private val detailBookmarks=linkedMapOf<Pair<Int,Int>,DetailBookmark>()
     private val detailContentBookmarks=linkedMapOf<Pair<Int,Int>,DetailBookmark>()
@@ -375,6 +376,7 @@ class MainActivity : ComponentActivity() {
         return true
     }
     override fun dispatchKeyEvent(event:KeyEvent):Boolean {
+        if(::startup.isInitialized && startup.visibility==View.VISIBLE)return super.dispatchKeyEvent(event)
         if(list.findFocus() !is EditText && remoteRepeat.discard(event))return true
         if(event.action==KeyEvent.ACTION_DOWN && event.keyCode in listOf(KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN,KeyEvent.KEYCODE_BACK)){
             shelfMoveToken++;pendingShelf=null
@@ -483,13 +485,18 @@ class MainActivity : ComponentActivity() {
         menu=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(12),dp(4),0);setBackgroundColor(0xFF212121.toInt())}
         shell.addView(menu,LinearLayout.LayoutParams(dp(60),-1));shell.addView(list,LinearLayout.LayoutParams(0,-1,1f));buildMenu()
         root=android.widget.FrameLayout(this).apply{addView(shell,android.widget.FrameLayout.LayoutParams(-1,-1))}
+        startup=StartupScreen(this, start={
+            getSharedPreferences("viewing",MODE_PRIVATE).edit().putBoolean("welcomed",true).apply()
+            model.open(Screen.Home,false)
+        }, retry=model::retry, qr={login("qr")}, password={login("password")})
+        root.addView(startup,android.widget.FrameLayout.LayoutParams(-1,-1))
         setContentView(root)
         onBackPressedDispatcher.addCallback(this,object:OnBackPressedCallback(true){override fun handleOnBackPressed(){remoteClick.cancel();remotePendingKey=null;remoteFocusToken++;shelfMoveToken++;pendingShelf=null;if(catalogSearchEditing){finishCatalogSearch();return};if(menuOpen){closeMenu();return}
             rememberFocus()
             if(current==Screen.Home){if(list.computeVerticalScrollOffset()>0){val index=adapter.rows.indexOfFirst{it.kind==Kind.SPOTLIGHT || it.kind==Kind.SHELF};if(index>=0){grid.scrollToPositionWithOffset(0,0);list.doOnNextLayout{focusItem(list.findViewHolderForAdapterPosition(index)?.itemView)};list.requestLayout()}}else finish()}
             else if(!model.back())finish()}})
         lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED){model.state.collect{render(it)}} }
-        if(savedInstanceState==null && getSharedPreferences("viewing",MODE_PRIVATE).getBoolean("welcomed",false))model.open(Screen.Home,false)
+        if(model.state.value.screen==Screen.Welcome && getSharedPreferences("viewing",MODE_PRIVATE).getBoolean("welcomed",false))model.open(Screen.Home,false)
     }
     override fun onWindowFocusChanged(hasFocus:Boolean){
         super.onWindowFocusChanged(hasFocus)
@@ -658,15 +665,21 @@ class MainActivity : ComponentActivity() {
             if(f.ages.isNotEmpty())"Возраст"else ""
         ).filter(String::isNotBlank).joinToString(" · ")
     }
-    private fun login(){
+    private fun login(method:String?=null){
+        val fromWelcome=current==Screen.Welcome
         val previousUser=account.session.userId
-        AccountPanel(this,lifecycleScope,account){
+        val panel=AccountPanel(this,lifecycleScope,account){
             accountJob?.cancel();accountJob=null;profileSyncing=false
             accountHistoryJob?.cancel();accountHistoryLoadJob?.cancel();accountHistoryItems=emptyList();accountSessions=emptyList();accountHistoryPage=0;profileError=null;lastHistoryHydration=0L;accountLoadedAt=0L
             Toast.makeText(this,"Вход выполнен · ${account.session.name}",Toast.LENGTH_SHORT).show()
             if(previousUser!=null && previousUser!=account.session.userId)model.resetNavigation(Screen.Profile)
+            if(fromWelcome){
+                getSharedPreferences("viewing",MODE_PRIVATE).edit().putBoolean("welcomed",true).apply()
+                model.open(Screen.Home,false)
+            }
             rememberFocus();render(model.state.value);refreshAccount(force=true,after={offerLocalHistory(automatic=true)})
-        }.start()
+        }
+        when(method){"qr"->panel.startQr();"password"->panel.startPassword();else->panel.start()}
     }
     private fun refreshAccount(force:Boolean=false,after:(()->Unit)?=null){
         if(!account.signedIn || accountJob?.isActive==true)return
@@ -1099,10 +1112,12 @@ class MainActivity : ComponentActivity() {
         if(grid.spanCount!=spans)grid.spanCount=spans
         menu.visibility=if(current==Screen.Welcome)View.GONE else View.VISIBLE
         val rows=mutableListOf<Row>()
+        val startupVisible=state.screen==Screen.Welcome || (state.screen==Screen.Home && state.home==null && (state.loading || state.error!=null))
+        startup.visibility=if(startupVisible)View.VISIBLE else View.GONE
+        shell.visibility=if(startupVisible)View.INVISIBLE else View.VISIBLE
+        if(startupVisible)startup.show(state.screen==Screen.Welcome,state.error!=null)
         if(state.screen==Screen.Welcome){
-            rows+=Row("welcome",Kind.HEADING,"AniLiberty","Так звучит аниме")
-            rows+=Row("intro",Kind.TEXT,"Аниме на большом экране","Управление пультом. Просмотр без обязательного входа.")
-            rows+=Row("start",Kind.ACTION,"Начать просмотр",click={getSharedPreferences("viewing",MODE_PRIVATE).edit().putBoolean("welcomed",true).apply();model.open(Screen.Home,false)})
+            // Welcome has its own centered surface outside the scrolling catalogue.
         }else{
             
             if(state.loading && state.screen !is Screen.Catalog && !(state.screen==Screen.Home && state.home!=null))rows+=Row("loading",Kind.TEXT,"Загрузка…")
@@ -1400,6 +1415,7 @@ class MainActivity : ComponentActivity() {
         preloadFranchises.take(12).forEach{loadFranchisePreview(it.id)}
         val keepDetailTabFocus=sameDetail && current is Screen.Detail && !enterContent && list.findFocus()?.let{list.findContainingItemView(it)?.tag}=="tabs"
         adapter.submit(rows)
+        if(startupVisible)return
         if(state.screen is Screen.Detail && !state.loading && rows.any{it.kind==Kind.HERO}){
             if(menuOpen || !list.hasWindowFocus())return
             if(enterContent){enterContent=false;enterDetailContent();return}

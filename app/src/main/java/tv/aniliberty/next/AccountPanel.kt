@@ -20,8 +20,77 @@ class AccountPanel(context:Context,private val scope:CoroutineScope,private val 
     private var task:Job?=null
     private val link="https://www.aniliberty.top/app/auth/otp/linkDevice"
     init{setOnDismissListener{task?.cancel()}}
-    fun start(){show();requestCode()}
+    fun start(){
+        message("Выберите удобный способ входа")
+        addChoice("Войти по QR-коду"){requestCode()}
+        addChoice("Войти по логину и паролю"){passwordForm()}
+        addAction("Закрыть"){dismiss()}
+        show()
+    }
+    fun startQr(){show();requestCode()}
+    fun startPassword(){show();passwordForm()}
+    private fun passwordForm(){
+        task?.cancel()
+        body.removeAllViews();footer.removeAllViews()
+        heading.text="Вход по логину и паролю"
+        fun input(title:String,secret:Boolean):android.widget.EditText {
+            body.addView(TextView(context).apply{label(title,14f,MUTED)})
+            return android.widget.EditText(context).apply{
+                hint=title;setTextColor(WHITE);setHintTextColor(MUTED);textSize=16f
+                isSingleLine=true
+                inputType=if(secret)android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+                    else android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                imeOptions=if(secret)android.view.inputmethod.EditorInfo.IME_ACTION_DONE else android.view.inputmethod.EditorInfo.IME_ACTION_NEXT
+                setPadding(dp(12),dp(8),dp(12),dp(8));webControlBackground()
+                isSaveEnabled=false
+                body.addView(this,LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(6);bottomMargin=dp(16)})
+            }
+        }
+        val login=input("Логин",false)
+        val password=input("Пароль",true)
+        val status=TextView(context).apply{label("",14f,MUTED)}
+        body.addView(status)
+        var pendingToken:String?=null
+        val submit=addAction("Войти",true){
+            if(task?.isActive==true)return@addAction
+            if(login.text.isBlank() || password.text.isEmpty()){
+                status.text="Введите логин и пароль"
+                (if(login.text.isBlank())login else password).requestFocus()
+                return@addAction
+            }
+            task=scope.launch{
+                login.isEnabled=false;password.isEnabled=false
+                status.text="Выполняем вход…"
+                try{
+                    val token=pendingToken?:account.api.login(login.text.toString(),password.text.toString()).also{pendingToken=it}
+                    account.connect(token)
+                    password.text.clear();dismiss();connected()
+                }catch(e:CancellationException){throw e}
+                catch(e:AccountHttpException){
+                    status.text=if(e.status==401 && pendingToken==null)"Неверный логин или пароль"else if(pendingToken!=null)"Вход подтверждён. Не удалось загрузить профиль. Повторите попытку."else e.message
+                }catch(_:Exception){status.text="Не удалось войти. Проверьте данные и подключение."}
+                finally{login.isEnabled=true;password.isEnabled=true}
+            }
+        }
+        login.addTextChangedListener(object:android.text.TextWatcher{
+            override fun beforeTextChanged(s:CharSequence?,start:Int,count:Int,after:Int){}
+            override fun onTextChanged(s:CharSequence?,start:Int,before:Int,count:Int){pendingToken=null}
+            override fun afterTextChanged(s:android.text.Editable?){}
+        })
+        password.addTextChangedListener(object:android.text.TextWatcher{
+            override fun beforeTextChanged(s:CharSequence?,start:Int,count:Int,after:Int){}
+            override fun onTextChanged(s:CharSequence?,start:Int,before:Int,count:Int){pendingToken=null}
+            override fun afterTextChanged(s:android.text.Editable?){}
+        })
+        password.setOnEditorActionListener{_,action,_->
+            if(action==android.view.inputmethod.EditorInfo.IME_ACTION_DONE){submit.performClick();true}else false
+        }
+        addAction("Войти по QR-коду"){password.text.clear();requestCode()}
+        addAction("Отмена"){password.text.clear();dismiss()}
+        login.requestFocus()
+    }
     private fun requestCode(){
+        heading.text="Вход по QR-коду"
         task?.cancel();message("Получаем код устройства…");footer.removeAllViews();addAction("Отмена"){dismiss()}
         task=scope.launch{
             try{

@@ -15,6 +15,17 @@ import org.robolectric.annotation.Config
 @Config(sdk=[30])
 class AccountApiTest {
     private data class Call(val path:String,val method:String,val body:String?,val token:String?)
+    @Test fun passwordLoginUsesDocumentedFieldsAndPreservesPassword()=runBlocking{
+        var captured:Call?=null
+        val api=AccountApi(AccountTransport{p,m,b,t->captured=Call(p,m,b,t);"{\"token\":\"session\"}"})
+        assertEquals("session",api.login(" user "," secret "))
+        val call=requireNotNull(captured)
+        assertEquals("/accounts/users/auth/login",call.path)
+        assertEquals("POST",call.method)
+        assertNull(call.token)
+        assertEquals("user",JSONObject(call.body!!).getString("login"))
+        assertEquals(" secret ",JSONObject(call.body!!).getString("password"))
+    }
     @Test fun favoritesAndCollectionsUseSeparateAuthenticatedEndpointsAndArrayBodies()=runBlocking{
         val calls=mutableListOf<Call>()
         val api=AccountApi(AccountTransport{p,m,b,t->calls+=Call(p,m,b,t);"[]"})

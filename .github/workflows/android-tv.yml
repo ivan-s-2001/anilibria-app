@@ -22,9 +22,18 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
-      - run: bash ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon --console=plain
+      - run: bash ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon --console=plain
       - uses: actions/upload-artifact@v4
         with:
           name: AniLiberty-TV-Next-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: AniLiberty-TV-Next-release-checks
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/reports/
+          if-no-files-found: warn
