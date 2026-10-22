@@ -6,27 +6,28 @@ import android.view.Gravity
 internal class QualityEnhancementDialog(
     context: Context,
     selected: Anime4kMode,
+    secondaryAvailable: Boolean = true,
     onSelected: (Anime4kMode) -> Unit,
 ) : TvSidePanel(context, "Улучшение качества") {
     private var selectedView: android.view.View? = null
 
     init {
         message(
-            "Экспериментально · Anime4K\n\nУлучшает контуры при увеличении видео. На слабом устройстве возможны замедления — выберите лёгкий режим или выключите обработку."
+            "Экспериментально · Anime4K\n\nСравните A, B и C на одном кадре. Усиленные режимы работают при увеличении от ×2; при меньшем масштабе применяется основной. Возможны артефакты и замедления."
         )
         Anime4kMode.entries.forEach { mode ->
-            val description =
-                when (mode) {
-                    Anime4kMode.OFF -> "Исходное изображение"
-                    Anime4kMode.LIGHT -> "Меньше вычислений · улучшение контуров"
-                    Anime4kMode.QUALITY -> "Нейросетевое увеличение · выше нагрузка"
-                }
+            val description = mode.description
             val choice =
                 addChoice("${mode.title}\n$description", selected == mode) {
                     onSelected(mode)
                     dismiss()
                 }
-            if (selected == mode) selectedView = choice
+            if (mode.secondary && !secondaryAvailable) {
+                choice.isEnabled = false
+                choice.isFocusable = false
+                choice.alpha = .45f
+            }
+            if (selected == mode && choice.isEnabled) selectedView = choice
         }
         addAction("Назад") { dismiss() }
     }

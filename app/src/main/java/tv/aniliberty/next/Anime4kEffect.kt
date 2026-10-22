@@ -17,20 +17,17 @@ internal class Anime4kEffect(
     private val screenWidth: Int,
     private val screenHeight: Int,
 ) : GlEffect {
-    override fun isNoOp(inputWidth: Int, inputHeight: Int): Boolean =
-        mode == Anime4kMode.OFF ||
-            anime4kOutputSize(inputWidth, inputHeight, screenWidth, screenHeight) ==
-                Anime4kSize(inputWidth, inputHeight)
+    override fun isNoOp(inputWidth: Int, inputHeight: Int): Boolean = mode == Anime4kMode.OFF
 
     override fun toGlShaderProgram(context: Context, useHdr: Boolean): GlShaderProgram {
         try {
             // These upstream models are SDR models. Never reinterpret HDR as BT.709.
             check(!useHdr) { "Anime4K supports SDR video only" }
-            val source =
-                context.assets.open("anime4k/${requireNotNull(mode.asset)}").bufferedReader().use {
-                    it.readText()
+            val sources =
+                (mode.assets + mode.primary.assets).distinct().associateWith { asset ->
+                    context.assets.open("anime4k/$asset").bufferedReader().use { it.readText() }
                 }
-            return Anime4kShaderProgram(parseAnime4kShader(source), screenWidth, screenHeight)
+            return Anime4kShaderProgram(mode, sources, screenWidth, screenHeight)
         } catch (e: Exception) {
             throw VideoFrameProcessingException(e)
         }
@@ -39,52 +36,56 @@ internal class Anime4kEffect(
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private class Anime4kShaderProgram(
-    private val passes: List<Anime4kPass>,
+    private val mode: Anime4kMode,
+    private val sources: Map<String, String>,
     private val screenWidth: Int,
     private val screenHeight: Int,
-) : BaseGlShaderProgram(false, 1) {
-    private data class Target(val texture: Int, val fbo: Int, val width: Int, val height: Int)
+) : BaseGlShaderProgram(true, 1) {
+    private data class Target(val texture: Int, val fbo: Int, val size: Anime4kSize)
 
-    private val targets = mutableListOf<Target>()
+    private val allocated = mutableListOf<Target>()
+    private val outputs = mutableListOf<Target?>()
     private val programs = mutableListOf<GlProgram>()
-    private var inputSize = Anime4kSize(1, 1)
+    private var nodes = emptyList<Anime4kNode>()
     private var outputSize = Anime4kSize(1, 1)
-    private var copy: GlProgram? = null
 
     override fun configure(inputWidth: Int, inputHeight: Int): Size {
         try {
             clearResources()
-            inputSize = Anime4kSize(inputWidth, inputHeight)
+            val input = Anime4kSize(inputWidth, inputHeight)
+            outputSize = anime4kOutputSize(inputWidth, inputHeight, screenWidth, screenHeight)
+            nodes = planAnime4k(mode, input, outputSize) { requireNotNull(sources[it]) }
             val maxTexture = IntArray(1)
             GLES20.glGetIntegerv(GLES20.GL_MAX_TEXTURE_SIZE, maxTexture, 0)
-            outputSize =
-                anime4kOutputSize(inputWidth, inputHeight, screenWidth, screenHeight, maxTexture[0])
-            if (outputSize == inputSize) {
-                copy =
-                    program(
-                        """#version 300 es
-precision highp float;
-in vec2 vTexCoord;
-uniform sampler2D uInput;
-out vec4 outColor;
-void main() { outColor = texture(uInput, vTexCoord); }
-"""
-                    )
-            } else {
-                passes.forEachIndexed { index, pass ->
-                    programs += program(pass.fragmentShader(index == passes.lastIndex))
-                    if (index != passes.lastIndex) {
-                        val size = if (pass.upscale) outputSize else inputSize
-                        // Signed gradients and CNN feature maps must not be clipped to RGBA8.
-                        val texture = GlUtil.createTexture(size.width, size.height, true)
+            val lastUse = IntArray(nodes.size) { it }
+            nodes.forEachIndexed { index, node ->
+                node.bindings.values.filter { it >= 0 }.forEach { lastUse[it] = index }
+            }
+            val free = mutableListOf<Target>()
+            // Include the Media3 output pool. Reuse intermediates only after their final consumer.
+            var bytes = outputSize.width.toLong() * outputSize.height * 8
+            nodes.forEachIndexed { index, node ->
+                check(node.output.width <= maxTexture[0] && node.output.height <= maxTexture[0]) {
+                    "Anime4K intermediate exceeds GPU texture size"
+                }
+                val program = GlProgram(ANIME4K_VERTEX, node.fragment)
+                programs += program
+                program.setBufferAttribute("aPosition", GlUtil.getNormalizedCoordinateBounds(), 4)
+                if (index == nodes.lastIndex) outputs += null
+                else {
+                    var target = free.firstOrNull { it.size == node.output }
+                    if (target != null) free.remove(target)
+                    else {
+                        bytes += node.output.width.toLong() * node.output.height * 8
+                        check(bytes <= 256L * 1024 * 1024) {
+                            "Anime4K texture memory budget exceeded"
+                        }
+                        val texture =
+                            GlUtil.createTexture(node.output.width, node.output.height, true)
                         try {
-                            targets +=
-                                Target(
-                                    texture,
-                                    GlUtil.createFboForTexture(texture),
-                                    size.width,
-                                    size.height,
-                                )
+                            target =
+                                Target(texture, GlUtil.createFboForTexture(texture), node.output)
+                            allocated += target
                         } catch (e: Exception) {
                             GlUtil.deleteTexture(texture)
                             throw e
@@ -93,9 +94,13 @@ void main() { outColor = texture(uInput, vTexCoord); }
                             GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER) ==
                                 GLES20.GL_FRAMEBUFFER_COMPLETE
                         ) {
-                            "GPU cannot render Anime4K floating-point textures"
+                            "GPU cannot render floating-point Anime4K textures"
                         }
                     }
+                    outputs += target
+                }
+                lastUse.forEachIndexed { id, last ->
+                    if (last == index && id <= index) outputs[id]?.let { free += it }
                 }
             }
             return Size(outputSize.width, outputSize.height)
@@ -104,65 +109,46 @@ void main() { outColor = texture(uInput, vTexCoord); }
         }
     }
 
-    private fun program(fragment: String): GlProgram {
-        val program = GlProgram(ANIME4K_VERTEX, fragment)
-        program.setBufferAttribute("aPosition", GlUtil.getNormalizedCoordinateBounds(), 4)
-        return program
-    }
-
     override fun drawFrame(inputTexId: Int, presentationTimeUs: Long) {
+        val framebuffer = IntArray(1)
+        GLES20.glGetIntegerv(GLES20.GL_FRAMEBUFFER_BINDING, framebuffer, 0)
         try {
-            copy?.let {
-                it.use()
-                it.setSamplerTexIdUniform("uInput", inputTexId, 0)
-                it.bindAttributesAndUniforms()
-                GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
-                GlUtil.checkGlError()
-                return
-            }
-            val framebuffer = IntArray(1)
-            GLES20.glGetIntegerv(GLES20.GL_FRAMEBUFFER_BINDING, framebuffer, 0)
-            val original = Target(inputTexId, 0, inputSize.width, inputSize.height)
-            val textures = mutableMapOf("MAIN" to original, "HOOKED" to original)
-            try {
-                passes.forEachIndexed { index, pass ->
-                    val target = targets.getOrNull(index)
-                    GlUtil.focusFramebufferUsingCurrentContext(
-                        target?.fbo ?: framebuffer[0],
-                        target?.width ?: outputSize.width,
-                        target?.height ?: outputSize.height,
-                    )
-                    val program = programs[index]
-                    program.use()
-                    pass.bindings.forEachIndexed { unit, name ->
-                        val texture = requireNotNull(textures[name])
-                        // Unused uniforms may have been eliminated by the GLSL compiler.
-                        if (program.getUniformLocation("u_$name") >= 0)
-                            program.setSamplerTexIdUniform("u_$name", texture.texture, unit)
+            nodes.forEachIndexed { index, node ->
+                GlUtil.focusFramebufferUsingCurrentContext(
+                    outputs[index]?.fbo ?: framebuffer[0],
+                    node.output.width,
+                    node.output.height,
+                )
+                val program = programs[index]
+                program.use()
+                node.bindings.entries.forEachIndexed { unit, (name, id) ->
+                    val texture = if (id < 0) inputTexId else requireNotNull(outputs[id]).texture
+                    if (program.getUniformLocation("u_$name") >= 0)
+                        program.setSamplerTexIdUniform("u_$name", texture, unit)
+                    if (id >= 0) {
+                        val size = nodes[id].output
                         program.setFloatsUniformIfPresent(
                             "u_${name}_size",
-                            floatArrayOf(texture.width.toFloat(), texture.height.toFloat()),
+                            floatArrayOf(size.width.toFloat(), size.height.toFloat()),
                         )
                     }
-                    program.bindAttributesAndUniforms()
-                    GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
-                    GlUtil.checkGlError()
-                    if (target != null) pass.save?.let { textures[it] = target }
                 }
-            } finally {
-                GlUtil.focusFramebufferUsingCurrentContext(
-                    framebuffer[0],
-                    outputSize.width,
-                    outputSize.height,
-                )
+                program.bindAttributesAndUniforms()
+                GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
+                GlUtil.checkGlError()
             }
         } catch (e: Exception) {
             throw VideoFrameProcessingException(e, presentationTimeUs)
+        } finally {
+            GlUtil.focusFramebufferUsingCurrentContext(
+                framebuffer[0],
+                outputSize.width,
+                outputSize.height,
+            )
         }
     }
 
     private fun clearResources() {
-        // Attempt every deletion even after a driver error; propagate the first failure afterwards.
         var failure: Exception? = null
         fun clean(block: () -> Unit) {
             try {
@@ -173,13 +159,13 @@ void main() { outColor = texture(uInput, vTexCoord); }
         }
         programs.forEach { clean { it.delete() } }
         programs.clear()
-        copy?.let { clean { it.delete() } }
-        copy = null
-        targets.forEach {
+        allocated.forEach {
             clean { GlUtil.deleteFbo(it.fbo) }
             clean { GlUtil.deleteTexture(it.texture) }
         }
-        targets.clear()
+        allocated.clear()
+        outputs.clear()
+        nodes = emptyList()
         failure?.let { throw it }
     }
 
