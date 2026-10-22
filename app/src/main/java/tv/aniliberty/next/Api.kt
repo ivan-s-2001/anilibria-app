@@ -107,13 +107,15 @@ class Api {
     }
     suspend fun franchise(id: String): List<Release> = JSONObject(request("/anime/franchises/${URLEncoder.encode(id,"UTF-8")}")).optJSONArray("franchise_releases").objects().sortedBy { it.optInt("sort_order") }.mapNotNull { it.optJSONObject("release")?.let(::parseRelease) }
     suspend fun latest(limit:Int=9): List<Release> = JSONArray(request("/anime/releases/latest?limit=$limit")).objects().map(::parseRelease)
-    suspend fun catalog(query: String = "", page: Int = 1, genre: Int? = null): Pair<List<Release>, Boolean> {
-        val q = URLEncoder.encode(query, "UTF-8")
-        val filter = genre?.let { "&f%5Bgenres%5D=$it" }.orEmpty()
-        val json = JSONObject(request("/anime/catalog/releases?limit=30&page=$page&f%5Bsearch%5D=$q$filter"))
-        val data = json.optJSONArray("data").objects().map(::parseRelease)
-        val meta = json.optJSONObject("meta")
-        return data to (meta != null && meta.optInt("current_page", page) < meta.optInt("last_page", page))
+    suspend fun catalog(screen:Screen.Catalog,page:Int=screen.page):CatalogPage=parseCatalogPage(request(catalogPath(screen,page)),page)
+    private var references:Map<String,List<CatalogChoice>>?=null
+    suspend fun catalogReferences():Map<String,List<CatalogChoice>>{
+        references?.let{return it}
+        val result=supervisorScope{
+            catalogReferencePaths.keys.associateWith{key->async{parseCatalogChoices(request("/anime/catalog/references/$key"),key=="years")}}.mapValues{it.value.await()}
+        }
+        references=result
+        return result
     }
     suspend fun release(id: Int, refresh:Boolean=false): Release {
         if(!refresh)synchronized(cache) { cache[id] }?.let { return it }

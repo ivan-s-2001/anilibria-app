@@ -47,8 +47,8 @@ fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int
     setOnClickListener { click() }
 }
 
-enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH, CONTINUE }
-data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null)
+enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH, CONTINUE, CATALOG_BAR }
+data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList())
 
 class PageAdapter(
     private val navigate: (Int) -> Unit,
@@ -105,7 +105,7 @@ class PageAdapter(
         // Snapshot nested lists before the outer adapter is rebound.
         attachedShelves.forEach(::saveShelf)
         val old=rows
-        val useDiff=shelfMode || old.any{it.kind==Kind.SHELF} || value.any{it.kind==Kind.SHELF}
+        val useDiff=shelfMode || old.any{it.kind==Kind.CATALOG_BAR} || value.any{it.kind==Kind.CATALOG_BAR} || old.any{it.kind==Kind.SHELF} || value.any{it.kind==Kind.SHELF}
         val diff=if(useDiff)androidx.recyclerview.widget.DiffUtil.calculateDiff(object:androidx.recyclerview.widget.DiffUtil.Callback(){
             override fun getOldListSize()=old.size
             override fun getNewListSize()=value.size
@@ -120,7 +120,7 @@ class PageAdapter(
     override fun onCreateViewHolder(parent: ViewGroup, type: Int): RecyclerView.ViewHolder {
         val context = parent.context
         val view: View = when (Kind.entries[type]) {
-            Kind.NAV, Kind.TABS, Kind.DAYS -> HorizontalScrollView(context).apply {
+            Kind.NAV, Kind.TABS, Kind.DAYS, Kind.CATALOG_BAR -> HorizontalScrollView(context).apply {
                 isHorizontalScrollBarEnabled = false
                 addView(LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL })
             }
@@ -221,6 +221,20 @@ class PageAdapter(
                 box.contentDescription=if(row.kind==Kind.REFRESH)row.title else "Открыть раздел ${row.title} полностью"
                 box.setOnClickListener(row.click?.let{callback->View.OnClickListener{callback()}})
                 box.isClickable=row.click!=null
+            }
+            Kind.CATALOG_BAR -> {
+                val line=(view as HorizontalScrollView).getChildAt(0)as LinearLayout
+                if(line.childCount==row.controls.size && row.controls.indices.all{(line.getChildAt(it)as?TextView)?.text?.toString()==row.controls[it].first}){
+                    row.controls.forEachIndexed{index,control->line.getChildAt(index).setOnClickListener{control.second()}}
+                    return
+                }
+                val focused=line.indexOfChild(line.findFocus())
+                line.removeAllViews();line.setPadding(0,view.dp(4),0,view.dp(8))
+                row.controls.forEachIndexed{index,(title,callback)->
+                    val icon=when(index){0->R.drawable.ic_search;1->R.drawable.ic_settings;else->0}
+                    line.addView(action(line,title,icon=icon,click=callback).apply{textSize=16f},LinearLayout.LayoutParams(-2,view.dp(44)).apply{marginEnd=view.dp(10)})
+                }
+                if(focused>=0)line.getChildAt(focused)?.requestFocus()
             }
             Kind.DAYS -> {
                 val line=(view as HorizontalScrollView).getChildAt(0) as LinearLayout;line.removeAllViews()
@@ -339,7 +353,7 @@ class PageAdapter(
                 title.maxLines=2
                 title.breakStrategy=android.text.Layout.BREAK_STRATEGY_BALANCED
                 title.hyphenationFrequency=android.text.Layout.HYPHENATION_FREQUENCY_NONE
-                if(poster || continuing)androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(title,12,if(shelfMode)17 else 14,1,android.util.TypedValue.COMPLEX_UNIT_SP)
+                if(poster || continuing)androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(title,12,if(row.selected==2)20 else if(shelfMode)17 else 14,1,android.util.TypedValue.COMPLEX_UNIT_SP)
                 val short=if(release!=null)listOf(release.year,release.type,release.latestEpisode?.let{"Эп. ${number(it.ordinal)}"}.orEmpty()).filter(String::isNotBlank).joinToString(" · ")else row.subtitle
                 val full=if(release!=null)listOf(release.metadata,release.genres.take(2).joinToString(" · ")).filter(String::isNotBlank).joinToString(" · ")else row.subtitle
                 subtitle.label(if(box.hasFocus())full else short,if(shelfMode)14f else 12f,MUTED)
@@ -363,7 +377,10 @@ class PageAdapter(
                     box.animate().scaleX(if(focused && !shelfMode)1.025f else 1f).scaleY(if(focused && !shelfMode)1.025f else 1f).setDuration(140).start()
                 }
                 if(webPoster){
-                    box.layoutParams=box.layoutParams.apply{height=view.cardDp(if(cataloguePoster)270 else 206)}
+                    box.layoutParams=box.layoutParams.apply{
+                        height=if(row.selected==2)((view.resources.displayMetrics.widthPixels-view.dp(156))/4/.7f).toInt()else view.cardDp(if(cataloguePoster)270 else 206)
+                    }
+                    if(row.selected==2)title.textSize=18f
                     image.layoutParams=FrameLayout.LayoutParams(-1,-1)
                     box.getChildAt(1).visibility=View.GONE
                     content.layoutParams=FrameLayout.LayoutParams(-1,-1)
@@ -397,13 +414,12 @@ class PageAdapter(
                         label
                     }else null
                     val statusBadge=if(cataloguePoster){
-                        episodeBadge.textSize=10f
-                        episodeBadge.layoutParams=FrameLayout.LayoutParams(-2,view.dp(26),Gravity.TOP or Gravity.START).apply{topMargin=view.dp(10);marginStart=view.dp(8)}
+                        episodeBadge.textSize=12f
+                        episodeBadge.layoutParams=FrameLayout.LayoutParams(-2,view.dp(28),Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply{topMargin=view.dp(10)}
                         val status=(box.getChildAt(4)as?TextView)?:TextView(view.context).also{box.addView(it)}
-                        status.layoutParams=FrameLayout.LayoutParams(-2,view.dp(26),Gravity.TOP or Gravity.END).apply{topMargin=view.dp(10);marginEnd=view.dp(8)}
-                        status.label(if(release?.ongoing==true)"Онгоинг"else"Завершён",10f,WHITE,true)
-                        status.gravity=Gravity.CENTER;status.setPadding(view.dp(7),0,view.dp(7),0)
-                        status.background=shape(view.context.getColor(if(release?.ongoing==true)R.color.al_success else R.color.al_accent),view.dp(4).toFloat())
+                        status.layoutParams=FrameLayout.LayoutParams(-1,view.dp(16),Gravity.TOP).apply{topMargin=view.dp(40);marginStart=view.dp(8);marginEnd=view.dp(8)}
+                        status.label(if(release?.ongoing==true)"Онгоинг"else"Завершён",10f,MUTED)
+                        status.gravity=Gravity.CENTER;status.includeFontPadding=false;status.background=null
                         status.isFocusable=false
                         status
                     }else{
@@ -420,7 +436,7 @@ class PageAdapter(
                         if(cataloguePoster){
                             box.getChildAt(1).apply{background=GenreShade();visibility=View.VISIBLE}
                             content.gravity=if(focused)Gravity.CENTER else Gravity.BOTTOM
-                            content.setPadding(view.dp(10),view.dp(if(focused)44 else 10),view.dp(10),view.dp(12))
+                            content.setPadding(view.dp(10),view.dp(if(focused && release?.ongoing!=null)56 else if(focused)44 else 10),view.dp(10),view.dp(12))
                             title.layoutParams=LinearLayout.LayoutParams(-1,if(focused)0 else -2,if(focused)1f else 0f)
                             title.maxLines=if(focused)4 else 3
                             subtitle.visibility=if(focused)View.VISIBLE else View.GONE

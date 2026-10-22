@@ -1,0 +1,41 @@
+package tv.aniliberty.next
+
+import org.junit.Assert.*
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import java.net.URLDecoder
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk=[30])
+class CatalogTest{
+    @Test fun encodesServerFilterValuesAndPreservesGenreDeepLink(){
+        val screen=Screen.Catalog(query="Мастер & меч",genre=15,filters=CatalogFilter(genres=setOf("20","15"),types=setOf("TV"),seasons=setOf("autumn"),ages=setOf("R18_PLUS"),publish=setOf("IS_ONGOING"),production=setOf("IS_IN_PRODUCTION"),fromYear="2024",toYear="2026",sorting="RATING_DESC"))
+        val path=catalogPath(screen,3)
+        assertTrue(path.contains("%26"))
+        val params=path.substringAfter("?").split("&").associate{part->val pair=part.split("=",limit=2);URLDecoder.decode(pair[0],"UTF-8") to URLDecoder.decode(pair[1],"UTF-8")}
+        assertEquals("Мастер & меч",params["f[search]"])
+        assertEquals("15,20",params["f[genres]"])
+        assertEquals("2024",params["f[years][from_year]"])
+        assertEquals("2026",params["f[years][to_year]"])
+        assertEquals("TV",params["f[types]"])
+        assertEquals("IS_ONGOING",params["f[publish_statuses]"])
+        assertEquals("3",params["page"])
+    }
+    @Test fun referenceLabelsComeFromApiAndYearsAreDescending(){
+        assertEquals(CatalogChoice("TV","ТВ"),parseCatalogChoices("""[{"value":"TV","description":"ТВ"}]""").single())
+        assertEquals(CatalogChoice("15","Фэнтези"),parseCatalogChoices("""[{"id":15,"name":"Фэнтези"}]""").single())
+        assertEquals(listOf("2026","2024"),parseCatalogChoices("[2024,2026]",true).map{it.value})
+    }
+    @Test fun appendedResultsKeepOldOrderAndDeduplicateIds(){
+        val first=parseCatalogPage("""{"data":[{"id":1},{"id":2}],"meta":{"current_page":1,"last_page":2,"total":3}}""",1)
+        val next=parseCatalogPage("""{"data":[{"id":2},{"id":3}],"meta":{"current_page":2,"last_page":2,"total":3}}""",2)
+        assertTrue(first.more);assertFalse(next.more)
+        assertEquals(3,first.total)
+        assertEquals(listOf(1,2,3),mergeCatalogPages(first.releases,next.releases).map{it.id})
+    }
+    @Test(expected=IllegalArgumentException::class) fun rejectsReversedYearRange(){
+        catalogPath(Screen.Catalog(filters=CatalogFilter(fromYear="2026",toYear="2024")),1)
+    }
+}

@@ -155,7 +155,7 @@ class HomeShelfTest {
         val status=card.getChildAt(4)as android.widget.TextView
         assertEquals("Онгоинг",status.text.toString())
         assertEquals(android.view.View.VISIBLE,status.visibility)
-        assertNotSame(card.getChildAt(3).background,status.background)
+        assertNull(status.background)
         assertEquals(false,parseRelease(org.json.JSONObject("""{"id":2,"is_ongoing":false}""")).ongoing)
         assertNull(parseRelease(org.json.JSONObject("""{"id":3}""")).ongoing)
         assertNotNull((card.getChildAt(0)as android.widget.ImageView).colorFilter)

@@ -10,12 +10,12 @@ import kotlinx.coroutines.launch
 sealed interface Screen {
     data object Welcome : Screen
     data object Home : Screen
-    data class Catalog(val query: String = "", val page: Int = 1, val genre: Int? = null, val title: String? = null) : Screen
+    data class Catalog(val query: String = "", val page: Int = 1, val genre: Int? = null, val title: String? = null,val filters:CatalogFilter=CatalogFilter()) : Screen
     data class Section(val kind:HomeSection,val page:Int=1):Screen
     data class Franchise(val id: String, val title: String) : Screen
     data class Detail(val id: Int, val tab: Int = 0) : Screen
 }
-data class UiState(val screen: Screen = Screen.Welcome, val loading: Boolean = false, val error: String? = null, val releases: List<Release> = emptyList(), val detail: Release? = null, val more: Boolean = false, val home: HomeData? = null, val homeDay: Int = 1, val discovery: Discovery? = null, val discoveryLoading: Boolean = false, val section:SectionData?=null,val refreshing:Set<HomeSection> = emptySet(),val refreshErrors:Set<HomeSection> = emptySet())
+data class UiState(val screen: Screen = Screen.Welcome, val loading: Boolean = false, val error: String? = null, val releases: List<Release> = emptyList(), val detail: Release? = null, val more: Boolean = false, val home: HomeData? = null, val homeDay: Int = 1, val discovery: Discovery? = null, val discoveryLoading: Boolean = false, val section:SectionData?=null,val refreshing:Set<HomeSection> = emptySet(),val refreshErrors:Set<HomeSection> = emptySet(),val catalogPage:Int=1,val catalogTotal:Int?=null,val loadingMore:Boolean=false,val moreError:String?=null)
 class TvModel : ViewModel() {
     val api = Api()
     val state = MutableStateFlow(UiState())
@@ -23,6 +23,7 @@ class TvModel : ViewModel() {
     private var job: Job? = null
     private var homeCache: HomeData? = null
     private val sectionCache=linkedMapOf<Screen.Section,SectionData>()
+    private val catalogCache=linkedMapOf<Screen.Catalog,UiState>()
     private var navigationGeneration=0
     private val featureJobs=mutableMapOf<HomeSection,Job>()
     private var homeLoadedAt = 0L
@@ -36,6 +37,7 @@ class TvModel : ViewModel() {
             return
         }
         if(screen is Screen.Section && sectionCache[screen]!=null){state.value=UiState(screen,section=sectionCache[screen]);return}
+        if(screen is Screen.Catalog && catalogCache[screen]!=null){state.value=catalogCache.getValue(screen);return}
         val previous = state.value
         if (screen is Screen.Detail && previous.detail?.id == screen.id) {
             state.value = previous.copy(screen = screen); return
@@ -46,7 +48,12 @@ class TvModel : ViewModel() {
             try {
                 state.value = when (screen) {
                     Screen.Home -> api.home().let { home -> homeCache = home; homeLoadedAt = android.os.SystemClock.elapsedRealtime(); UiState(screen, home = home, homeDay = selectedHomeDay) }
-                    is Screen.Catalog -> api.catalog(screen.query, screen.page, screen.genre).let { (items, more) -> UiState(screen, releases = items, more = more) }
+                    is Screen.Catalog -> api.catalog(screen).let { result ->
+                        UiState(screen,releases=result.releases,more=result.more,catalogPage=screen.page,catalogTotal=result.total).also{
+                            if(catalogCache.size>=8)catalogCache.remove(catalogCache.keys.first())
+                            catalogCache[screen]=it
+                        }
+                    }
                     is Screen.Section -> api.section(screen.kind,screen.page).let{data->
                         if(sectionCache.size>=16)sectionCache.remove(sectionCache.keys.first())
                         sectionCache[screen]=data;UiState(screen,section=data)
@@ -85,6 +92,23 @@ class TvModel : ViewModel() {
         }
     }
     fun homeDay(index: Int) { selectedHomeDay = index; state.value = state.value.copy(homeDay = index) }
+    fun loadMoreCatalog(){
+        val before=state.value
+        val screen=before.screen as?Screen.Catalog?:return
+        if(before.loading || before.loadingMore || !before.more)return
+        val generation=navigationGeneration
+        state.value=before.copy(loadingMore=true,moreError=null)
+        job=viewModelScope.launch{
+            try{
+                val next=api.catalog(screen,before.catalogPage+1)
+                if(generation!=navigationGeneration || state.value.screen!=screen)return@launch
+                val updated=state.value.copy(releases=mergeCatalogPages(before.releases,next.releases),more=next.more,catalogPage=before.catalogPage+1,catalogTotal=next.total?:before.catalogTotal,loadingMore=false)
+                catalogCache[screen]=updated
+                state.value=updated
+            }catch(e:CancellationException){throw e}
+            catch(_:Exception){if(generation==navigationGeneration && state.value.screen==screen)state.value=state.value.copy(loadingMore=false,moreError="Не удалось загрузить ещё")}
+        }
+    }
     fun tab(index: Int) { (state.value.screen as? Screen.Detail)?.let { state.value = state.value.copy(screen = it.copy(tab = index)) } }
     fun back(): Boolean {
         if (stack.isEmpty()) return false
@@ -99,5 +123,5 @@ class TvModel : ViewModel() {
             if((state.value.screen as? Screen.Detail)?.id==screen.id)state.value=state.value.copy(discovery=result,discoveryLoading=false)
         }
     }
-    fun retry() { (state.value.screen as?Screen.Section)?.let{sectionCache.remove(it)}; if (state.value.screen == Screen.Home) homeCache = null; open(state.value.screen, false) }
+    fun retry() { (state.value.screen as?Screen.Catalog)?.let{catalogCache.remove(it)}; (state.value.screen as?Screen.Section)?.let{sectionCache.remove(it)}; if (state.value.screen == Screen.Home) homeCache = null; open(state.value.screen, false) }
 }

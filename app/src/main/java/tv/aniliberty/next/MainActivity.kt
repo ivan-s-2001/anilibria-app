@@ -87,10 +87,10 @@ class MainActivity : ComponentActivity() {
         }
     }
     private fun homeMenuLayout(){
-        if(current==Screen.Home && menu.parent===shell){
+        if((current==Screen.Home || current is Screen.Catalog) && menu.parent===shell){
             shell.removeView(menu);shell.setPadding(dp(60),0,0,0)
             root.addView(menu,android.widget.FrameLayout.LayoutParams(dp(if(menuOpen)196 else 60),-1))
-        }else if(current!=Screen.Home && menu.parent===root){
+        }else if(current!=Screen.Home && current !is Screen.Catalog && menu.parent===root){
             root.removeView(menu);shell.setPadding(0,0,0,0)
             shell.addView(menu,0,LinearLayout.LayoutParams(dp(if(menuOpen)196 else 60),-1))
         }
@@ -145,6 +145,30 @@ class MainActivity : ComponentActivity() {
         return true
     }
     override fun dispatchKeyEvent(event:KeyEvent):Boolean {
+        if(current is Screen.Catalog && !menuOpen){
+            val focused=list.findFocus()?.let{list.findContainingItemView(it)}
+            val position=focused?.let{list.getChildAdapterPosition(it)}?:-1
+            if(adapter.rows.getOrNull(position)?.kind==Kind.POSTER){
+                val first=adapter.rows.indexOfFirst{it.kind==Kind.POSTER}
+                val column=(position-first)%4
+                if(event.keyCode==KeyEvent.KEYCODE_DPAD_RIGHT && (column==3 || adapter.rows.getOrNull(position+1)?.kind!=Kind.POSTER))return true
+                if(event.keyCode==KeyEvent.KEYCODE_DPAD_LEFT && column==0){
+                    if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0)openMenu()
+                    return true
+                }
+                if(event.keyCode==KeyEvent.KEYCODE_DPAD_DOWN && model.state.value.more && position>=adapter.rows.size-10 && model.state.value.moreError==null){
+                    model.loadMoreCatalog()
+                    if(adapter.rows.getOrNull(position+4)?.kind!=Kind.POSTER)return true
+                }
+                if(event.keyCode==KeyEvent.KEYCODE_DPAD_UP && position-first<4){
+                    if(event.action==KeyEvent.ACTION_DOWN){
+                        val tools=adapter.rows.indexOfFirst{it.kind==Kind.CATALOG_BAR}
+                        focusItem(list.findViewHolderForAdapterPosition(tools)?.itemView)
+                    }
+                    return true
+                }
+            }
+        }
         if(current==Screen.Home && !menuOpen){
             val focus=list.findFocus()
             val outer=focus?.let{list.findContainingItemView(it)}
@@ -194,7 +218,13 @@ class MainActivity : ComponentActivity() {
         adapter=PageAdapter(::navigate,::selectTab,::play,::favorite,{rememberFocus();model.open(Screen.Detail(it.id))},
             { id -> prefs.getLong("position:$id",0) to prefs.getLong("duration:$id",0) },
             { id -> prefs.getString("last:$id",null) },::returnToTabs, { index -> enterDay=true;val previous=model.state.value;model.homeDay(index);if(previous==model.state.value)render(model.state.value) },::quickActions)
-        grid.spanSizeLookup=object:GridLayoutManager.SpanSizeLookup(){override fun getSpanSize(position:Int)=when(adapter.rows[position].kind){Kind.POSTER,Kind.GENRE->3;Kind.EPISODE,Kind.FEATURE,Kind.FRANCHISE->5;else->15}}
+        grid.spanSizeLookup=object:GridLayoutManager.SpanSizeLookup(){override fun getSpanSize(position:Int)=when(adapter.rows[position].kind){Kind.POSTER->if(current is Screen.Catalog)5 else 3;Kind.GENRE->3;Kind.EPISODE,Kind.FEATURE,Kind.FRANCHISE->5;else->grid.spanCount}}
+        list.addOnScrollListener(object:RecyclerView.OnScrollListener(){
+            override fun onScrolled(view:RecyclerView,dx:Int,dy:Int){
+                val state=model.state.value
+                if(state.screen is Screen.Catalog && state.moreError==null && dy>0 && grid.findLastVisibleItemPosition()>=adapter.itemCount-9)model.loadMoreCatalog()
+            }
+        })
         list.adapter=adapter
         shell=LinearLayout(this).apply{setBackgroundColor(0xFF121212.toInt())}
         menu=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(12),dp(4),0);setBackgroundColor(0xFF212121.toInt())}
@@ -254,6 +284,56 @@ class MainActivity : ComponentActivity() {
         val dialog=AlertDialog.Builder(this).setTitle("Поиск").setView(input).setNegativeButton("Отмена",null).setPositiveButton("Найти"){_,_->model.open(Screen.Catalog(input.text.toString().trim()))}.create()
         input.setOnEditorActionListener{_,action,_->if(action==EditorInfo.IME_ACTION_SEARCH){model.open(Screen.Catalog(input.text.toString().trim()));dialog.dismiss();true}else false}
         dialog.show();input.requestFocus()
+    }
+    private var enterCatalogResults=false
+    private var catalogReferences:Map<String,List<CatalogChoice>> = emptyMap()
+    private fun applyCatalog(screen:Screen.Catalog){
+        rememberFocus();enterCatalogResults=true;model.open(screen.copy(page=1),false)
+    }
+    private fun catalogSearch(screen:Screen.Catalog){
+        val input=EditText(this).apply{setText(screen.query);hint="Название аниме";isSingleLine=true;imeOptions=EditorInfo.IME_ACTION_SEARCH}
+        val dialog=AlertDialog.Builder(this).setTitle("Поиск в каталоге").setView(input).setPositiveButton("Найти"){_,_->applyCatalog(screen.copy(query=input.text.toString().trim()))}.setNegativeButton("Отмена",null).create()
+        input.setOnEditorActionListener{_,action,_->if(action==EditorInfo.IME_ACTION_SEARCH){applyCatalog(screen.copy(query=input.text.toString().trim()));dialog.dismiss();true}else false}
+        dialog.show();input.requestFocus()
+    }
+    private fun withCatalogReferences(screen:Screen.Catalog,ready:(Map<String,List<CatalogChoice>>)->Unit){
+        if(catalogReferences.isNotEmpty()){ready(catalogReferences);return}
+        val loading=AlertDialog.Builder(this).setMessage("Загрузка фильтров…").setNegativeButton("Отмена",null).create()
+        val task=lifecycleScope.launch{
+            try{
+                val data=model.api.catalogReferences();catalogReferences=data;loading.dismiss()
+                if(model.state.value.screen==screen)ready(data)
+            }catch(e:kotlinx.coroutines.CancellationException){loading.dismiss();throw e}
+            catch(_:Exception){
+                loading.dismiss()
+                if(model.state.value.screen==screen)AlertDialog.Builder(this@MainActivity).setMessage("Не удалось загрузить фильтры").setPositiveButton("Повторить"){_,_->withCatalogReferences(screen,ready)}.setNegativeButton("Отмена",null).show()
+            }
+        }
+        loading.setOnCancelListener{task.cancel()}
+        loading.setOnShowListener{loading.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener{task.cancel();loading.dismiss()}}
+        loading.show()
+    }
+    private fun catalogFilters(screen:Screen.Catalog)=withCatalogReferences(screen){refs->
+        CatalogFilterPanel(this,screen,refs){filters->applyCatalog(screen.copy(filters=filters,genre=null,title=null))}.show()
+    }
+    private fun catalogSorting(screen:Screen.Catalog)=withCatalogReferences(screen){refs->
+        val choices=refs["sorting"].orEmpty()
+        AlertDialog.Builder(this).setTitle("Сортировка").setSingleChoiceItems(choices.map{it.title}.toTypedArray(),choices.indexOfFirst{it.value==screen.filters.sorting}){dialog,index->
+            dialog.dismiss();applyCatalog(screen.copy(filters=screen.filters.copy(sorting=choices[index].value)))
+        }.setNegativeButton("Отмена",null).show()
+    }
+    private fun catalogSummary(screen:Screen.Catalog):String{
+        val f=screen.filters
+        return listOf(
+            screen.query.takeIf{it.isNotBlank()}?.let{"Поиск: $it"}.orEmpty(),
+            if(screen.genre!=null)screen.title?:"Выбранный жанр"else if(f.genres.isNotEmpty())"Жанры: ${f.genres.size}"else "",
+            if(f.types.isNotEmpty())"Формат: ${f.types.size}"else "",
+            if(f.fromYear.isNotBlank()||f.toYear.isNotBlank())"${f.fromYear.ifBlank{"…"}}–${f.toYear.ifBlank{"…"}}"else "",
+            if(f.seasons.isNotEmpty())"Сезоны: ${f.seasons.size}"else "",
+            if(f.publish.isNotEmpty())"Статус выхода"else "",
+            if(f.production.isNotEmpty())"Статус озвучки"else "",
+            if(f.ages.isNotEmpty())"Возраст"else ""
+        ).filter(String::isNotBlank).joinToString(" · ")
     }
     private fun library(){
         val items=JSONArray(prefs.getString("library","[]"))
@@ -346,10 +426,13 @@ class MainActivity : ComponentActivity() {
     private fun render(state:UiState){
         (state.screen as?Screen.Detail)?.let{history.restore(it.id)}
         if(current==state.screen && !state.loading && adapter.rows.none{it.key=="loading"})rememberFocus()
+        val sameCatalog=current is Screen.Catalog && current==state.screen && adapter.rows.any{it.kind==Kind.CATALOG_BAR}
         val sameHome=current==Screen.Home && state.screen==Screen.Home && adapter.rows.any{it.kind==Kind.SHELF}
         val retainedFocus = if(current==state.screen) list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String } else null
         current=state.screen
         homeMenuLayout()
+        val spans=if(current is Screen.Catalog)20 else 15
+        if(grid.spanCount!=spans)grid.spanCount=spans
         menu.visibility=if(current==Screen.Welcome)View.GONE else View.VISIBLE
         val rows=mutableListOf<Row>()
         if(state.screen==Screen.Welcome){
@@ -421,11 +504,20 @@ class MainActivity : ComponentActivity() {
                     if(state.releases.isEmpty())rows+=Row("empty",Kind.TEXT,"Релизы пока не указаны")
                 }
                 is Screen.Catalog->{
-                    rows+=Row("heading",Kind.HEADING,screen.title?:if(screen.query.isBlank())"Каталог"else"Результаты: ${screen.query}","Страница ${screen.page}")
-                    rows+=state.releases.map{Row("release:${it.id}",Kind.POSTER,release=it)}
-                    if(state.releases.isEmpty())rows+=Row("empty",Kind.TEXT,"Ничего не найдено")
-                    if(state.more)rows+=Row("next",Kind.ACTION,"Следующая страница",click={model.open(screen.copy(page=screen.page+1))})
-                    if(screen.page>1)rows+=Row("previous",Kind.ACTION,"Предыдущая страница",click={model.open(screen.copy(page=screen.page-1))})
+                    val total=state.catalogTotal?.let{"Найдено: $it"}?:"Загружено: ${state.releases.size}"
+                    rows+=Row("catalogue-heading",Kind.HEADING,screen.title?:"Каталог",total,selected=1)
+                    val sort=catalogReferences["sorting"]?.firstOrNull{it.value==screen.filters.sorting}?.title?:when(screen.filters.sorting){"RATING_DESC"->"По рейтингу";"YEAR_DESC"->"Сначала новые";"YEAR_ASC"->"Сначала старые";else->"Сортировка"}
+                    rows+=Row("catalogue-tools",Kind.CATALOG_BAR,controls=listOf(
+                        (if(screen.query.isBlank())"Поиск"else screen.query.take(40)) to {catalogSearch(screen)},
+                        "Фильтры${if(screen.filters.count+(if(screen.genre!=null)1 else 0)>0)" · ${screen.filters.count+(if(screen.genre!=null)1 else 0)}"else ""}" to {catalogFilters(screen)},
+                        sort to {catalogSorting(screen)},
+                        "Сбросить" to {rememberFocus();model.open(Screen.Catalog(),false)}
+                    ))
+                    if(screen.filters.count>0 || screen.genre!=null || screen.query.isNotBlank())rows+=Row("catalogue-active",Kind.TEXT,catalogSummary(screen))
+                    rows+=state.releases.map{Row("release:${it.id}",Kind.POSTER,release=it,selected=2)}
+                    if(state.releases.isEmpty())rows+=Row("catalogue-empty",Kind.ACTION,"Ничего не найдено","Измените запрос или фильтры",click={catalogFilters(screen)})
+                    if(state.loadingMore)rows+=Row("catalogue-loading-more",Kind.TEXT,"Загрузка…")
+                    else if(state.moreError!=null)rows+=Row("catalogue-more-retry",Kind.ACTION,"Повторить загрузку",state.moreError,click=model::loadMoreCatalog)
                 }
                 is Screen.Detail->{
                     val r=state.detail?:return
@@ -479,7 +571,14 @@ class MainActivity : ComponentActivity() {
         }
         adapter.submit(rows)
         if(current==Screen.Home && menuOpen)return
-        if(enterDay){
+        if(enterCatalogResults && current is Screen.Catalog && !state.loading){
+            enterCatalogResults=false
+            val index=rows.indexOfFirst{it.kind==Kind.POSTER}.takeIf{it>=0}?:rows.indexOfFirst{it.kind==Kind.CATALOG_BAR}
+            if(index>=0){
+                list.doOnNextLayout{focusItem(list.findViewHolderForAdapterPosition(index)?.itemView)}
+                grid.scrollToPositionWithOffset(index,list.dp(96))
+            }
+        }else if(enterDay){
             enterDay=false
             val index=rows.indexOfFirst{it.key.startsWith("shelf:schedule:")}.takeIf{it>=0}?:rows.indexOfFirst{it.key=="schedule-days"}
             if(index>=0){
@@ -499,14 +598,14 @@ class MainActivity : ComponentActivity() {
             val key=retainedFocus?:focusMemory[screenKey(state.screen)]
             val index=rows.indexOfFirst{it.key==key}.takeIf{it>=0}
                 ?: if(key!=null && adapter.contentStart>=0) (adapter.contentStart until rows.size).firstOrNull{rows[it].kind!=Kind.HEADING}?:adapter.contentStart
-                else rows.indexOfFirst{it.kind in listOf(Kind.ACTION,Kind.POSTER,Kind.HERO,Kind.SPOTLIGHT,Kind.SHELF,Kind.FEATURE,Kind.GENRE,Kind.FRANCHISE,Kind.CONTINUE,Kind.MORE)}
+                else rows.indexOfFirst{it.kind in listOf(Kind.ACTION,Kind.POSTER,Kind.HERO,Kind.SPOTLIGHT,Kind.SHELF,Kind.FEATURE,Kind.GENRE,Kind.FRANCHISE,Kind.CONTINUE,Kind.MORE,Kind.CATALOG_BAR)}
             if(index>=0&&!state.loading){list.doOnNextLayout{
                 if(current!=state.screen || (current==Screen.Home && menuOpen))return@doOnNextLayout
                 val item=list.findViewHolderForAdapterPosition(index)?.itemView
-                if(!sameHome || list.findFocus()==null)focusItem(item)
+                if((!sameHome && !sameCatalog) || list.findFocus()==null)focusItem(item)
             };val scroll=scrollMemory[screenKey(state.screen)]
                 val anchor=scroll?.first?.let{saved->rows.indexOfFirst{it.key==saved}.takeIf{it>=0}}
-                if(!sameHome)grid.scrollToPositionWithOffset(anchor?:if(key==null)0 else index,scroll?.second?:if(key==null)0 else list.dp(12))}
+                if(!sameHome && !sameCatalog)grid.scrollToPositionWithOffset(anchor?:if(key==null)0 else index,scroll?.second?:if(key==null)0 else list.dp(12))}
         }
     }
 }
