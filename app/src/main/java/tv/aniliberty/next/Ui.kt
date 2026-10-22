@@ -384,6 +384,7 @@ class PageAdapter(
             }
             Kind.HERO -> {
                 val r=row.release!!;val box=view as LinearLayout
+                val focusedAction=box.findFocus()?.tag as?String
                 box.removeAllViews();box.setPadding(0,view.dp(12),0,view.dp(16));box.gravity=Gravity.TOP
                 box.addView(ImageView(view.context).apply{
                     scaleType=ImageView.ScaleType.FIT_CENTER;load(r.poster)
@@ -421,7 +422,15 @@ class PageAdapter(
                         background=shape(if(ongoing)0x1A68B5FF else 0x1A78C99F,dp(6).toFloat())
                     },LinearLayout.LayoutParams(-2,view.dp(32)))
                 }
-                if(r.ratings.isEmpty() && r.ongoing==null)ratings.parent.let{(it as View).visibility=View.GONE}
+                r.favoriteCount?.let{count->
+                    ratings.addView(TextView(view.context).apply{
+                        label(compactCount(count),14f,WHITE,true);gravity=Gravity.CENTER_VERTICAL
+                        setPadding(dp(10),0,dp(10),0);compoundDrawablePadding=dp(6)
+                        setCompoundDrawablesRelative(context.getDrawable(R.drawable.ic_favorite)?.apply{setBounds(0,0,dp(18),dp(18))},null,null,null)
+                        background=shape(0xFF212121.toInt(),dp(6).toFloat());contentDescription="В избранном у $count пользователей"
+                    },LinearLayout.LayoutParams(-2,view.dp(32)).apply{marginStart=view.dp(8)})
+                }
+                if(r.ratings.isEmpty() && r.ongoing==null && r.favoriteCount==null)ratings.parent.let{(it as View).visibility=View.GONE}
                 val episode=resumeEpisode(r.episodes,lastEpisode(r.id),progress)
                 if(r.blocked)text("Просмотр ограничен правообладателем или регионом",13f,MUTED)
                 else if(episode==null)text("Серии ещё не опубликованы",13f,MUTED)
@@ -433,7 +442,7 @@ class PageAdapter(
                 val controls=LinearLayout(view.context).apply{gravity=Gravity.BOTTOM}
                 info.addView(HorizontalScrollView(view.context).apply{isHorizontalScrollBarEnabled=false;addView(controls)},LinearLayout.LayoutParams(-1,view.dp(48)).apply{topMargin=view.dp(4)})
                 fun button(label:String,icon:Int,primary:Boolean=false,description:String=label,click:()->Unit){
-                    controls.addView(action(controls,label,primary,icon,click).apply{textSize=14f;contentDescription=description},LinearLayout.LayoutParams(-2,view.dp(46)).apply{marginEnd=view.dp(8)})
+                    controls.addView(action(controls,label,primary,icon,click).apply{tag="hero-action:$icon";textSize=14f;contentDescription=description},LinearLayout.LayoutParams(-2,view.dp(46)).apply{marginEnd=view.dp(8)})
                 }
                 if(episode!=null && episode.streams.isNotEmpty() && !r.blocked){
                     val following=r.episodes.any{it.id==lastEpisode(r.id)} && episode.id!=lastEpisode(r.id)
@@ -442,6 +451,7 @@ class PageAdapter(
                 }
                 button(row.favoriteTitle?:if(row.selected==1)"В библиотеке"else"В библиотеку",R.drawable.ic_favorite,description=row.favoriteTitle?:if(row.selected==1)"Убрать из библиотеки"else"Добавить в библиотеку"){favorite(r)}
                 row.controls.forEach{(label,callback)->button(label,when{label=="Описание"->R.drawable.ic_comments;label=="Коллекция"||CollectionType.entries.any{it.title==label}->R.drawable.ic_library;else->R.drawable.ic_settings},click=callback)}
+                if(focusedAction!=null)box.findViewWithTag<View>(focusedAction)?.requestFocus()
             }
             Kind.GENRE,Kind.FRANCHISE -> {
                 val box=view as FrameLayout
@@ -599,13 +609,14 @@ class PageAdapter(
                         status.isFocusable=false
                         status
                     }else{
-                        episodeBadge.layoutParams=FrameLayout.LayoutParams(-2,view.dp(28),Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply{topMargin=view.dp(10)}
+                        episodeBadge.layoutParams=FrameLayout.LayoutParams(-2,view.dp(28),Gravity.TOP or Gravity.END).apply{topMargin=view.dp(10);marginEnd=view.dp(8)}
                         null
                     }
                     content.setPadding(view.dp(10),view.dp(44),view.dp(10),view.dp(12))
                     title.layoutParams=LinearLayout.LayoutParams(-1,0,1f)
                     subtitle.maxLines=1
                     fun focusPoster(focused:Boolean){
+                        box.findViewWithTag<TextView>("favorite-count")?.visibility=if(focused && release?.favoriteCount!=null)View.VISIBLE else View.GONE
                         content.visibility=if(focused)View.VISIBLE else View.GONE
                         genresLine.visibility=if(focused && genresLine.text.isNotBlank())View.VISIBLE else View.GONE
                         genresLine.isSelected=focused
@@ -628,7 +639,7 @@ class PageAdapter(
                         image.colorFilter=if(focused)android.graphics.ColorMatrixColorFilter(floatArrayOf(.045f,0f,0f,0f,12.75f,0f,.045f,0f,0f,12.75f,0f,0f,.045f,0f,12.75f,0f,0f,0f,1f,0f))else null
                     }
                     if(row.selected==2){
-                        val count=(box.getChildAt(5)as?TextView)?:TextView(view.context).also{box.addView(it)}
+                        val count=box.findViewWithTag<TextView>("episode-count")?:TextView(view.context).also{it.tag="episode-count";box.addView(it)}
                         count.layoutParams=FrameLayout.LayoutParams(-2,view.dp(24),Gravity.TOP or Gravity.END).apply{topMargin=view.dp(10);marginEnd=view.dp(8)}
                         count.label(release?.catalogueEpisodeCount?.let{"$it эп."}.orEmpty(),10f,WHITE,true)
                         count.gravity=Gravity.CENTER;count.includeFontPadding=false
@@ -636,7 +647,15 @@ class PageAdapter(
                         count.background=shape(0x1AFFFFFF,view.dp(4).toFloat())
                         count.visibility=if(release?.catalogueEpisodeCount!=null)View.VISIBLE else View.GONE
                         count.isFocusable=false
-                    }else box.getChildAt(5)?.visibility=View.GONE
+                    }else box.findViewWithTag<TextView>("episode-count")?.visibility=View.GONE
+                    val favorites=box.findViewWithTag<TextView>("favorite-count")?:TextView(view.context).also{it.tag="favorite-count";box.addView(it)}
+                    favorites.layoutParams=FrameLayout.LayoutParams(-2,view.dp(24),Gravity.TOP or Gravity.START).apply{topMargin=view.dp(10);marginStart=view.dp(8)}
+                    favorites.label(release?.favoriteCount?.let(::compactCount).orEmpty(),10f,WHITE,true)
+                    favorites.gravity=Gravity.CENTER_VERTICAL;favorites.includeFontPadding=false;favorites.isFocusable=false
+                    favorites.setPadding(view.dp(6),0,view.dp(6),0);favorites.compoundDrawablePadding=view.dp(3)
+                    favorites.setCompoundDrawablesRelative(view.context.getDrawable(R.drawable.ic_favorite)?.apply{setBounds(0,0,view.dp(13),view.dp(13))},null,null,null)
+                    favorites.background=shape(0x1AFFFFFF,view.dp(4).toFloat())
+                    favorites.contentDescription=release?.favoriteCount?.let{"В избранном у $it пользователей"}.orEmpty()
                     focusPoster(box.hasFocus())
                     box.setOnFocusChangeListener{_,focused->focusPoster(focused);box.animate().scaleX(if(focused && !homeCard)1.025f else 1f).scaleY(if(focused && !homeCard)1.025f else 1f).setDuration(140).start()}
                 }else{

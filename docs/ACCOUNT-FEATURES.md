@@ -1,0 +1,14 @@
+# Account features on the title page
+
+The TV client uses the existing AniLiberty API v1. No server or API-contract changes.
+
+- Login: official OTP endpoints `/accounts/otp/get` and `/accounts/otp/login`. QR opens the website's `/app/auth/otp/linkDevice` page. The user signs in on their phone and enters the six-digit code. Polling stops when the panel closes or the code expires. The token is encrypted with an Android Keystore AES-GCM key; passwords are never entered or stored on TV.
+- Favorites: `/accounts/users/me/favorites/ids`, POST/DELETE `/accounts/users/me/favorites`. Independent from collection status.
+- Collections: `/accounts/users/me/collections/ids`, POST/DELETE `/accounts/users/me/collections`, with the five documented enum values. Selecting a status replaces the release's current collection; removal is explicit.
+- Progress: tuple responses from GET `/accounts/users/me/views/timecodes`; writes contain UUID, seconds and `is_watched`. Long OK on an episode exposes watched/unwatched actions; More exposes bulk marks. Marking a title's collection Watched does not silently mark every episode.
+- Playback writes durable account-specific pending progress. On return to the main activity it is sent in batches, followed by a remote progress refresh. Network errors retain the queue; newer queued values are not removed by an older completed request.
+- Recent history metadata: `/accounts/users/me/views/history?limit=30`. At most twelve distinct releases are hydrated for Continue Watching. This is a recent-history shelf, not a complete account-history browser. Existing local newer playback wins. Metadata errors do not discard usable local cards or block favorite/collection controls.
+- Guest viewing and each account have separate local playback stores. Guest saved titles are not automatically uploaded.
+- After login, when guest history exists, offer “Занести локальную историю просмотра в ваш аккаунт?”. The preview excludes all episode IDs already recorded by the account. The import re-reads remote timecodes, submits only missing episodes in batches of 100, preserves the guest copy, and can be retried from My. Interrupted retries re-read the server, so successful batches are not blindly resent. An independent device can still update the same previously absent ID between GET and POST because the public API has no conditional-write contract.
+
+Validation: contract tests use an injected transport and documented/web-client tuple shapes, including OTP leading zeroes, POST/DELETE array payloads, fractional seconds, unknown collection enums, import conflict precedence and account isolation. GitHub Actions also runs existing UI/layout tests and builds the debug APK. Real authentication and cross-device playback still require testing with a user account on TV.

@@ -99,6 +99,9 @@ class AccountRepository(private val context:Context,val api:AccountApi=AccountAp
             val position=if(item.watched)maxOf(duration,(item.seconds*1000).toLong(),1)else(item.seconds*1000).toLong()
             edit.putLong("position:${e.id}",position).putLong("duration:${e.id}",if(item.watched)position else duration)
         }
+        if(prefs.getString("last:${release.id}",null)==null){
+            release.episodes.lastOrNull{e->remote[e.id]?.let{it.watched||it.seconds>0}==true}?.let{edit.putString("last:${release.id}",it.id)}
+        }
         edit.apply()
     }
     suspend fun flush()=queueMutex.withLock{
@@ -115,6 +118,7 @@ class AccountRepository(private val context:Context,val api:AccountApi=AccountAp
             }
         }
     }
+    suspend fun recentHistory():List<AccountHistoryItem> = api.recentHistory(token())
     suspend fun localImportPlan():List<AccountTimecode> {
         loadProgress()
         return importCandidates(localTimecodes(context.getSharedPreferences("viewing",Context.MODE_PRIVATE)),remote.keys)
@@ -135,11 +139,14 @@ private fun writePending(prefs:SharedPreferences,values:List<AccountTimecode>){
     prefs.edit().putString("account-pending",json.toString()).apply()
 }
 fun queueAccountProgress(context:Context,episodeId:String,position:Long,duration:Long){
+    queueAccountTimecodes(context,listOf(AccountTimecode(episodeId,position.coerceAtLeast(0)/1000.0,position>0 && duration>0 && position>=duration-1000)))
+}
+fun queueAccountTimecodes(context:Context,updates:List<AccountTimecode>){
     if(AccountSession(context).userId==null)return
     val prefs=playbackPreferences(context)
     synchronized(progressLock){
         val values=pending(prefs).toMutableMap()
-        values[episodeId]=AccountTimecode(episodeId,position.coerceAtLeast(0)/1000.0,position>0 && duration>0 && position>=duration-1000)
+        updates.forEach{values[it.episodeId]=it}
         writePending(prefs,values.values.toList())
     }
 }

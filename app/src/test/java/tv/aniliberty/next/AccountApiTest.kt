@@ -59,6 +59,11 @@ class AccountApiTest {
         assertFalse(records.getValue("one").watched)
         assertEquals(listOf(records.getValue("done")),importCandidates(records.values.toList(),setOf("one")))
     }
+    @Test fun accountHistoryUsesNestedReleaseAndEpisodeIds(){
+        val items=parseAccountHistory("""{"data":[{"release_episode_id":"uuid","updated_at":"2026-10-22T01:00:00Z","release_episode":{"id":"uuid","release":{"id":42}}},{"release_episode_id":"deleted"}]}""")
+        assertEquals(1,items.size);assertEquals(42,items.single().releaseId);assertEquals("uuid",items.single().episodeId)
+        assertTrue(items.single().updatedAt>0)
+    }
     @Test fun guestAndAccountPlaybackAreIsolatedAndUnsentQueueIsDurable(){
         val context=RuntimeEnvironment.getApplication()
         val session=context.getSharedPreferences("account-session",Context.MODE_PRIVATE)
@@ -66,12 +71,12 @@ class AccountApiTest {
         val guest=playbackPreferences(context);guest.edit().clear().putLong("position:ep",100).commit()
         session.edit().putInt("user",123).commit()
         val signedIn=playbackPreferences(context);signedIn.edit().clear().commit()
-        assertEquals(0,signedIn.getLong("position:ep",0))
+        assertEquals(0L,signedIn.getLong("position:ep",0))
         queueAccountProgress(context,"ep",12345,20000)
         assertEquals(12.345,pending(signedIn).getValue("ep").seconds,.00001)
         session.edit().putInt("user",456).commit()
         assertTrue(pending(playbackPreferences(context)).isEmpty())
         session.edit().clear().commit()
-        assertEquals(100,playbackPreferences(context).getLong("position:ep",0))
+        assertEquals(100L,playbackPreferences(context).getLong("position:ep",0))
     }
 }

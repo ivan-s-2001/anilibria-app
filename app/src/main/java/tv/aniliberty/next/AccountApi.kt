@@ -13,6 +13,7 @@ enum class CollectionType(val title:String){
 data class AccountProfile(val id:Int,val name:String)
 data class AccountLists(val favorites:Set<Int>,val collections:Map<Int,CollectionType>)
 data class AccountTimecode(val episodeId:String,val seconds:Double,val watched:Boolean)
+data class AccountHistoryItem(val releaseId:Int,val episodeId:String,val updatedAt:Long)
 data class DeviceCode(val code:String,val remainingSeconds:Int)
 class AccountHttpException(val status:Int):Exception(when(status){401,403->"Нужно войти в аккаунт заново";404->"Данные не найдены";429->"Слишком много запросов. Повторите позже";else->"Сервис ответил: $status"})
 fun interface AccountTransport { suspend fun request(path:String,method:String,body:String?,token:String?):String }
@@ -60,6 +61,7 @@ class AccountApi(private val transport:AccountTransport=AccountHttpTransport()){
         val body=JSONArray();values.forEach{v->body.put(JSONObject().put("release_episode_id",v.episodeId).put("time",v.seconds.coerceAtLeast(0.0)).put("is_watched",v.watched))}
         transport.request("/accounts/users/me/views/timecodes","POST",body.toString(),token)
     }
+    suspend fun recentHistory(token:String):List<AccountHistoryItem> = parseAccountHistory(transport.request("/accounts/users/me/views/history?limit=30","GET",null,token))
     suspend fun logout(token:String){transport.request("/accounts/users/auth/logout","POST",null,token)}
     private fun releaseBody(id:Int)=JSONArray().put(JSONObject().put("release_id",id))
 }
@@ -77,4 +79,16 @@ internal fun parseTimecodes(body:String):List<AccountTimecode>{
         val id=tuple.optString(0);val seconds=tuple.optDouble(1,Double.NaN)
         if(id.isBlank()||!seconds.isFinite()||seconds<0)null else AccountTimecode(id,seconds,tuple.optBoolean(2))
     }
+}
+
+internal fun parseAccountHistory(body:String):List<AccountHistoryItem>{
+    val data=JSONObject(body).optJSONArray("data")?:return emptyList()
+    return(0 until data.length()).mapNotNull{i->
+        val item=data.optJSONObject(i)?:return@mapNotNull null
+        val episode=item.optJSONObject("release_episode")?:return@mapNotNull null
+        val release=episode.optJSONObject("release")?.optInt("id",-1)?:-1
+        val id=item.optString("release_episode_id").ifBlank{episode.optString("id")}
+        val updated=runCatching{java.time.OffsetDateTime.parse(item.optString("updated_at")).toInstant().toEpochMilli()}.getOrDefault(0)
+        if(release>0 && id.isNotBlank())AccountHistoryItem(release,id,updated)else null
+    }.sortedByDescending{it.updatedAt}
 }

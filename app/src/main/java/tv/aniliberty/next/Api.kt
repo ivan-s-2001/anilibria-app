@@ -16,7 +16,7 @@ data class Episode(val id: String, val ordinal: Double, val name: String, val pr
     val label: String get() = name.ifBlank { "Эпизод ${number(ordinal)}" }
 }
 data class Credit(val role: String, val name: String)
-data class Release(val id: Int, val alias: String, val title: String, val english: String, val poster: String?, val year: String, val season: String, val type: String, val age: String, val genres: List<String>, val description: String, val episodes: List<Episode>, val credits: List<Credit>, val blocked: Boolean, val latestEpisode: Episode? = null, val externalIds: ExternalIds = ExternalIds(), val ratings: List<Rating> = emptyList(), val ongoing:Boolean? = null, val updatedAt:String = "",val totalEpisodes:Int?=null,val releasedEpisodes:Int?=null) {
+data class Release(val id: Int, val alias: String, val title: String, val english: String, val poster: String?, val year: String, val season: String, val type: String, val age: String, val genres: List<String>, val description: String, val episodes: List<Episode>, val credits: List<Credit>, val blocked: Boolean, val latestEpisode: Episode? = null, val externalIds: ExternalIds = ExternalIds(), val ratings: List<Rating> = emptyList(), val ongoing:Boolean? = null, val updatedAt:String = "",val totalEpisodes:Int?=null,val releasedEpisodes:Int?=null,val favoriteCount:Long?=null) {
     val catalogueEpisodeCount:Int? get() = releasedEpisodes
     val metadata: String get() = listOf(year, season, type, age).filter(String::isNotBlank).joinToString(" · ")
 }
@@ -42,7 +42,7 @@ fun parseRelease(json: JSONObject): Release {
         json.optBoolean("is_blocked_by_geo") || json.optBoolean("is_blocked_by_copyrights"),
         json.optJSONObject("latest_episode")?.let { parseRelease(JSONObject().put("id",json.getInt("id")).put("episodes",JSONArray().put(it))).episodes.firstOrNull() },
         ExternalIds(json.optJSONObject("shikimori")?.optInt("id")?.takeIf { it > 0 },json.optJSONObject("mal")?.optInt("id")?.takeIf { it > 0 }),
-        listOf("Shikimori" to "shikimori", "MyAnimeList" to "mal").mapNotNull { (source,key) -> json.optJSONObject(key)?.let { site -> site.optDouble("rating",Double.NaN).takeIf { it.isFinite() && it in 1.0..10.0 }?.let { Rating(source,it,site.optInt("votes").takeIf { it > 0 }) } } }).copy(ongoing=if(json.has("is_ongoing") && !json.isNull("is_ongoing"))json.getBoolean("is_ongoing")else null,updatedAt=json.text("updated_at"),totalEpisodes=json.optInt("episodes_total",-1).takeIf{it>0},releasedEpisodes=json.optJSONArray("episodes")?.let{publishedEpisodeCount(it)})
+        listOf("Shikimori" to "shikimori", "MyAnimeList" to "mal").mapNotNull { (source,key) -> json.optJSONObject(key)?.let { site -> site.optDouble("rating",Double.NaN).takeIf { it.isFinite() && it in 1.0..10.0 }?.let { Rating(source,it,site.optInt("votes").takeIf { it > 0 }) } } }).copy(ongoing=if(json.has("is_ongoing") && !json.isNull("is_ongoing"))json.getBoolean("is_ongoing")else null,updatedAt=json.text("updated_at"),totalEpisodes=json.optInt("episodes_total",-1).takeIf{it>0},releasedEpisodes=json.optJSONArray("episodes")?.let{publishedEpisodeCount(it)},favoriteCount=if(json.has("added_in_users_favorites") && !json.isNull("added_in_users_favorites"))json.optLong("added_in_users_favorites",-1).takeIf{it>=0}else null)
 }
 
 internal fun publishedEpisodeCount(episodes:JSONArray):Int = episodes.objects()

@@ -15,7 +15,7 @@ import org.robolectric.annotation.Config
 class HomeShelfTest {
     @Test fun titleHeaderUsesNumericAgeAndStatusAfterNamesWithoutSynopsis(){
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
-        val release=parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Название","english":"Title"},"year":2026,"age_rating":{"description":"18+"},"is_ongoing":true,"description":"СКРЫТОЕ КРАТКОЕ ОПИСАНИЕ","shikimori":{"rating":8.5},"mal":{"rating":8.1}}"""))
+        val release=parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Название","english":"Title"},"year":2026,"added_in_users_favorites":25600,"age_rating":{"description":"18+"},"is_ongoing":true,"description":"СКРЫТОЕ КРАТКОЕ ОПИСАНИЕ","shikimori":{"rating":8.5},"mal":{"rating":8.1}}"""))
         adapter.submit(listOf(Row("hero",Kind.HERO,release=release)))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.HERO.ordinal)
         adapter.onBindViewHolder(holder,0)
@@ -23,8 +23,10 @@ class HomeShelfTest {
         assertEquals("Название",(info.getChildAt(0)as android.widget.TextView).text.toString())
         assertEquals("Title",(info.getChildAt(1)as android.widget.TextView).text.toString())
         val ratings=(info.getChildAt(2)as android.widget.HorizontalScrollView).getChildAt(0)as android.widget.LinearLayout
-        assertEquals(3,ratings.childCount)
+        assertEquals(4,ratings.childCount)
         assertEquals("Онгоинг",(ratings.getChildAt(2)as android.widget.TextView).text.toString())
+        assertEquals("25.6к",(ratings.getChildAt(3)as android.widget.TextView).text.toString())
+        assertNotNull((ratings.getChildAt(3)as android.widget.TextView).compoundDrawablesRelative[0])
         val metadata=(0 until info.childCount).mapNotNull{info.getChildAt(it)as?android.widget.TextView}.first{it.text.toString().endsWith("18")}.text.toString()
         assertTrue(metadata.endsWith("18"));assertFalse(metadata.contains("+"))
         val hero=holder.itemView
@@ -51,6 +53,25 @@ class HomeShelfTest {
         assertTrue(button.hasFocus());assertEquals("Связанные",button.text.toString())
         button.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP,android.view.KeyEvent.KEYCODE_DPAD_DOWN))
         assertEquals(1,entered)
+    }
+    @Test fun posterFavoriteCounterAppearsOnFocusAndSurvivesReuseInCatalogue(){
+        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        val release=parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Тайтл"},"added_in_users_favorites":25600,"episodes":[{"id":"ep","ordinal":1}],"latest_episode":{"id":"ep","ordinal":434}}"""))
+        adapter.submit(listOf(Row("poster",Kind.POSTER,release=release,selected=1)))
+        val parent=FrameLayout(RuntimeEnvironment.getApplication())
+        val holder=adapter.onCreateViewHolder(parent,Kind.POSTER.ordinal)
+        adapter.onBindViewHolder(holder,0);parent.addView(holder.itemView)
+        val card=holder.itemView as FrameLayout
+        val other=android.widget.TextView(parent.context).apply{isFocusable=true;isFocusableInTouchMode=true};parent.addView(other)
+        val favorites=card.findViewWithTag<android.widget.TextView>("favorite-count")
+        assertEquals("25.6к",favorites.text.toString());assertEquals(android.view.View.GONE,favorites.visibility)
+        card.requestFocus();assertEquals(android.view.View.VISIBLE,favorites.visibility)
+        val favoriteParams=favorites.layoutParams as FrameLayout.LayoutParams
+        assertEquals(android.view.Gravity.START, favoriteParams.gravity and android.view.Gravity.RELATIVE_HORIZONTAL_GRAVITY_MASK)
+        adapter.submit(listOf(Row("poster",Kind.POSTER,release=release,selected=2)));adapter.onBindViewHolder(holder,0)
+        val episodes=card.findViewWithTag<android.widget.TextView>("episode-count")
+        assertNotSame(episodes,favorites);assertEquals("1 эп.",episodes.text.toString());assertEquals("25.6к",favorites.text.toString())
+        other.requestFocus();assertEquals(android.view.View.GONE,favorites.visibility)
     }
     @Test fun videoCardAlwaysKeepsSixteenByNine(){
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})

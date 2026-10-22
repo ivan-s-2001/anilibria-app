@@ -34,7 +34,7 @@ class MainActivity : ComponentActivity() {
     private val account by lazy{AccountRepository(this)}
     private var accountJob:kotlinx.coroutines.Job?=null
     private var accountLoadedAt=0L
-    private var progressLoadedAt=0L
+    private var accountHistoryJob:kotlinx.coroutines.Job?=null
     private val history get()=ViewingHistory(prefs)
     private var historyHydrating=false
     private var lastHistoryHydration=0L
@@ -459,7 +459,7 @@ class MainActivity : ComponentActivity() {
     }
     private fun login(){
         AccountPanel(this,lifecycleScope,account){
-            lastHistoryHydration=0L;accountLoadedAt=0L;progressLoadedAt=0L
+            accountHistoryJob?.cancel();lastHistoryHydration=0L;accountLoadedAt=0L
             Toast.makeText(this,"Вход выполнен · ${account.session.name}",Toast.LENGTH_SHORT).show()
             rememberFocus();render(model.state.value);refreshAccount(force=true,after={offerLocalHistory()})
         }.start()
@@ -470,11 +470,34 @@ class MainActivity : ComponentActivity() {
         accountJob=lifecycleScope.launch{
             try{
                 account.refresh();accountLoadedAt=System.currentTimeMillis()
-                account.loadProgress();progressLoadedAt=System.currentTimeMillis()
-                rememberFocus();render(model.state.value);after?.invoke()
+                account.loadProgress()
+                rememberFocus();render(model.state.value);after?.invoke();startAccountHistorySync()
             }catch(e:kotlinx.coroutines.CancellationException){throw e}
             catch(_:Exception){ /* Cached lists remain available; explicit actions offer retry. */ }
         }
+    }
+    private fun startAccountHistorySync(){
+        if(accountHistoryJob?.isActive==true)return
+        accountHistoryJob=lifecycleScope.launch{hydrateAccountHistory();if(account.signedIn){rememberFocus();render(model.state.value)}}
+    }
+    private suspend fun hydrateAccountHistory(){
+        val user=account.session.userId?:return
+        try{
+            val recent=account.recentHistory().distinctBy{it.releaseId}.take(12)
+            for(record in recent){
+                if(account.session.userId!=user)return
+                val local=history.latestWatched().firstOrNull{it.releaseId==record.releaseId}
+                if(local!=null && local.updatedAt>record.updatedAt)continue
+                try{
+                    val release=model.api.release(record.releaseId)
+                    if(account.session.userId!=user)return
+                    account.applyProgress(release)
+                    val episode=release.episodes.firstOrNull{it.id==record.episodeId}?:continue
+                    history.save(release,episode,prefs.getLong("position:${episode.id}",0),prefs.getLong("duration:${episode.id}",episode.duration*1000),record.updatedAt)
+                    prefs.edit().putString("last:${release.id}",episode.id).apply()
+                }catch(e:kotlinx.coroutines.CancellationException){throw e}catch(_:Exception){ /* Keep already available local cards. */ }
+            }
+        }catch(e:kotlinx.coroutines.CancellationException){throw e}catch(_:Exception){ /* Progress sync itself can succeed while history metadata is unavailable. */ }
     }
     private fun accountAction(done:(()->Unit)?=null,block:suspend()->Unit){
         if(accountJob?.isActive==true){Toast.makeText(this,"Подождите, идёт синхронизация",Toast.LENGTH_SHORT).show();return}
@@ -511,7 +534,7 @@ class MainActivity : ComponentActivity() {
             panel.dismiss()
             TvSidePanel(this,"Выйти из аккаунта?").apply{
                 message("Данные аккаунта останутся на сайте. Приложение переключится на гостевую библиотеку этого ТВ.")
-                addAction("Выйти"){dismiss();accountAction(done={lastHistoryHydration=0;model.open(Screen.Home)}){account.logout()}}
+                addAction("Выйти"){dismiss();accountAction(done={accountHistoryJob?.cancel();lastHistoryHydration=0;model.open(Screen.Home)}){account.logout()}}
                 addAction("Отмена"){dismiss()};show()
             }
         }
@@ -526,7 +549,7 @@ class MainActivity : ComponentActivity() {
             accountAction(done={
                 val panel=TvSidePanel(this,"Занести локальную историю просмотра в ваш аккаунт?")
                 panel.message(if(plan.isEmpty())"Все серии из локальной истории уже есть в аккаунте. Прогресс аккаунта сохранён."else"Можно перенести прогресс ${plan.size} серий с этого ТВ. Уже сохранённый в аккаунте прогресс не изменится. Локальная история останется на ТВ.")
-                if(plan.isNotEmpty())panel.addAction("Перенести",true){panel.dismiss();accountAction{val count=account.importLocalHistory();Toast.makeText(this,"Перенесено серий: $count",Toast.LENGTH_LONG).show()}}
+                if(plan.isNotEmpty())panel.addAction("Перенести",true){panel.dismiss();accountAction{val count=account.importLocalHistory();startAccountHistorySync();Toast.makeText(this,"Перенесено серий: $count",Toast.LENGTH_LONG).show()}}
                 panel.addAction(if(plan.isEmpty())"Закрыть"else"Пропустить"){panel.dismiss()};panel.show()
             }){plan=account.localImportPlan()}
         }
@@ -547,11 +570,8 @@ class MainActivity : ComponentActivity() {
             val duration=(e.duration*1000).coerceAtLeast(1)
             edit.putLong("position:${e.id}",if(watched)duration else 0).putLong("duration:${e.id}",duration)
         };edit.apply()
-        episodes.forEachIndexed{index,e->
-            val position=prefs.getLong("position:${e.id}",0);val duration=prefs.getLong("duration:${e.id}",0)
-            queueAccountProgress(this,e.id,position,duration)
-            history.save(release,e,position,duration,System.currentTimeMillis()+index)
-        }
+        queueAccountTimecodes(this,episodes.map{e->AccountTimecode(e.id,prefs.getLong("position:${e.id}",0)/1000.0,watched)})
+        episodes.lastOrNull()?.let{e->history.save(release,e,prefs.getLong("position:${e.id}",0),prefs.getLong("duration:${e.id}",0))}
         if(episodes.isNotEmpty()){if(watched)prefs.edit().putString("last:${release.id}",episodes.last().id).apply()else prefs.edit().remove("last:${release.id}").apply()}
         rememberFocus();render(model.state.value)
         if(account.signedIn)accountAction{account.flush();account.loadProgress()}
@@ -632,9 +652,8 @@ class MainActivity : ComponentActivity() {
     }
     private fun quickActions(item:Release){
         val resume=prefs.getString("last:${item.id}",null)!=null
-        val library=JSONArray(prefs.getString("library","[]"))
         val added=isFavorite(item.id)
-        val labels=arrayOf(if(resume)"Продолжить просмотр"else"Смотреть",if(added)"Убрать из библиотеки"else"В библиотеку","Подробнее")
+        val labels=arrayOf(if(resume)"Продолжить просмотр"else"Смотреть",if(account.signedIn){if(added)"Убрать из избранного"else"В избранное"}else if(added)"Убрать с этого ТВ"else"В избранное","Подробнее")
         fun choose(choice:Int){
             when(choice){
                 0->lifecycleScope.launch {
@@ -853,7 +872,7 @@ class MainActivity : ComponentActivity() {
                     rows+=Row("library-heading",Kind.HEADING,screen.title,selected=1)
                     rows+=state.releases.map{Row("library:${it.id}",Kind.POSTER,release=it,selected=2)}
                     if(state.releases.isEmpty()){
-                        rows+=Row("library-empty",Kind.TEXT,"Здесь будут ваши тайтлы","Добавляйте их на странице тайтла или удержанием OK на карточке.")
+                        rows+=Row("library-empty",Kind.TEXT,"Здесь будут ваши тайтлы",if(account.signedIn)"Выбирайте избранное и коллекцию на странице тайтла."else"Сохраняйте тайтлы на этом ТВ со страницы тайтла.")
                         rows+=Row("library-catalogue",Kind.ACTION,"Открыть каталог",click={model.open(Screen.Catalog())})
                     }
                 }
