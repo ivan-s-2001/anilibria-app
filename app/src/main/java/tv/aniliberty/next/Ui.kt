@@ -63,6 +63,11 @@ class PageAdapter(
     private val quickActions: (Release) -> Unit = {},
     private val shelfMode: Boolean = false,
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+    private val stableKeys=mutableMapOf<String,Long>()
+    private var nextStableId=0L
+    init{setHasStableIds(true)}
+    override fun getItemId(position:Int):Long=stableKeys.getOrPut(rows[position].key){nextStableId++}
+    fun rememberShelf(shelf:RecyclerView)=saveShelf(shelf)
     private fun View.cardDp(value:Int)=dp(if(shelfMode)(value*1.18f).toInt()else value)
     private data class ShelfPosition(val focusedKey:String?,val anchorKey:String?,val offset:Int)
     private val shelfPositions=mutableMapOf<String,ShelfPosition>()
@@ -80,6 +85,9 @@ class PageAdapter(
         val memory=shelfPositions[key]
         val index=child.rows.indexOfFirst{it.key==memory?.focusedKey}.takeIf{it>=0}?:0
         val manager=shelf.layoutManager as androidx.recyclerview.widget.LinearLayoutManager
+        if(requestFocus){
+            shelf.findViewHolderForAdapterPosition(index)?.itemView?.let{it.requestFocus();return}
+        }
         val anchor=child.rows.indexOfFirst{it.key==memory?.anchorKey}.takeIf{it>=0}?:index
         manager.scrollToPositionWithOffset(anchor,memory?.offset?:0)
         if(requestFocus)shelf.post {
@@ -94,8 +102,16 @@ class PageAdapter(
     fun submit(value: List<Row>) {
         // Snapshot nested lists before the outer adapter is rebound.
         attachedShelves.forEach(::saveShelf)
+        val old=rows
+        val useDiff=shelfMode || old.any{it.kind==Kind.SHELF} || value.any{it.kind==Kind.SHELF}
+        val diff=if(useDiff)androidx.recyclerview.widget.DiffUtil.calculateDiff(object:androidx.recyclerview.widget.DiffUtil.Callback(){
+            override fun getOldListSize()=old.size
+            override fun getNewListSize()=value.size
+            override fun areItemsTheSame(a:Int,b:Int)=old[a].key==value[b].key && old[a].kind==value[b].kind
+            override fun areContentsTheSame(a:Int,b:Int)=old[a]==value[b]
+        },false)else null
         rows = value; tabStart = rows.indexOfFirst { it.kind == Kind.TABS }; contentStart = if (tabStart >= 0) tabStart + 1 else -1
-        notifyDataSetChanged()
+        if(diff!=null)diff.dispatchUpdatesTo(this)else notifyDataSetChanged()
     }
     override fun getItemCount() = rows.size
     override fun getItemViewType(position: Int) = rows[position].kind.ordinal
@@ -112,8 +128,13 @@ class PageAdapter(
                 addView(ImageView(context).apply{scaleType=ImageView.ScaleType.FIT_CENTER;isFocusable=false},LinearLayout.LayoutParams(dp(32),dp(32)))
                 addView(TextView(context).apply{gravity=Gravity.CENTER;maxLines=2;includeFontPadding=false;isFocusable=false;ellipsize=android.text.TextUtils.TruncateAt.END},LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(12)})
             }
-            Kind.SHELF -> RecyclerView(context).apply {
-                layoutManager=androidx.recyclerview.widget.LinearLayoutManager(context,RecyclerView.HORIZONTAL,false)
+            Kind.SHELF -> object:RecyclerView(context){
+                override fun requestChildRectangleOnScreen(child:View,rect:android.graphics.Rect,immediate:Boolean):Boolean=
+                    super.requestChildRectangleOnScreen(child,rect,false)
+            }.apply {
+                layoutManager=androidx.recyclerview.widget.LinearLayoutManager(context,RecyclerView.HORIZONTAL,false).apply{isItemPrefetchEnabled=true}
+                descendantFocusability=ViewGroup.FOCUS_AFTER_DESCENDANTS
+                overScrollMode=View.OVER_SCROLL_NEVER
                 clipToPadding=false;itemAnimator=null;setPadding(dp(4),dp(4),dp(4),dp(4))
             }
             Kind.HERO -> LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
@@ -170,16 +191,19 @@ class PageAdapter(
             }
             Kind.MORE,Kind.REFRESH -> {
                 val box=view as LinearLayout
-                box.layoutParams=box.layoutParams.apply{if(shelfMode){
-                    width=view.cardDp(when(row.selected){1->232;2->172;3->312;5->272;else->144})
-                    height=view.cardDp(when(row.selected){1->204;2->236;3->190;4->206;5->150;else->270})
-                }}
+                box.layoutParams=box.layoutParams.apply{
+                    width=view.dp(96);height=view.dp(144)
+                    if(this is RecyclerView.LayoutParams){
+                        val shelfCardHeight=view.cardDp(when(row.selected){1->204;2->236;3->190;4->206;5->150;else->270})
+                        topMargin=view.dp(4)+(shelfCardHeight-height).coerceAtLeast(0)/2
+                    }
+                }
                 val icon=box.getChildAt(0)as ImageView
                 icon.layoutParams=LinearLayout.LayoutParams(view.dp(32),view.dp(32))
                 icon.setImageResource(if(row.kind==Kind.REFRESH)R.drawable.ic_refresh else R.drawable.ic_arrow_right)
                 icon.setColorFilter(RED)
                 val caption=box.getChildAt(1)as TextView
-                caption.label(if(row.kind==Kind.REFRESH)row.title else "Открыть всё",16f,WHITE,true)
+                caption.label(if(row.kind==Kind.REFRESH)row.title else "Открыть всё",14f,WHITE,true)
                 caption.gravity=Gravity.CENTER;caption.maxLines=2
                 box.gravity=Gravity.CENTER;box.isFocusable=true;box.isClickable=row.click!=null
                 box.background=StateListDrawable().apply{
@@ -283,7 +307,7 @@ class PageAdapter(
                 meta.visibility=if(row.subtitle.isBlank())View.GONE else View.VISIBLE
                 box.contentDescription=listOf(row.title,row.subtitle).filter(String::isNotBlank).joinToString(". ")
                 box.setOnClickListener{row.click?.invoke()}
-                box.setOnFocusChangeListener{_,focused->box.animate().scaleX(if(focused)1.025f else 1f).scaleY(if(focused)1.025f else 1f).setDuration(140).start()}
+                box.setOnFocusChangeListener{_,focused->box.animate().scaleX(if(focused && !shelfMode)1.025f else 1f).scaleY(if(focused && !shelfMode)1.025f else 1f).setDuration(140).start()}
             }
             Kind.SPOTLIGHT,Kind.FEATURE,Kind.POSTER,Kind.CONTINUE -> {
                 val box=view as FrameLayout
@@ -328,7 +352,7 @@ class PageAdapter(
                 content.setBackgroundColor(Color.TRANSPARENT)
                 box.setOnFocusChangeListener{_,focused->
                     if(!spotlight){subtitle.text=if(focused)full else short;title.setTextColor(if(focused)WHITE else 0xFFDDDDDD.toInt())}
-                    box.animate().scaleX(if(focused)1.025f else 1f).scaleY(if(focused)1.025f else 1f).setDuration(140).start()
+                    box.animate().scaleX(if(focused && !shelfMode)1.025f else 1f).scaleY(if(focused && !shelfMode)1.025f else 1f).setDuration(140).start()
                 }
                 if(webPoster){
                     box.layoutParams=box.layoutParams.apply{height=view.cardDp(if(cataloguePoster)270 else 206)}
@@ -404,7 +428,7 @@ class PageAdapter(
                         image.colorFilter=if(focused)android.graphics.ColorMatrixColorFilter(floatArrayOf(.045f,0f,0f,0f,12.75f,0f,.045f,0f,0f,12.75f,0f,0f,.045f,0f,12.75f,0f,0f,0f,1f,0f))else null
                     }
                     focusPoster(box.hasFocus())
-                    box.setOnFocusChangeListener{_,focused->focusPoster(focused);box.animate().scaleX(if(focused)1.025f else 1f).scaleY(if(focused)1.025f else 1f).setDuration(140).start()}
+                    box.setOnFocusChangeListener{_,focused->focusPoster(focused);box.animate().scaleX(if(focused && !shelfMode)1.025f else 1f).scaleY(if(focused && !shelfMode)1.025f else 1f).setDuration(140).start()}
                 }else{
                     image.clearColorFilter();content.visibility=View.VISIBLE;content.gravity=Gravity.TOP
                     title.gravity=Gravity.START;subtitle.gravity=Gravity.START
@@ -448,7 +472,7 @@ class PageAdapter(
                     focusContinue(box.hasFocus())
                     box.setOnFocusChangeListener{_,focused->
                         focusContinue(focused)
-                        box.animate().scaleX(if(focused)1.025f else 1f).scaleY(if(focused)1.025f else 1f).setDuration(140).start()
+                        box.animate().scaleX(if(focused && !shelfMode)1.025f else 1f).scaleY(if(focused && !shelfMode)1.025f else 1f).setDuration(140).start()
                     }
                 }
                 box.contentDescription=listOf(release?.title?:row.title,short).filter(String::isNotBlank).joinToString(". ")

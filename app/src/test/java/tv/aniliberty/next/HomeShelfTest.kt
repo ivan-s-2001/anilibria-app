@@ -34,17 +34,17 @@ class HomeShelfTest {
         val short=shelfCards("latest","Новые эпизоды",listOf(Row("release:1",Kind.POSTER))){ }
         assertEquals(2,short.size);assertEquals(Kind.MORE,short.last().kind)
     }
-    @Test fun wideFeatureShelfHasMatchingArrowGeometry(){
+    @Test fun shelfEndUsesSameCompactSizeBesideWideCards(){
         val cards=shelfCards("genres","Жанры",listOf(Row("genre:1",Kind.FEATURE,"Детектив")),true){ }
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
         adapter.submit(cards)
         val parent=FrameLayout(RuntimeEnvironment.getApplication())
         val feature=adapter.onCreateViewHolder(parent,Kind.FEATURE.ordinal);adapter.onBindViewHolder(feature,0)
         val more=adapter.onCreateViewHolder(parent,Kind.MORE.ordinal);adapter.onBindViewHolder(more,1)
-        assertEquals(feature.itemView.layoutParams.width,more.itemView.layoutParams.width)
-        assertEquals(feature.itemView.layoutParams.height,more.itemView.layoutParams.height)
+        assertEquals(more.itemView.dp(96),more.itemView.layoutParams.width)
+        assertEquals(more.itemView.dp(144),more.itemView.layoutParams.height)
     }
-    @Test fun everyShelfEndMatchesCardSizeAndCentersIconAboveCaption(){
+    @Test fun everyShelfEndUsesSameSizeAndCentersIconAboveCaption(){
         val context=RuntimeEnvironment.getApplication()
         val cases=listOf(Triple(0,Kind.POSTER,270),Triple(1,Kind.FEATURE,204),Triple(2,Kind.GENRE,236),Triple(3,Kind.FRANCHISE,190),Triple(4,Kind.POSTER,206),Triple(5,Kind.CONTINUE,150))
         for((style,kind,height)in cases){
@@ -53,15 +53,29 @@ class HomeShelfTest {
             val holder=adapter.onCreateViewHolder(FrameLayout(context),Kind.MORE.ordinal)
             adapter.onBindViewHolder(holder,0)
             val box=holder.itemView as android.widget.LinearLayout
-            assertEquals(box.dp((height*1.18f).toInt()),box.layoutParams.height)
+            assertEquals(box.dp(144),box.layoutParams.height)
             val width=when(kind){Kind.FEATURE->232;Kind.GENRE->172;Kind.FRANCHISE->312;Kind.CONTINUE->272;else->144}
-            assertEquals(box.dp((width*1.18f).toInt()),box.layoutParams.width)
+            assertEquals(box.dp(96),box.layoutParams.width)
             assertEquals(android.view.Gravity.CENTER,box.gravity)
             assertEquals(android.widget.LinearLayout.VERTICAL,box.orientation)
             assertTrue(box.getChildAt(0)is android.widget.ImageView)
             assertEquals("Открыть всё",(box.getChildAt(1)as android.widget.TextView).text.toString())
             assertFalse(box.getChildAt(1).isFocusable)
         }
+    }
+
+    @Test fun shelfUpdatesKeepStableItemIdsWithoutFullListReset(){
+        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
+        val a=Row("a",Kind.MORE,"Все",click={})
+        val b=Row("b",Kind.REFRESH,"Обновить",click={})
+        adapter.submit(listOf(a,b))
+        val id=adapter.getItemId(0)
+        var fullReset=false
+        adapter.registerAdapterDataObserver(object:RecyclerView.AdapterDataObserver(){override fun onChanged(){fullReset=true}})
+        adapter.submit(listOf(b,a))
+        assertEquals(id,adapter.getItemId(1))
+        assertFalse(fullReset)
+        assertTrue(adapter.hasStableIds())
     }
 
     @Test fun genrePlacesCaptionInsideImageLikeWeb(){

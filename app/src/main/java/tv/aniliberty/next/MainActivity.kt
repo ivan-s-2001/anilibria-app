@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
     private var current: Screen = Screen.Welcome
     private var enterContent = false
     private var enterDay = false
+    private lateinit var root:android.widget.FrameLayout
     private lateinit var shell: LinearLayout
     private lateinit var menu: LinearLayout
     private fun dp(value:Int)=(value*resources.displayMetrics.density).toInt()
@@ -57,7 +58,7 @@ class MainActivity : ComponentActivity() {
 
     private fun buildMenu() {
         menu.removeAllViews()
-        menu.layoutParams=LinearLayout.LayoutParams(dp(if(menuOpen)196 else 60),-1)
+        menu.layoutParams=if(::root.isInitialized && menu.parent===root)android.widget.FrameLayout.LayoutParams(dp(if(menuOpen)196 else 60),-1)else LinearLayout.LayoutParams(dp(if(menuOpen)196 else 60),-1)
         menu.addView(LinearLayout(this).apply{
             gravity=android.view.Gravity.CENTER_VERTICAL
             addView(android.widget.ImageView(this@MainActivity).apply{setImageResource(R.drawable.ic_aniliberty);contentDescription="AniLiberty"},LinearLayout.LayoutParams(dp(36),dp(36)).apply{marginStart=dp(8);marginEnd=dp(10)})
@@ -80,13 +81,76 @@ class MainActivity : ComponentActivity() {
             },LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(6)})
         }
     }
+    private fun homeMenuLayout(){
+        if(current==Screen.Home && menu.parent===shell){
+            shell.removeView(menu);shell.setPadding(dp(60),0,0,0)
+            root.addView(menu,android.widget.FrameLayout.LayoutParams(dp(if(menuOpen)196 else 60),-1))
+        }else if(current!=Screen.Home && menu.parent===root){
+            root.removeView(menu);shell.setPadding(0,0,0,0)
+            shell.addView(menu,0,LinearLayout.LayoutParams(dp(if(menuOpen)196 else 60),-1))
+        }
+    }
     private fun openMenu(){
         if(current==Screen.Welcome)return
         contentFocus=list.findFocus();rememberFocus();menuOpen=true;buildMenu()
         menu.getChildAt(listOf(2,0,1,3).indexOf(selectedSection).coerceAtLeast(0)+1)?.requestFocus()
     }
     private fun closeMenu(restore:Boolean=true){menuOpen=false;buildMenu();if(restore){if(contentFocus?.isAttachedToWindow==true)contentFocus?.requestFocus()else list.requestFocus()}}
+    private var homeFocusTarget:Int?=null
+    private var lastHomeMove=0L
+    private fun moveHomeFocus(direction:Int):Boolean{
+        val focus=list.findFocus()?:return false
+        val outer=list.findContainingItemView(focus)?:return false
+        val index=list.getChildAdapterPosition(outer)
+        if(outer is RecyclerView)adapter.rememberShelf(outer)
+        val candidates=if(direction<0)(index-1 downTo 0)else(index+1 until adapter.rows.size)
+        val target=candidates.firstOrNull{adapter.rows[it].kind in setOf(Kind.SHELF,Kind.DAYS,Kind.SPOTLIGHT,Kind.ACTION)}?:return true
+        if(homeFocusTarget!=null)return true
+        fun focusTarget(){
+            val item=list.findViewHolderForAdapterPosition(target)?.itemView?:return
+            focusItem(item)
+        }
+        val attached=list.findViewHolderForAdapterPosition(target)?.itemView
+        if(attached!=null){focusTarget();return true}
+        homeFocusTarget=target
+        list.stopScroll()
+        list.addOnScrollListener(object:RecyclerView.OnScrollListener(){
+            override fun onScrollStateChanged(view:RecyclerView,state:Int){
+                if(state!=RecyclerView.SCROLL_STATE_IDLE)return
+                list.removeOnScrollListener(this)
+                val pending=homeFocusTarget;homeFocusTarget=null
+                if(current==Screen.Home && pending==target)focusTarget()
+            }
+        })
+        list.smoothScrollToPosition(target)
+        return true
+    }
     override fun dispatchKeyEvent(event:KeyEvent):Boolean {
+        if(current==Screen.Home && !menuOpen){
+            val focus=list.findFocus()
+            val outer=focus?.let{list.findContainingItemView(it)}
+            if(event.keyCode==KeyEvent.KEYCODE_DPAD_UP || event.keyCode==KeyEvent.KEYCODE_DPAD_DOWN){
+                if(focus!=null){
+                    if(event.action==KeyEvent.ACTION_DOWN){
+                        val now=android.os.SystemClock.uptimeMillis()
+                        if(event.repeatCount==0 || now-lastHomeMove>=140){
+                            lastHomeMove=now
+                            moveHomeFocus(if(event.keyCode==KeyEvent.KEYCODE_DPAD_UP)-1 else 1)
+                        }
+                    }
+                    return true
+                }
+            }
+            if(outer is RecyclerView && event.keyCode in listOf(KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT)){
+                val child=focus?.let{outer.findContainingItemView(it)}
+                val index=child?.let{outer.getChildAdapterPosition(it)}?:-1
+                if(index>=0 && event.keyCode==KeyEvent.KEYCODE_DPAD_RIGHT && index==(outer.adapter?.itemCount?:0)-1)return true
+                if(index==0 && event.keyCode==KeyEvent.KEYCODE_DPAD_LEFT){
+                    if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0)openMenu()
+                    return true
+                }
+            }
+        }
         if(!menuOpen && current!=Screen.Welcome && event.keyCode==KeyEvent.KEYCODE_DPAD_LEFT){
             val focus=currentFocus
             val next=focus?.focusSearch(View.FOCUS_LEFT)
@@ -98,7 +162,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        list = RecyclerView(this).apply {
+        list = object:RecyclerView(this){
+            override fun requestChildRectangleOnScreen(child:View,rect:android.graphics.Rect,immediate:Boolean):Boolean=
+                super.requestChildRectangleOnScreen(child,rect,if(current==Screen.Home)false else immediate)
+        }.apply {
             setBackgroundColor(0xFF121212.toInt()); setPadding(dp(32),dp(8),dp(32),dp(24));clipToPadding=false;itemAnimator=null
         }
         grid=GridLayoutManager(this,15);list.layoutManager=grid
@@ -110,7 +177,9 @@ class MainActivity : ComponentActivity() {
         list.adapter=adapter
         shell=LinearLayout(this).apply{setBackgroundColor(0xFF121212.toInt())}
         menu=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(12),dp(4),0);setBackgroundColor(0xFF212121.toInt())}
-        shell.addView(menu,LinearLayout.LayoutParams(dp(60),-1));shell.addView(list,LinearLayout.LayoutParams(0,-1,1f));buildMenu();setContentView(shell)
+        shell.addView(menu,LinearLayout.LayoutParams(dp(60),-1));shell.addView(list,LinearLayout.LayoutParams(0,-1,1f));buildMenu()
+        root=android.widget.FrameLayout(this).apply{addView(shell,android.widget.FrameLayout.LayoutParams(-1,-1))}
+        setContentView(root)
         onBackPressedDispatcher.addCallback(this,object:OnBackPressedCallback(true){override fun handleOnBackPressed(){if(menuOpen){if(current==Screen.Home){finish()}else closeMenu();return}
             rememberFocus()
             if(current==Screen.Home){if(list.computeVerticalScrollOffset()>0){list.smoothScrollToPosition(0)}else openMenu()}
@@ -132,7 +201,10 @@ class MainActivity : ComponentActivity() {
             val focused=list.findFocus()?.let{list.findContainingItemView(it)}
             if(focused?.tag!=key)return@postOnAnimation
             val heading=grid.findViewByPosition(header)
-            if(heading==null || heading.top<list.paddingTop)grid.scrollToPositionWithOffset(header,list.paddingTop+dp(6))
+            if(homeFocusTarget==null){
+                if(heading==null)list.smoothScrollToPosition(header)
+                else if(heading.top<list.paddingTop)list.smoothScrollBy(0,heading.top-list.paddingTop-dp(6))
+            }
         }
     }
     override fun onResume(){
@@ -272,8 +344,10 @@ class MainActivity : ComponentActivity() {
     private fun render(state:UiState){
         (state.screen as?Screen.Detail)?.let{history.restore(it.id)}
         if(current==state.screen && !state.loading && adapter.rows.none{it.key=="loading"})rememberFocus()
+        val sameHome=current==Screen.Home && state.screen==Screen.Home && adapter.rows.any{it.kind==Kind.SHELF}
         val retainedFocus = if(current==state.screen) list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String } else null
         current=state.screen
+        homeMenuLayout()
         menu.visibility=if(current==Screen.Welcome)View.GONE else View.VISIBLE
         val rows=mutableListOf<Row>()
         if(state.screen==Screen.Welcome){
@@ -394,10 +468,18 @@ class MainActivity : ComponentActivity() {
             }
         }
         adapter.submit(rows)
+        if(current==Screen.Home && menuOpen)return
         if(enterDay){
             enterDay=false
             val index=rows.indexOfFirst{it.key.startsWith("shelf:schedule:")}.takeIf{it>=0}?:rows.indexOfFirst{it.key=="schedule-days"}
-            if(index>=0){list.doOnNextLayout{focusItem(list.findViewHolderForAdapterPosition(index)?.itemView)};grid.scrollToPositionWithOffset(index,list.dp(64))}
+            if(index>=0){
+                val days=rows.indexOfFirst{it.key=="schedule-days"}
+                list.doOnNextLayout{
+                    val bar=list.findViewHolderForAdapterPosition(days)?.itemView as?android.widget.HorizontalScrollView
+                    val line=bar?.getChildAt(0)as?LinearLayout
+                    line?.getChildAt(state.homeDay+1)?.requestFocus()
+                }
+            }
         }else if(enterContent && adapter.contentStart in rows.indices){
             enterContent=false
             val index=(adapter.contentStart until rows.size).firstOrNull { rows[it].kind != Kind.HEADING } ?: adapter.contentStart
@@ -409,11 +491,12 @@ class MainActivity : ComponentActivity() {
                 ?: if(key!=null && adapter.contentStart>=0) (adapter.contentStart until rows.size).firstOrNull{rows[it].kind!=Kind.HEADING}?:adapter.contentStart
                 else rows.indexOfFirst{it.kind in listOf(Kind.ACTION,Kind.POSTER,Kind.HERO,Kind.SPOTLIGHT,Kind.SHELF,Kind.FEATURE,Kind.GENRE,Kind.FRANCHISE,Kind.CONTINUE,Kind.MORE)}
             if(index>=0&&!state.loading){list.doOnNextLayout{
+                if(current!=state.screen || (current==Screen.Home && menuOpen))return@doOnNextLayout
                 val item=list.findViewHolderForAdapterPosition(index)?.itemView
                 focusItem(item)
             };val scroll=scrollMemory[screenKey(state.screen)]
                 val anchor=scroll?.first?.let{saved->rows.indexOfFirst{it.key==saved}.takeIf{it>=0}}
-                grid.scrollToPositionWithOffset(anchor?:if(key==null)0 else index,scroll?.second?:if(key==null)0 else list.dp(12))}
+                if(!sameHome)grid.scrollToPositionWithOffset(anchor?:if(key==null)0 else index,scroll?.second?:if(key==null)0 else list.dp(12))}
         }
     }
 }
