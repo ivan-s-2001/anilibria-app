@@ -10,7 +10,7 @@ import android.widget.TextView
 
 /** A single, remote-friendly surface shared by catalogue tools. */
 open class TvSidePanel(context:Context,title:String):Dialog(context){
-    val heading=TextView(context).apply{label(title,24f,WHITE,true);includeFontPadding=false;setPadding(0,dp(4),0,dp(20))}
+    val heading=TextView(context).apply{label(title,24f,WHITE,true);includeFontPadding=false;maxLines=3;ellipsize=android.text.TextUtils.TruncateAt.END;setPadding(0,dp(4),0,dp(20))}
     val body=LinearLayout(context).apply{orientation=LinearLayout.VERTICAL}
     val footer=LinearLayout(context).apply{orientation=LinearLayout.VERTICAL}
     private val scroll=ScrollView(context).apply{isFillViewport=false;addView(body);overScrollMode=View.OVER_SCROLL_NEVER}

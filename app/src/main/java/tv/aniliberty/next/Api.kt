@@ -136,6 +136,9 @@ class Api {
         return result
     }
     suspend fun franchise(id: String): List<Release> = JSONObject(request("/anime/franchises/${URLEncoder.encode(id,"UTF-8")}")).optJSONArray("franchise_releases").objects().sortedBy { it.optInt("sort_order") }.mapNotNull { it.optJSONObject("release")?.let(::parseRelease) }
+    suspend fun libraryReleases(ids:List<Int>):List<Release> = ids.distinct().chunked(30).flatMap{batch->
+        JSONObject(request("/anime/releases/list?ids=${batch.joinToString(",")}&limit=30&exclude=episodes,torrents,members,sponsors")).optJSONArray("data").objects().map(::parseRelease)
+    }.sortedBy{ids.indexOf(it.id)}
     suspend fun latest(limit:Int=9): List<Release> = JSONArray(request("/anime/releases/latest?limit=$limit")).objects().map(::parseRelease)
     suspend fun catalog(screen:Screen.Catalog,page:Int=screen.page):CatalogPage {
         val result=parseCatalogPage(request(catalogPath(screen,page)),page)

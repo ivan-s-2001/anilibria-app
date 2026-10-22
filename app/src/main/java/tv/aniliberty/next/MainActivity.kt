@@ -1,6 +1,5 @@
 package tv.aniliberty.next
 
-import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -87,10 +86,10 @@ class MainActivity : ComponentActivity() {
         }
     }
     private fun homeMenuLayout(){
-        if((current==Screen.Home || current is Screen.Catalog || current is Screen.Section) && menu.parent===shell){
+        if(current!=Screen.Welcome && menu.parent===shell){
             shell.removeView(menu);shell.setPadding(dp(60),0,0,0)
             root.addView(menu,android.widget.FrameLayout.LayoutParams(dp(if(menuOpen)196 else 60),-1))
-        }else if(current!=Screen.Home && current !is Screen.Catalog && current !is Screen.Section && menu.parent===root){
+        }else if(current==Screen.Welcome && menu.parent===root){
             root.removeView(menu);shell.setPadding(0,0,0,0)
             shell.addView(menu,0,LinearLayout.LayoutParams(dp(if(menuOpen)196 else 60),-1))
         }
@@ -169,6 +168,15 @@ class MainActivity : ComponentActivity() {
         }.apply{targetPosition=target})
     }
     override fun dispatchKeyEvent(event:KeyEvent):Boolean {
+        if((current is Screen.Library || current is Screen.Franchise) && !menuOpen){
+            val position=list.findFocus()?.let{list.findContainingItemView(it)}?.let{list.getChildAdapterPosition(it)}?:-1
+            if(adapter.rows.getOrNull(position)?.kind==Kind.POSTER){
+                val first=adapter.rows.indexOfFirst{it.kind==Kind.POSTER};val column=(position-first)%4
+                if(event.keyCode==KeyEvent.KEYCODE_DPAD_RIGHT && (column==3 || adapter.rows.getOrNull(position+1)?.kind!=Kind.POSTER))return true
+                if(event.keyCode==KeyEvent.KEYCODE_DPAD_LEFT && column==0){if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0)openMenu();return true}
+                if(event.keyCode==KeyEvent.KEYCODE_DPAD_UP && position-first<4)return true
+            }
+        }
         if(current is Screen.Section && !menuOpen){
             val position=list.findFocus()?.let{list.findContainingItemView(it)}?.let{list.getChildAdapterPosition(it)}?:-1
             val kinds=listOf(Kind.POSTER,Kind.GENRE,Kind.FRANCHISE,Kind.FEATURE)
@@ -262,7 +270,7 @@ class MainActivity : ComponentActivity() {
         adapter=PageAdapter(::navigate,::selectTab,::play,::favorite,{rememberFocus();model.open(Screen.Detail(it.id))},
             { id -> prefs.getLong("position:$id",0) to prefs.getLong("duration:$id",0) },
             { id -> prefs.getString("last:$id",null) },::returnToTabs, { index -> enterDay=true;val previous=model.state.value;model.homeDay(index);if(previous==model.state.value)render(model.state.value) },::quickActions)
-        grid.spanSizeLookup=object:GridLayoutManager.SpanSizeLookup(){override fun getSpanSize(position:Int)=when(adapter.rows.getOrNull(position)?.kind){Kind.POSTER->if(current is Screen.Catalog || current is Screen.Section)5 else 3;Kind.GENRE->if(current is Screen.Section)5 else 3;Kind.EPISODE,Kind.FEATURE,Kind.FRANCHISE->5;else->grid.spanCount}}
+        grid.spanSizeLookup=object:GridLayoutManager.SpanSizeLookup(){override fun getSpanSize(position:Int)=when(adapter.rows.getOrNull(position)?.kind){Kind.POSTER->if(current is Screen.Catalog || current is Screen.Section || current is Screen.Library || current is Screen.Franchise)5 else 3;Kind.GENRE->if(current is Screen.Section)5 else 3;Kind.EPISODE,Kind.FEATURE,Kind.FRANCHISE->5;else->grid.spanCount}}
         list.addOnScrollListener(object:RecyclerView.OnScrollListener(){
             override fun onScrolled(view:RecyclerView,dx:Int,dy:Int){
                 val state=model.state.value
@@ -342,10 +350,9 @@ class MainActivity : ComponentActivity() {
         when(index){0->model.open(Screen.Home);1->model.open(Screen.Catalog());2->search();3->library()}
     }
     private fun search(){
-        val input=EditText(this).apply{hint="Название аниме";isSingleLine=true;imeOptions=EditorInfo.IME_ACTION_SEARCH}
-        val dialog=AlertDialog.Builder(this).setTitle("Поиск").setView(input).setNegativeButton("Отмена",null).setPositiveButton("Найти"){_,_->model.open(Screen.Catalog(input.text.toString().trim()))}.create()
-        input.setOnEditorActionListener{_,action,_->if(action==EditorInfo.IME_ACTION_SEARCH){model.open(Screen.Catalog(input.text.toString().trim()));dialog.dismiss();true}else false}
-        dialog.show();input.requestFocus()
+        val screen=(model.state.value.screen as?Screen.Catalog)?:Screen.Catalog()
+        if(model.state.value.screen!=screen)model.open(screen)
+        catalogSearch(screen)
     }
     private var enterCatalogResults=false
     private var catalogReferences:Map<String,List<CatalogChoice>> = emptyMap()
@@ -446,9 +453,12 @@ class MainActivity : ComponentActivity() {
     }
     private fun library(){
         val items=JSONArray(prefs.getString("library","[]"))
-        if(items.length()==0){Toast.makeText(this,"Библиотека пуста. Добавьте тайтл на его странице.",Toast.LENGTH_LONG).show();return}
-        val values=(0 until items.length()).map{items.getJSONObject(it)}
-        AlertDialog.Builder(this).setTitle("Моя библиотека · на этом телевизоре").setItems(values.map{it.getString("title")}.toTypedArray()){_,i->model.open(Screen.Detail(values[i].getInt("id")))}.setNegativeButton("Закрыть",null).show()
+        val ids=(0 until items.length()).mapNotNull{items.optJSONObject(it)?.optInt("id")?.takeIf{id->id>0}}
+        rememberFocus();model.open(Screen.Library(ids))
+    }
+    private fun isFavorite(id:Int):Boolean {
+        val items=JSONArray(prefs.getString("library","[]"))
+        return (0 until items.length()).any{items.optJSONObject(it)?.optInt("id")==id}
     }
     private fun favorite(release:Release){
         val old=JSONArray(prefs.getString("library","[]"));val next=JSONArray();var found=false
@@ -456,6 +466,10 @@ class MainActivity : ComponentActivity() {
         if(!found)next.put(JSONObject().put("id",release.id).put("title",release.title))
         prefs.edit().putString("library",next.toString()).apply()
         Toast.makeText(this,if(found)"Удалено из библиотеки"else"Добавлено в библиотеку",Toast.LENGTH_SHORT).show()
+        if(current is Screen.Library){
+            val ids=(0 until next.length()).map{next.getJSONObject(it).getInt("id")}
+            model.open(Screen.Library(ids),false)
+        }else if(current is Screen.Detail)render(model.state.value)
     }
     private fun continueActions(item:ContinueEpisode){
         val panel=TvSidePanel(this,item.releaseTitle)
@@ -498,15 +512,16 @@ class MainActivity : ComponentActivity() {
                 2->{rememberFocus();model.open(Screen.Detail(item.id))}
             }
         }
-        if(current is Screen.Catalog){
+        run {
             val panel=TvSidePanel(this,item.title)
             labels.forEachIndexed{index,label->panel.addChoice(label){panel.dismiss();choose(index)}}
             panel.addAction("Закрыть"){panel.dismiss()}
             panel.show()
-        }else AlertDialog.Builder(this).setTitle(item.title).setItems(labels){_,choice->choose(choice)}.show()
+        }
     }
     private fun play(episode:Episode){
         val release=model.state.value.detail?:return
+        if(release.blocked){Toast.makeText(this,"Просмотр этого тайтла ограничен",Toast.LENGTH_LONG).show();return}
         if(episode.streams.isEmpty()){Toast.makeText(this,"Для этой серии нет доступного HLS-потока",Toast.LENGTH_LONG).show();return}
         rememberFocus()
         startActivity(Intent(this,PlayerActivity::class.java).putExtra("release",release.id).putExtra("episode",episode.id))
@@ -528,18 +543,21 @@ class MainActivity : ComponentActivity() {
         try{startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url)))}catch(_:ActivityNotFoundException){Toast.makeText(this,"Нет приложения для открытия ссылки",Toast.LENGTH_LONG).show()}
     }
     private fun showTorrents(releaseId:Int){
-        val loading=AlertDialog.Builder(this).setMessage("Загрузка раздач…").setNegativeButton("Отмена",null).create()
-        val task=lifecycleScope.launch {
+        val panel=TvSidePanel(this,"Торренты")
+        panel.message("Загрузка раздач…")
+        var task:kotlinx.coroutines.Job?=null
+        panel.addAction("Закрыть"){task?.cancel();panel.dismiss()}
+        panel.setOnCancelListener{task?.cancel()};panel.show()
+        task=lifecycleScope.launch{
             try{
                 val items=model.api.releaseTorrents(releaseId)
-                loading.dismiss()
-                if(items.isEmpty())AlertDialog.Builder(this@MainActivity).setMessage("Раздачи пока недоступны").setPositiveButton("Закрыть",null).show()
-                else AlertDialog.Builder(this@MainActivity).setTitle("Торренты").setItems(items.map{listOf(it.title,it.description).filter(String::isNotBlank).joinToString("\n")}.toTypedArray()){_,index->openLink(items[index].magnet)}.setNegativeButton("Закрыть",null).show()
-            }catch(e:kotlinx.coroutines.CancellationException){throw e}catch(_:Exception){loading.dismiss();Toast.makeText(this@MainActivity,"Не удалось загрузить раздачи",Toast.LENGTH_LONG).show()}
+                panel.body.removeAllViews()
+                if(items.isEmpty())panel.message("Раздачи пока недоступны")
+                else items.forEach{item->panel.addChoice(listOf(item.title,item.description).filter{it.isNotBlank()}.joinToString("\n"),icon=R.drawable.ic_download){openLink(item.magnet)}}
+                panel.body.getFocusables(View.FOCUS_FORWARD).firstOrNull()?.requestFocus()
+            }catch(e:kotlinx.coroutines.CancellationException){throw e}
+            catch(_:Exception){panel.message("Не удалось загрузить раздачи. Проверьте подключение.")}
         }
-        loading.setOnCancelListener{task.cancel()}
-        loading.setOnShowListener{loading.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener{task.cancel();loading.dismiss()}}
-        loading.show()
     }
     private fun openSection(kind:HomeSection){rememberFocus();model.open(Screen.Section(kind))}
     private fun releaseCards(items:List<Release>,key:String)=items.distinctBy{it.id}.map{Row("$key:release:${it.id}",Kind.POSTER,release=it,selected=if(key.startsWith("latest",true)||key.startsWith("schedule",true))1 else 0)}
@@ -584,10 +602,10 @@ class MainActivity : ComponentActivity() {
         val sameHome=current==Screen.Home && state.screen==Screen.Home && adapter.rows.any{it.kind==Kind.SHELF}
         val retainedFocus = if(current==state.screen) list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String } else null
         current=state.screen
-        val section=when(current){Screen.Home->0;is Screen.Catalog,is Screen.Section,is Screen.Franchise->1;else->selectedSection}
+        val section=when(current){Screen.Home->0;is Screen.Catalog,is Screen.Section,is Screen.Franchise->1;is Screen.Library->3;else->selectedSection}
         if(section!=selectedSection){selectedSection=section;buildMenu()}
         homeMenuLayout()
-        val spans=if((current as?Screen.Section)?.kind==HomeSection.FRANCHISES)15 else if(current is Screen.Catalog || current is Screen.Section)20 else 15
+        val spans=if((current as?Screen.Section)?.kind==HomeSection.FRANCHISES)15 else if(current is Screen.Catalog || current is Screen.Section || current is Screen.Library || current is Screen.Franchise)20 else 15
         if(grid.spanCount!=spans)grid.spanCount=spans
         menu.visibility=if(current==Screen.Welcome)View.GONE else View.VISIBLE
         val rows=mutableListOf<Row>()
@@ -663,9 +681,17 @@ class MainActivity : ComponentActivity() {
                     if(cards.isEmpty())rows+=Row("section-empty",Kind.TEXT,if(query.isNotBlank())"Ничего не найдено"else "Пока ничего нет")
                 }
 
+                is Screen.Library->{
+                    rows+=Row("library-heading",Kind.HEADING,"Моя библиотека",selected=1)
+                    rows+=state.releases.map{Row("library:${it.id}",Kind.POSTER,release=it,selected=2)}
+                    if(state.releases.isEmpty()){
+                        rows+=Row("library-empty",Kind.TEXT,"Здесь будут ваши тайтлы","Добавляйте их на странице тайтла или удержанием OK на карточке.")
+                        rows+=Row("library-catalogue",Kind.ACTION,"Открыть каталог",click={model.open(Screen.Catalog())})
+                    }
+                }
                 is Screen.Franchise->{
                     rows+=Row("franchise-heading",Kind.HEADING,screen.title,"Порядок просмотра")
-                    rows+=state.releases.map{Row("release:${it.id}",Kind.POSTER,release=it)}
+                    rows+=state.releases.map{Row("release:${it.id}",Kind.POSTER,release=it,selected=2)}
                     if(state.releases.isEmpty())rows+=Row("empty",Kind.TEXT,"Релизы пока не указаны")
                 }
                 is Screen.Catalog->{
@@ -688,14 +714,14 @@ class MainActivity : ComponentActivity() {
                 }
                 is Screen.Detail->{
                     val r=state.detail?:return
-                    rows+=Row("hero",Kind.HERO,release=r)
+                    rows+=Row("hero",Kind.HERO,release=r,selected=if(isFavorite(r.id))1 else 0)
                     val description=android.text.Html.fromHtml(r.description,android.text.Html.FROM_HTML_MODE_LEGACY).toString().trim()
-                    if(description.isNotBlank())rows+=Row("synopsis",Kind.ACTION,description.take(220).let{if(it.length<description.length)"$it…"else it},"Описание",click={AlertDialog.Builder(this).setTitle(r.title).setMessage(description).setPositiveButton("Закрыть",null).show()})
+                    if(description.isNotBlank())rows+=Row("synopsis",Kind.ACTION,description.take(220).let{if(it.length<description.length)"$it…"else it},"Описание",click={TvSidePanel(this,"Описание").apply{message(description);addAction("Закрыть"){dismiss()};show()}})
                     rows+=Row("more",Kind.ACTION,"Ещё",click={
-                        AlertDialog.Builder(this).setTitle(r.title).setItems(arrayOf("Открыть страницу на сайте","Торренты")){_,choice->
-                            if(choice==0)openLink("https://www.aniliberty.top/anime/releases/release/${r.alias}/episodes")
-                            else showTorrents(r.id)
-                        }.show()
+                        val panel=TvSidePanel(this,"Дополнительно")
+                        panel.addChoice("Открыть страницу на сайте",icon=R.drawable.ic_arrow_right){panel.dismiss();openLink("https://www.aniliberty.top/anime/releases/release/${r.alias}/episodes")}
+                        panel.addChoice("Торренты",icon=R.drawable.ic_download){panel.dismiss();showTorrents(r.id)}
+                        panel.addAction("Закрыть"){panel.dismiss()};panel.show()
                     })
                     rows+=Row("tabs",Kind.TABS,selected=screen.tab)
                     when(screen.tab){

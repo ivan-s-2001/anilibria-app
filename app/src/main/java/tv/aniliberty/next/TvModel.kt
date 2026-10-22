@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 sealed interface Screen {
     data object Welcome : Screen
     data object Home : Screen
+    data class Library(val ids:List<Int>):Screen
     data class Catalog(val query: String = "", val page: Int = 1, val genre: Int? = null, val title: String? = null,val filters:CatalogFilter=CatalogFilter()) : Screen
     data class Section(val kind:HomeSection,val page:Int=1):Screen
     data class Franchise(val id: String, val title: String) : Screen
@@ -58,6 +59,7 @@ class TvModel : ViewModel() {
                         if(sectionCache.size>=16)sectionCache.remove(sectionCache.keys.first())
                         UiState(screen,section=data,more=data.more,catalogPage=screen.page).also{sectionCache[screen]=it}
                     }
+                    is Screen.Library -> UiState(screen,releases=api.libraryReleases(screen.ids))
                     is Screen.Franchise -> UiState(screen, releases = api.franchise(screen.id))
                     is Screen.Detail -> UiState(screen, detail = api.release(screen.id))
                     else -> UiState(screen)

@@ -344,10 +344,7 @@ class PageAdapter(
                     val item = action(line,text,icon=icons[i],click={tab(i)})
                     item.textSize=15f; item.setTextColor(if(i==row.selected)RED else MUTED)
                     item.setOnFocusChangeListener { _, focused -> item.setTextColor(if(focused)WHITE else if(i==row.selected)RED else MUTED) }
-                    item.background = StateListDrawable().apply {
-                        addState(intArrayOf(android.R.attr.state_focused),shape(0xFF242424.toInt(),view.dp(4).toFloat()))
-                        addState(intArrayOf(),shape(Color.TRANSPARENT))
-                    }
+                    item.webControlBackground()
                     item.setOnKeyListener { _, key, event ->
                         if(key==KeyEvent.KEYCODE_DPAD_DOWN) { if(event.action==KeyEvent.ACTION_UP)tab(i);true } else false
                     }
@@ -371,9 +368,11 @@ class PageAdapter(
                 val controls=LinearLayout(view.context)
                 info.addView(controls,LinearLayout.LayoutParams(-1,view.dp(48)).apply{topMargin=view.dp(10)})
                 val episode = r.episodes.firstOrNull { it.id == lastEpisode(r.id) } ?: r.episodes.firstOrNull()
-                if(episode!=null && !r.blocked) controls.addView(action(controls,if(progress(episode.id).first>0) "Продолжить" else "Смотреть",true,R.drawable.ic_play){play(episode)},LinearLayout.LayoutParams(-2,-1).apply{marginEnd=view.dp(12)})
-                controls.addView(action(controls,"В библиотеку",icon=R.drawable.ic_favorite){favorite(r)},LinearLayout.LayoutParams(-2,-1))
+                if(episode!=null && episode.streams.isNotEmpty() && !r.blocked) controls.addView(action(controls,if(progress(episode.id).first>0) "Продолжить" else "Смотреть",true,R.drawable.ic_play){play(episode)},LinearLayout.LayoutParams(-2,-1).apply{marginEnd=view.dp(12)})
+                controls.addView(action(controls,if(row.selected==1)"Убрать из библиотеки"else"В библиотеку",icon=R.drawable.ic_favorite){favorite(r)},LinearLayout.LayoutParams(-2,-1))
                 if(r.blocked)text("Просмотр ограничен правообладателем или регионом",15f,MUTED)
+                else if(episode==null)text("Серии ещё не опубликованы",15f,MUTED)
+                else if(episode.streams.isEmpty())text("Поток для выбранной серии пока недоступен",15f,MUTED)
             }
             Kind.GENRE,Kind.FRANCHISE -> {
                 val box=view as FrameLayout
@@ -604,13 +603,17 @@ class PageAdapter(
                 val box=view as FrameLayout;val e=row.episode!!
                 (box.getChildAt(0)as ImageView).load(e.preview)
                 val watched=progress(e.id)
-                (box.getChildAt(2)as TextView).label("${e.label}\n${if(e.duration>0)"%d:%02d".format(e.duration/60,e.duration%60) else ""}${if(watched.first>0)" · Продолжить" else ""}",17f,WHITE,true)
+                val completed=watched.second>0 && watched.first>=watched.second-1000
+                val episodeTitle=if(e.name.isBlank())e.label else "${number(e.ordinal)} · ${e.name}"
+                val duration=if(e.duration>0)"%d:%02d".format(e.duration/60,e.duration%60)else ""
+                val status=when{e.streams.isEmpty()->"Пока недоступно";completed->"Просмотрено";watched.first>0->"Продолжить";else->""}
+                (box.getChildAt(2)as TextView).apply{label(listOf(episodeTitle,listOf(duration,status).filter{it.isNotBlank()}.joinToString(" · ")).filter{it.isNotBlank()}.joinToString("\n"),16f,WHITE,true);maxLines=4;ellipsize=android.text.TextUtils.TruncateAt.END}
                 (box.getChildAt(3)as android.widget.ProgressBar).progress=if(watched.second>0)(watched.first*1000/watched.second).toInt().coerceIn(0,1000)else 0
-                box.contentDescription=e.label;box.setOnClickListener{play(e)}
+                box.contentDescription=listOf(episodeTitle,duration,status).filter{it.isNotBlank()}.joinToString(". ");box.setOnClickListener{play(e)}
             }
             Kind.HEADING -> {
                 val box=view as LinearLayout
-                if(row.key=="section-heading" || row.key.startsWith("period:"))box.layoutParams=box.layoutParams.apply{height=view.dp(52)}
+                box.layoutParams=box.layoutParams.apply{height=if(row.key=="section-heading" || row.key.startsWith("period:") || row.key=="library-heading")view.dp(52)else -2}
                 (box.getChildAt(0)as TextView).label(row.title,if(row.selected==1)24f else 18f,WHITE,true)
                 (box.getChildAt(1)as TextView).apply{label(row.subtitle,12f,MUTED);visibility=if(row.subtitle.isBlank())View.GONE else View.VISIBLE}
                 val title=box.getChildAt(0)as TextView
@@ -635,7 +638,8 @@ class PageAdapter(
                 t.label(listOf(row.title,row.subtitle).filter(String::isNotBlank).joinToString("\n"),if(row.kind==Kind.HEADING)22f else 16f,if(row.kind==Kind.TEXT)MUTED else WHITE,row.kind==Kind.HEADING)
                 t.setPadding(0,view.dp(8),0,view.dp(8));t.isFocusable=row.click!=null || (contentStart>=0 && position>=contentStart);t.isClickable=row.click!=null
                 t.background=null
-                if(row.click!=null){t.focusBackground();t.setPadding(view.dp(12),view.dp(10),view.dp(12),view.dp(10))}
+                if(t.isFocusable)t.webControlBackground()
+                if(row.click!=null){t.webControlBackground();t.setPadding(view.dp(12),view.dp(10),view.dp(12),view.dp(10))}
                 t.setOnClickListener(row.click?.let{callback->View.OnClickListener{callback()}})
                 t.isClickable = row.click != null
                 if(position==contentStart) t.setOnKeyListener{_,key,event->if(key==KeyEvent.KEYCODE_DPAD_UP){if(event.action==KeyEvent.ACTION_UP)returnToTabs();true}else false}

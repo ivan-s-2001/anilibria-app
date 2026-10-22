@@ -1,6 +1,5 @@
 package tv.aniliberty.next
 
-import android.app.AlertDialog
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -27,6 +26,9 @@ import kotlinx.coroutines.launch
 class PlayerActivity : ComponentActivity() {
     private lateinit var root:FrameLayout
     private lateinit var video:PlayerView
+    private lateinit var buffering:android.widget.ProgressBar
+    private var errorPanel:TvSidePanel?=null
+    private lateinit var autoNextButton:TextView
     private lateinit var controls:LinearLayout
     private lateinit var title:TextView
     private lateinit var clock:TextView
@@ -85,6 +87,8 @@ class PlayerActivity : ComponentActivity() {
         root=FrameLayout(this).apply{setBackgroundColor(android.graphics.Color.BLACK)}
         video=PlayerView(this).apply{useController=false}
         root.addView(video,FrameLayout.LayoutParams(-1,-1))
+        buffering=android.widget.ProgressBar(this).apply{isFocusable=false;contentDescription="Загрузка видео"}
+        root.addView(buffering,FrameLayout.LayoutParams(dp(48),dp(48),Gravity.CENTER))
         controls=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(28),dp(16),dp(28),dp(20));setBackgroundColor(0xEE121212.toInt());visibility=View.GONE}
         root.addView(controls,FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM))
         title=TextView(this).apply{label("Загрузка…",18f,WHITE,true);maxLines=2};controls.addView(title)
@@ -113,11 +117,13 @@ class PlayerActivity : ComponentActivity() {
         nextButton=action(buttons,"Следующий",icon=R.drawable.ic_next){nextEpisode(release?.episodes.orEmpty(),current?.id)?.let{startEpisode(it)}};buttons.addView(nextButton)
         episodesButton=action(buttons,"Эпизоды",icon=R.drawable.ic_episodes){episodes()};buttons.addView(episodesButton)
         qualityButton=action(buttons,"Качество",icon=R.drawable.ic_settings){qualities()};buttons.addView(qualityButton)
-        buttons.addView(action(buttons,"Автопереход"){
+        autoNextButton=action(buttons,if(prefs.getBoolean("auto-next",true))"Автопереход: вкл"else "Автопереход: выкл"){
             val enabled=!prefs.getBoolean("auto-next",true);prefs.edit().putBoolean("auto-next",enabled).apply()
+            autoNextButton.text=if(enabled)"Автопереход: вкл"else "Автопереход: выкл"
             if(!enabled)cancelNext()
             Toast.makeText(this,if(enabled)"Автопереход включён"else"Автопереход отключён",Toast.LENGTH_SHORT).show()
-        })
+        };buttons.addView(autoNextButton)
+        for(index in 0 until buttons.childCount){buttons.getChildAt(index).layoutParams=(buttons.getChildAt(index).layoutParams as?LinearLayout.LayoutParams?:LinearLayout.LayoutParams(-2,-2)).apply{marginEnd=dp(8)}}
         setContentView(root)
         onBackPressedDispatcher.addCallback(this,object:OnBackPressedCallback(true){override fun handleOnBackPressed(){
             when{
@@ -139,9 +145,19 @@ class PlayerActivity : ComponentActivity() {
                 current=episode
                 if(!stopped)startEpisode(episode,quality,desiredPlay)
             }catch(e:CancellationException){throw e}catch(_:Exception){
-                AlertDialog.Builder(this@PlayerActivity).setTitle("Не удалось начать просмотр").setMessage("Просмотр недоступен или нет подключения.").setPositiveButton("Назад"){_,_->finish()}.setOnCancelListener{finish()}.show()
+                if(!isFinishing && !isDestroyed)showPlaybackError("Просмотр недоступен или нет подключения."){recreate()}
             }
         }
+    }
+    private fun showPlaybackError(message:String,retry:()->Unit){
+        buffering.visibility=View.GONE;errorPanel?.dismiss()
+        val dialog=TvSidePanel(this,"Не удалось воспроизвести")
+        errorPanel=dialog;dialog.message(message)
+        dialog.addChoice("Повторить",icon=R.drawable.ic_refresh){dialog.dismiss();retry()}
+        if(current?.streams?.size?.let{it>1}==true)dialog.addChoice("Выбрать качество",icon=R.drawable.ic_settings){dialog.dismiss();qualities()}
+        dialog.addAction("Вернуться к тайтлу"){dialog.dismiss();finish()}
+        dialog.setOnCancelListener{if(current==null)finish()else showControls()}
+        dialog.show()
     }
     private fun refreshControls(){handler.removeCallbacks(hide);handler.postDelayed(hide,5000)}
     private fun showControls(focus:View?=null){controls.visibility=View.VISIBLE;(focus?:pause).requestFocus();refreshControls()}
@@ -150,6 +166,8 @@ class PlayerActivity : ComponentActivity() {
     private fun startEpisode(episode:Episode, requestedQuality:Int=0, play:Boolean=true){
         val selected=requestedQuality.takeIf{it in episode.streams.indices}?:0
         val stream=episode.streams.getOrNull(selected)?:run{Toast.makeText(this,"Нет доступного потока",Toast.LENGTH_LONG).show();return}
+        errorPanel?.dismiss();errorPanel=null
+        buffering.visibility=View.VISIBLE
         save();cancelNext();player?.release();current=episode;quality=selected;desiredPlay=play
         val engine=ExoPlayer.Builder(this).build();player=engine;video.player=engine
         title.text="${release?.title.orEmpty()} · ${episode.label}"
@@ -157,11 +175,16 @@ class PlayerActivity : ComponentActivity() {
         nextButton.visibility=if(nextEpisode(release?.episodes.orEmpty(),episode.id)!=null)View.VISIBLE else View.GONE
         engine.addListener(object:Player.Listener{
             override fun onPlayerError(error:PlaybackException){
+                if(player!==engine || stopped)return
                 save();cancelNext();showControls()
-                AlertDialog.Builder(this@PlayerActivity).setTitle("Ошибка воспроизведения").setMessage("Повторите загрузку или выберите другое качество.").setPositiveButton("Повторить"){_,_->startEpisode(episode,quality)}.setNeutralButton("Качество"){_,_->qualities()}.setNegativeButton("Назад"){_,_->finish()}.show()
+                showPlaybackError("Повторите загрузку или выберите другое качество."){startEpisode(episode,quality)}
             }
             override fun onIsPlayingChanged(isPlaying:Boolean){if(!isPlaying)save()}
-            override fun onPlaybackStateChanged(state:Int){if(state==Player.STATE_ENDED){save();offerNext()}}
+            override fun onPlaybackStateChanged(state:Int){
+                if(player!==engine)return
+                buffering.visibility=if(state==Player.STATE_BUFFERING)View.VISIBLE else View.GONE
+                if(state==Player.STATE_ENDED){save();offerNext()}
+            }
         })
         engine.setMediaItem(MediaItem.fromUri(stream.second));engine.prepare()
         val saved=prefs.getLong("position:${episode.id}",0)
@@ -185,7 +208,7 @@ class PlayerActivity : ComponentActivity() {
         val target=build(content)
         val scroll=ScrollView(this).apply{isFillViewport=true;addView(content);isFocusable=false}
         panel=scroll;controls.visibility=View.GONE
-        root.addView(scroll,FrameLayout.LayoutParams(dp(360),-1,Gravity.END))
+        root.addView(scroll,FrameLayout.LayoutParams((resources.displayMetrics.widthPixels*.42f).toInt(),-1,Gravity.END))
         scroll.post{(target?:content.getChildAt(1)).requestFocus()}
     }
     private fun closePanel(){panel?.let{root.removeView(it)};panel=null;showControls(panelCaller);panelCaller=null}
@@ -220,6 +243,7 @@ class PlayerActivity : ComponentActivity() {
     private fun offerNext(){
         cancelNext();val episode=nextEpisode(release?.episodes.orEmpty(),current?.id)?:run{showControls();return}
         if(panel!=null || stopped)return
+        if(episode.streams.isEmpty()){showControls();Toast.makeText(this,"Следующая серия пока недоступна",Toast.LENGTH_LONG).show();return}
         val offer=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(16),dp(20),dp(16));setBackgroundColor(0xFF212121.toInt())}
         nextOffer=offer;nextRemaining=10
         val auto=prefs.getBoolean("auto-next",true)
@@ -237,7 +261,11 @@ class PlayerActivity : ComponentActivity() {
             if(direction!=0){val candidate=currentFocus?.focusSearch(direction);if(candidate==null || !insidePanel(candidate))return true}
             return super.dispatchKeyEvent(event)
         }
-        if(nextOffer!=null)return super.dispatchKeyEvent(event)
+        if(nextOffer!=null){
+            val direction=when(event.keyCode){KeyEvent.KEYCODE_DPAD_LEFT->View.FOCUS_LEFT;KeyEvent.KEYCODE_DPAD_RIGHT->View.FOCUS_RIGHT;KeyEvent.KEYCODE_DPAD_UP->View.FOCUS_UP;KeyEvent.KEYCODE_DPAD_DOWN->View.FOCUS_DOWN;else->0}
+            if(direction!=0){val target=currentFocus?.focusSearch(direction);if(target==null || !insideView(target,nextOffer!!))return true}
+            return super.dispatchKeyEvent(event)
+        }
         when(event.keyCode){
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE->{if(event.action==KeyEvent.ACTION_DOWN)togglePause();return true}
             KeyEvent.KEYCODE_MEDIA_PLAY->{if(event.action==KeyEvent.ACTION_DOWN)player?.play();return true}
@@ -249,8 +277,9 @@ class PlayerActivity : ComponentActivity() {
         if(event.action==KeyEvent.ACTION_DOWN)refreshControls()
         return super.dispatchKeyEvent(event)
     }
-    private fun insidePanel(view:View):Boolean{var node:android.view.ViewParent?=view.parent;while(node!=null){if(node===panel)return true;node=node.parent};return false}
+    private fun insidePanel(view:View):Boolean=panel?.let{insideView(view,it)}?:false
+    private fun insideView(view:View,container:View):Boolean{var node:android.view.ViewParent?=view.parent;while(node!=null){if(node===container)return true;node=node.parent};return false}
     override fun onStart(){super.onStart();stopped=false;handler.post(ticker);if(player==null)current?.let{startEpisode(it,quality,desiredPlay)}}
-    override fun onStop(){stopped=true;desiredPlay=player?.playWhenReady?:desiredPlay;save();cancelNext();handler.removeCallbacksAndMessages(null);video.player=null;player?.release();player=null;super.onStop()}
+    override fun onStop(){errorPanel?.dismiss();errorPanel=null;stopped=true;desiredPlay=player?.playWhenReady?:desiredPlay;save();cancelNext();handler.removeCallbacksAndMessages(null);video.player=null;player?.release();player=null;super.onStop()}
     override fun onSaveInstanceState(out:Bundle){out.putString("episode",current?.id);out.putInt("quality",quality);out.putBoolean("playing",player?.playWhenReady?:desiredPlay);super.onSaveInstanceState(out)}
 }
