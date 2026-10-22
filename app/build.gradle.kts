@@ -3,7 +3,6 @@ plugins { id("com.android.application") }
 android {
     namespace = "tv.aniliberty.next"
     compileSdk = 36
-    lint { lintConfig = file("lint.xml") }
     defaultConfig {
         applicationId = "tv.aniliberty.next"
         minSdk = 26
@@ -36,7 +35,6 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.3.0")
     implementation("androidx.media3:media3-exoplayer:1.8.0")
     implementation("androidx.media3:media3-exoplayer-hls:1.8.0")
-    implementation("androidx.media3:media3-exoplayer-ima:1.8.0")
     implementation("androidx.media3:media3-ui:1.8.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
