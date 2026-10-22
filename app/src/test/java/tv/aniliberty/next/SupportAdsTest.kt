@@ -1,6 +1,7 @@
 package tv.aniliberty.next
 
 import android.content.Context
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Before
@@ -80,7 +81,7 @@ class SupportAdsTest {
             )
         assertFalse(ads.enabled)
         assertFalse(ads.decided)
-        assertNull(ads.campaign())
+        assertTrue(ads.campaigns().isEmpty())
         ads.completeChoice()
         assertTrue(SupportAds(context).decided)
     }
@@ -122,6 +123,47 @@ class SupportAdsTest {
             VastCampaign("a", "https://ads.example/vast", "Company", "erid"),
             items.single(),
         )
+    }
+
+    @Test
+    fun loadsAllProvidersRatherThanOnlyTheFirst() = runBlocking {
+        TvSettings(context).toggle("support-video-ads", false)
+        val ads =
+            SupportAds(
+                context,
+                AccountTransport { path, _, _, token ->
+                    assertEquals("/media/vasts", path)
+                    assertNull(token)
+                    """[{"id":"bad","url":"https://first.example/vast"},{"id":"second","url":"https://second.example/vast"},{"id":"third","url":"https://third.example/vast"}]"""
+                },
+            )
+        assertEquals(listOf("bad", "second", "third"), ads.campaigns().map { it.id })
+    }
+
+    @Test
+    fun waterfallAdvancesAfterErrorsButStopsAfterAnAdStarts() {
+        var clock = 0L
+        val first = VastCampaign("1", "https://first.example", "", "")
+        val second = VastCampaign("2", "https://second.example", "", "")
+        val queue = AdCampaignQueue(listOf(first, second), now = { clock }, timeoutMs = 10000)
+        assertEquals(first, queue.next())
+        clock = 4500
+        assertEquals(second, queue.next())
+        queue.markStarted()
+        assertNull(queue.next())
+        val expired = AdCampaignQueue(listOf(first), now = { clock }, timeoutMs = 1000)
+        clock += 1000
+        assertNull(expired.next())
+    }
+
+    @Test
+    fun campaignListSlowerThanOldTimeoutStillReachesPlayer() = runBlocking {
+        val expected = listOf(VastCampaign("slow", "https://ads.example/vast", "", ""))
+        val request = async {
+            kotlinx.coroutines.delay(3000)
+            expected
+        }
+        assertEquals(expected, awaitAdCampaigns(request))
     }
 
     @Test

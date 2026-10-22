@@ -3094,6 +3094,21 @@ class MainActivity : ComponentActivity() {
                             "Баннеры и рекламные материалы",
                             false,
                         )
+                        if (SupportAds(this).enabled)
+                            rows +=
+                                Row(
+                                    "support-ad-status",
+                                    Kind.SETTING,
+                                    "Состояние видеорекламы",
+                                    favoriteTitle = "›",
+                                    click = {
+                                        TvSidePanel(this, "Видеореклама").apply {
+                                            message(SupportAds(this@MainActivity).lastStatus())
+                                            addAction("Закрыть") { dismiss() }
+                                            show()
+                                        }
+                                    },
+                                )
                         rows += Row("settings-menu", Kind.HEADING, "Кнопки бокового меню")
                         localToggle("menu-random", "Случайный релиз", "", false)
                         localToggle("menu-search", "Поиск", "")

@@ -45,11 +45,18 @@ internal class SupportAds(
         prefs.edit().putLong("support-ad-shown:tv", now).apply()
     }
 
-    suspend fun campaign(): VastCampaign? {
-        if (!enabled) return null
+    suspend fun campaigns(): List<VastCampaign> {
+        if (!enabled) return emptyList()
         return parseVastCampaigns(transport.request("/media/vasts", "GET", null, null))
-            .firstOrNull()
     }
+
+    fun status(message: String) {
+        prefs.edit().putString("support-ad-status", message).apply()
+        android.util.Log.i("AniLibertyAds", message)
+    }
+
+    fun lastStatus(): String =
+        prefs.getString("support-ad-status", "Реклама ещё не запрашивалась").orEmpty()
 }
 
 internal fun parseVastCampaigns(body: String): List<VastCampaign> {
