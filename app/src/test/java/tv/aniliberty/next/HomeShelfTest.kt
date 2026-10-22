@@ -71,7 +71,7 @@ class HomeShelfTest {
 
     @Test fun latestShowsWebInformationOverlayOnlyOnFocus(){
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
-        val release=parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Название"},"year":2026}"""))
+        val release=parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Название"},"year":2026,"is_ongoing":true}"""))
         adapter.submit(listOf(Row("latest:1",Kind.POSTER,release=release,selected=1)))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.POSTER.ordinal)
         adapter.onBindViewHolder(holder,0)
@@ -88,7 +88,7 @@ class HomeShelfTest {
 
     @Test fun catalogueKeepsTitleVisibleAndShowsBadgeOnFocus(){
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
-        val release=parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Название"},"year":2026}"""))
+        val release=parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Название"},"year":2026,"is_ongoing":true}"""))
         adapter.submit(listOf(Row("catalogue:1",Kind.POSTER,release=release)))
         val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.POSTER.ordinal)
         adapter.onBindViewHolder(holder,0)
@@ -98,6 +98,9 @@ class HomeShelfTest {
         card.requestFocus()
         assertEquals(android.view.View.VISIBLE,card.getChildAt(3).visibility)
         assertEquals(4,card.childCount)
+        assertTrue((card.getChildAt(3)as android.widget.TextView).text.contains("Онгоинг"))
+        assertEquals(false,parseRelease(org.json.JSONObject("""{"id":2,"is_ongoing":false}""")).ongoing)
+        assertNull(parseRelease(org.json.JSONObject("""{"id":3}""")).ongoing)
         assertNotNull((card.getChildAt(0)as android.widget.ImageView).colorFilter)
     }
 

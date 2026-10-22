@@ -324,7 +324,7 @@ class PageAdapter(
                     val episodeBadge=(box.getChildAt(3)as?TextView)?:TextView(view.context).also{
                         box.addView(it,FrameLayout.LayoutParams(-2,view.dp(28),Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply{topMargin=view.dp(10)})
                     }
-                    episodeBadge.label(if(cataloguePoster)release?.type?.takeIf{it.isNotBlank()}?:"Аниме"else release?.latestEpisode?.let{"${number(it.ordinal)} эпизод"}?:"Релиз",12f,WHITE,true)
+                    episodeBadge.label(if(cataloguePoster)listOf(release?.type.orEmpty(),when(release?.ongoing){true->"Онгоинг";false->"Завершён";null->""}).filter(String::isNotBlank).joinToString(" · ").ifBlank{"Аниме"}else release?.latestEpisode?.let{"${number(it.ordinal)} эпизод"}?:"Релиз",12f,WHITE,true)
                     episodeBadge.gravity=Gravity.CENTER;episodeBadge.setPadding(view.dp(10),0,view.dp(10),0)
                     episodeBadge.background=shape(0x1AFFFFFF,view.dp(6).toFloat());episodeBadge.isFocusable=false
                     content.setPadding(view.dp(10),view.dp(44),view.dp(10),view.dp(12))
