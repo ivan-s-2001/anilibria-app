@@ -339,9 +339,9 @@ class PageAdapter(
                     episodeBadge.background=shape(0x1AFFFFFF,view.dp(6).toFloat());episodeBadge.isFocusable=false
                     val updateLabel=if(!cataloguePoster){
                         val label=(box.getChildAt(4)as?TextView)?:TextView(view.context).also{box.addView(it)}
-                        label.layoutParams=FrameLayout.LayoutParams(-1,view.dp(30),Gravity.BOTTOM).apply{bottomMargin=view.dp(6);marginStart=view.dp(8);marginEnd=view.dp(8)}
+                        label.layoutParams=FrameLayout.LayoutParams(-1,view.dp(16),Gravity.TOP).apply{topMargin=view.dp(40);marginStart=view.dp(8);marginEnd=view.dp(8)}
                         label.label(updateTimestamp(release?.latestEpisode?.updatedAt?.ifBlank{release.updatedAt}?:release?.updatedAt.orEmpty()),10f,MUTED)
-                        label.gravity=Gravity.CENTER;label.maxLines=2
+                        label.gravity=Gravity.CENTER;label.maxLines=1;label.includeFontPadding=false
                         label
                     }else null
                     val statusBadge=if(cataloguePoster){
@@ -375,7 +375,11 @@ class PageAdapter(
                         episodeBadge.visibility=if(focused)View.VISIBLE else View.GONE
                         statusBadge?.visibility=if(focused && release?.ongoing!=null)View.VISIBLE else View.GONE
                         updateLabel?.visibility=if(focused && updateLabel.text.isNotBlank())View.VISIBLE else View.GONE
-                        if(!cataloguePoster)content.setPadding(view.dp(10),view.dp(44),view.dp(10),view.dp(if(updateLabel?.text?.isNotBlank()==true)38 else 12))
+                        if(!cataloguePoster){
+                            content.setPadding(view.dp(10),view.dp(if(updateLabel?.text?.isNotBlank()==true)56 else 44),view.dp(10),view.dp(12))
+                            title.gravity=Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                            title.includeFontPadding=false
+                        }
                         image.colorFilter=if(focused)android.graphics.ColorMatrixColorFilter(floatArrayOf(.045f,0f,0f,0f,12.75f,0f,.045f,0f,0f,12.75f,0f,0f,.045f,0f,12.75f,0f,0f,0f,1f,0f))else null
                     }
                     focusPoster(box.hasFocus())
