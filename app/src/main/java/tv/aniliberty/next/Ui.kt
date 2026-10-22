@@ -342,8 +342,33 @@ class PageAdapter(
                     title.gravity=Gravity.CENTER;title.maxLines=3
                     subtitle.gravity=Gravity.CENTER;subtitle.maxLines=5;subtitle.text=row.subtitle
                     (box.getChildAt(3)as android.widget.ProgressBar).layoutParams=FrameLayout.LayoutParams(-1,view.dp(4),Gravity.BOTTOM)
+                    val item=row.watching!!
+                    val badge=(box.getChildAt(4)as?TextView)?:TextView(view.context).also{
+                        box.addView(it,FrameLayout.LayoutParams(-2,view.dp(28),Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply{topMargin=view.dp(8)})
+                    }
+                    badge.label("${number(item.ordinal)} эпизод",12f,WHITE,true)
+                    badge.gravity=Gravity.CENTER;badge.setPadding(view.dp(10),0,view.dp(10),0)
+                    badge.background=shape(0x1AFFFFFF,view.dp(6).toFloat())
+                    val playHint=(box.getChildAt(5)as?TextView)?:TextView(view.context).also{
+                        box.addView(it,FrameLayout.LayoutParams(-2,view.dp(28),Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply{bottomMargin=view.dp(10)})
+                    }
+                    playHint.label(if(item.nextUp)"Смотреть"else"Продолжить",12f,WHITE,true)
+                    playHint.gravity=Gravity.CENTER;playHint.setPadding(view.dp(10),0,view.dp(10),0)
+                    playHint.background=shape(0x1AFFFFFF,view.dp(6).toFloat())
+                    val playIcon=view.context.getDrawable(R.drawable.ic_play)!!.mutate().apply{setTint(WHITE);setBounds(0,0,view.dp(14),view.dp(14))}
+                    playHint.setCompoundDrawables(playIcon,null,null,null);playHint.compoundDrawablePadding=view.dp(4)
+                    // One focus target per episode: this visual action uses the card's OK handler.
+                    badge.isFocusable=false;playHint.isFocusable=false
+                    subtitle.text=listOf(item.episodeName,row.subtitle.substringAfter("\n","")).filter(String::isNotBlank).joinToString("\n")
+                    if(subtitle.text.isBlank())subtitle.text="Эпизод ${number(item.ordinal)}"
+                    subtitle.maxLines=2;subtitle.textSize=12f
                     fun focusContinue(focused:Boolean){
                         title.visibility=View.VISIBLE
+                        title.maxLines=2
+                        title.layoutParams=LinearLayout.LayoutParams(-1,if(focused)0 else -2,if(focused)1f else 0f)
+                        content.setPadding(view.dp(12),view.dp(if(focused)38 else 12),view.dp(12),view.dp(if(focused)42 else 16))
+                        badge.visibility=if(focused)View.VISIBLE else View.GONE
+                        playHint.visibility=if(focused)View.VISIBLE else View.GONE
                         subtitle.visibility=if(focused)View.VISIBLE else View.GONE
                         image.colorFilter=if(focused)android.graphics.ColorMatrixColorFilter(floatArrayOf(.2f,0f,0f,0f,0f,0f,.2f,0f,0f,0f,0f,0f,.2f,0f,0f,0f,0f,0f,1f,0f))else null
                     }
