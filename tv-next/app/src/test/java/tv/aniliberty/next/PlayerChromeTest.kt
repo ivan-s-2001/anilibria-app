@@ -14,17 +14,17 @@ import org.robolectric.annotation.Config
 @Config(sdk = [30])
 class PlayerChromeTest {
     @Test
-    fun timelineShowsPreviewRemainingAndHoursWithoutInventingDuration() {
+    fun timelineShowsRemainingAndHoursWithoutInventingDuration() {
         val chrome = PlayerChrome(RuntimeEnvironment.getApplication())
-        chrome.update(90000, 120000, true, true)
+        chrome.update(90000, 120000)
         assertEquals("1:30", chrome.elapsed.text.toString())
         assertEquals(750, chrome.seek.progress)
-        assertTrue(chrome.hint.text.contains("отменить"))
+        assertSame(chrome.buttons, chrome.getChildAt(chrome.childCount - 1))
         assertTrue(chrome.remaining.text.contains("0:30"))
         assertEquals("1:01:01", playbackTime(3661000))
-        chrome.update(0, 0, false, false)
+        chrome.update(0, 0)
         assertFalse(chrome.seek.isEnabled)
-        assertTrue(chrome.hint.text.contains("Пауза"))
+        assertSame(chrome.buttons, chrome.getChildAt(chrome.childCount - 1))
     }
 
     @Test
