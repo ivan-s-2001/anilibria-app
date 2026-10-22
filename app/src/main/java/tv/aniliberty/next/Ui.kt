@@ -109,6 +109,7 @@ class PageAdapter(
         if(requestFocus){
             shelf.findViewHolderForAdapterPosition(index)?.itemView?.let{it.requestFocus();return}
         }
+        if(!requestFocus && (shelf.hasFocus() || shelf.scrollState!=RecyclerView.SCROLL_STATE_IDLE))return
         val anchor=child.rows.indexOfFirst{it.key==memory?.anchorKey}.takeIf{it>=0}?:index
         manager.scrollToPositionWithOffset(anchor,memory?.offset?:0)
         if(requestFocus)shelf.post {
@@ -125,14 +126,14 @@ class PageAdapter(
         attachedShelves.forEach(::saveShelf)
         val old=rows
         val useDiff=old.any{it.kind==Kind.HERO || it.kind==Kind.TABS} || value.any{it.kind==Kind.HERO || it.kind==Kind.TABS} || shelfMode || old.any{it.kind==Kind.CATALOG_BAR} || value.any{it.kind==Kind.CATALOG_BAR} || old.any{it.kind==Kind.SHELF || it.kind==Kind.SETTING || it.kind==Kind.ACCOUNT_TILE} || value.any{it.kind==Kind.SHELF || it.kind==Kind.SETTING || it.kind==Kind.ACCOUNT_TILE}
-        val diff=if(useDiff)androidx.recyclerview.widget.DiffUtil.calculateDiff(object:androidx.recyclerview.widget.DiffUtil.Callback(){
+        val diff=androidx.recyclerview.widget.DiffUtil.calculateDiff(object:androidx.recyclerview.widget.DiffUtil.Callback(){
             override fun getOldListSize()=old.size
             override fun getNewListSize()=value.size
             override fun areItemsTheSame(a:Int,b:Int)=old[a].key==value[b].key && old[a].kind==value[b].kind
             override fun areContentsTheSame(a:Int,b:Int)=old[a]==value[b]
-        },false)else null
+        },false)
         rows = value; tabStart = rows.indexOfFirst { it.kind == Kind.TABS }; contentStart = if (tabStart >= 0) tabStart + 1 else -1
-        if(diff!=null)diff.dispatchUpdatesTo(this)else notifyDataSetChanged()
+        diff.dispatchUpdatesTo(this)
     }
     override fun getItemCount() = rows.size
     override fun getItemViewType(position: Int) = rows[position].kind.ordinal
@@ -350,11 +351,14 @@ class PageAdapter(
                 if(focused>=0)line.getChildAt(focused)?.requestFocus()
             }
             Kind.DAYS -> {
-                val line=(view as HorizontalScrollView).getChildAt(0) as LinearLayout;line.removeAllViews()
-                if(row.title.isNotBlank())line.addView(TextView(view.context).apply{label(row.title,24f,WHITE,true);isFocusable=false},LinearLayout.LayoutParams(-2,-2).apply{marginEnd=view.dp(24)})
-                listOf("Вчера","Сегодня","Завтра").forEachIndexed { index, title ->
-                    line.addView(action(line,title,click={day(index)}).apply { textSize=16f;setTextColor(if(index==row.selected)RED else WHITE);webControlBackground() },LinearLayout.LayoutParams(-2,view.dp(48)).apply{marginEnd=view.dp(8)})
+                val line=(view as HorizontalScrollView).getChildAt(0) as LinearLayout
+                val offset=if(row.title.isNotBlank())1 else 0
+                if(line.childCount!=3+offset){
+                    line.removeAllViews()
+                    if(offset==1)line.addView(TextView(view.context).apply{label(row.title,24f,WHITE,true);isFocusable=false},LinearLayout.LayoutParams(-2,-2).apply{marginEnd=view.dp(24)})
+                    listOf("Вчера","Сегодня","Завтра").forEachIndexed{index,title->line.addView(action(line,title,click={day(index)}).apply{tag="schedule-tab:$index";textSize=16f;webControlBackground()},LinearLayout.LayoutParams(-2,view.dp(48)).apply{marginEnd=view.dp(8)})}
                 }
+                (0..2).forEach{index->(line.getChildAt(index+offset)as TextView).apply{setTextColor(if(index==row.selected)RED else WHITE);setOnClickListener{day(index)}}}
             }
             Kind.NAV -> {
                 val line = (view as HorizontalScrollView).getChildAt(0) as LinearLayout; line.removeAllViews()
@@ -595,7 +599,7 @@ class PageAdapter(
                 content.setBackgroundColor(Color.TRANSPARENT)
                 box.setOnFocusChangeListener{_,focused->
                     if(!spotlight){subtitle.text=if(focused)full else short;title.setTextColor(if(focused)WHITE else 0xFFDDDDDD.toInt())}
-                    box.animate().scaleX(if(focused && !homeCard)1.025f else 1f).scaleY(if(focused && !homeCard)1.025f else 1f).setDuration(140).start()
+                    box.animate().cancel();box.scaleX=1f;box.scaleY=1f
                 }
                 if(webPoster){
                     box.layoutParams=box.layoutParams.apply{
@@ -702,7 +706,7 @@ class PageAdapter(
                         rating.contentDescription=release?.favoriteCount?.let{"В избранном у $it пользователей"}?:"Количество добавлений в избранное неизвестно"
                     }
                     focusPoster(box.hasFocus())
-                    box.setOnFocusChangeListener{_,focused->focusPoster(focused);box.animate().scaleX(if(focused && !homeCard)1.025f else 1f).scaleY(if(focused && !homeCard)1.025f else 1f).setDuration(140).start()}
+                    box.setOnFocusChangeListener{_,focused->focusPoster(focused);box.animate().cancel();box.scaleX=1f;box.scaleY=1f}
                 }else{
                     image.clearColorFilter();content.visibility=View.VISIBLE;content.gravity=Gravity.TOP
                     title.gravity=Gravity.START;subtitle.gravity=Gravity.START
@@ -746,7 +750,7 @@ class PageAdapter(
                     focusContinue(box.hasFocus())
                     box.setOnFocusChangeListener{_,focused->
                         focusContinue(focused)
-                        box.animate().scaleX(if(focused && !homeCard)1.025f else 1f).scaleY(if(focused && !homeCard)1.025f else 1f).setDuration(140).start()
+                        box.animate().cancel();box.scaleX=1f;box.scaleY=1f
                     }
                 }
                 if(row.kind==Kind.FEATURE){

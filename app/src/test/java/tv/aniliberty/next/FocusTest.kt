@@ -84,4 +84,18 @@ class FocusTest {
         assertFalse(holder.itemView.isFocusable)
         assertFalse(holder.itemView.isClickable)
     }
+    @Test fun homeDayButtonsKeepExactViewAndFocusAcrossRefresh(){
+        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        val row=Row("schedule-days",Kind.DAYS,"Расписание релизов",selected=1)
+        adapter.submit(listOf(row))
+        val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.DAYS.ordinal)
+        adapter.onBindViewHolder(holder,0)
+        val line=(holder.itemView as HorizontalScrollView).getChildAt(0)as LinearLayout
+        val tomorrow=line.getChildAt(3)
+        tomorrow.requestFocus()
+        adapter.submit(listOf(row.copy(selected=2)))
+        adapter.onBindViewHolder(holder,0)
+        assertSame(tomorrow,line.getChildAt(3));assertTrue(tomorrow.hasFocus())
+    }
+
 }

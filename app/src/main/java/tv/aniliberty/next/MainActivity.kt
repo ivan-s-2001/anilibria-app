@@ -40,6 +40,8 @@ class MainActivity : ComponentActivity() {
     private var historyHydrating=false
     private var lastHistoryHydration=0L
     private var resumedOnce=false
+    private val childFocusMemory=mutableMapOf<Pair<Screen,String>,Int>()
+    private var remoteFocusToken=0
     private val focusMemory = mutableMapOf<Screen, String>()
     private val scrollMemory=mutableMapOf<Screen,Pair<String,Int>>()
     private fun screenKey(screen:Screen)=if(screen is Screen.Detail)screen.copy(tab=0)else screen
@@ -49,7 +51,12 @@ class MainActivity : ComponentActivity() {
             is android.widget.HorizontalScrollView->{
                 val line=item.getChildAt(0)as?LinearLayout
                 if(current==Screen.Home && item.tag=="schedule-days")line?.getChildAt(model.state.value.homeDay+1)?.requestFocus()
-                else line?.getFocusables(View.FOCUS_FORWARD)?.firstOrNull()?.requestFocus()
+                else {
+                    val choices=line?.getFocusables(View.FOCUS_FORWARD).orEmpty()
+                    val row=adapter.rows.firstOrNull{it.key==item.tag}
+                    val saved=childFocusMemory[screenKey(current) to (item.tag as?String).orEmpty()]
+                    choices.getOrNull(saved?:if(row?.kind==Kind.ACCOUNT_TABS)row.selected else 0)?.requestFocus()?:choices.firstOrNull()?.requestFocus()
+                }
             }
             null->Unit
             else->if(item.isFocusable)item.requestFocus()else if(item is ViewGroup)item.getFocusables(View.FOCUS_FORWARD).firstOrNull()?.requestFocus()
@@ -210,16 +217,20 @@ class MainActivity : ComponentActivity() {
     }
     private fun openMenu(){
         if(current==Screen.Welcome)return
+        remoteFocusToken++;detailFocusToken++;detailFocusPending=false
         homeTransition++;homeFocusTarget=null;catalogToolsPending=false;list.stopScroll()
         contentFocus=list.findFocus();rememberFocus();menuOpen=true;buildMenu()
         (menu.findViewWithTag<View>("menu-route:$selectedSection")?:menu.findViewWithTag<View>("menu-route:0"))?.requestFocus()
     }
-    private fun closeMenu(restore:Boolean=true){menuOpen=false;buildMenu();if(restore){if(contentFocus?.isAttachedToWindow==true)contentFocus?.requestFocus()else list.requestFocus()}}
+    private fun closeMenu(restore:Boolean=true){menuOpen=false;buildMenu();if(restore){if(contentFocus?.isAttachedToWindow==true)contentFocus?.requestFocus()else {
+            val key=focusMemory[screenKey(current)];val index=adapter.rows.indexOfFirst{it.key==key}
+            if(index>=0){grid.scrollToPositionWithOffset(index,dp(16));list.doOnNextLayout{if(!menuOpen)focusItem(list.findViewHolderForAdapterPosition(index)?.itemView)};list.requestLayout()}else list.requestFocus()
+        }}}
     private var homeFocusTarget:Int?=null
     private var lastHomeMove=0L
     private var homeTransition=0
     private fun moveHomeFocus(direction:Int):Boolean{
-        if(homeFocusTarget!=null)return true
+        if(homeFocusTarget!=null){homeTransition++;homeFocusTarget=null;list.stopScroll()}
         val focus=list.findFocus()?:return false
         val outer=list.findContainingItemView(focus)?:return false
         val index=list.getChildAdapterPosition(outer)
@@ -229,10 +240,12 @@ class MainActivity : ComponentActivity() {
         val header=if(adapter.rows[target].kind==Kind.SHELF)homeSectionHeader(adapter.rows,target)?:target else target
         val token=++homeTransition
         homeFocusTarget=target
+        val attachedTarget=list.findViewHolderForAdapterPosition(target)?.itemView
+        if(attachedTarget!=null){focusItem(attachedTarget);homeFocusTarget=null}
         fun finish(){
             if(token!=homeTransition)return
             homeFocusTarget=null
-            if(current!=Screen.Home || menuOpen)return
+            if(current!=Screen.Home || menuOpen || attachedTarget!=null)return
             val resolved=adapter.rows.indexOfFirst{it.key==key}
             if(resolved>=0)focusItem(list.findViewHolderForAdapterPosition(resolved)?.itemView)
         }
@@ -281,7 +294,56 @@ class MainActivity : ComponentActivity() {
             override fun calculateTimeForDeceleration(dx:Int)=160
         }.apply{targetPosition=target})
     }
+    private fun pageRemoteKey(event:KeyEvent):Boolean {
+        if(menuOpen || current==Screen.Home || current is Screen.Detail)return false
+        val direction=when(event.keyCode){KeyEvent.KEYCODE_DPAD_LEFT->View.FOCUS_LEFT;KeyEvent.KEYCODE_DPAD_RIGHT->View.FOCUS_RIGHT;KeyEvent.KEYCODE_DPAD_UP->View.FOCUS_UP;KeyEvent.KEYCODE_DPAD_DOWN->View.FOCUS_DOWN;else->return false}
+        val focused=list.findFocus()?:return false
+        if(focused is EditText)return false
+        val outer=list.findContainingItemView(focused)?:return false
+        val position=list.getChildAdapterPosition(outer)
+        if(position !in adapter.rows.indices)return true
+        val horizontal=direction==View.FOCUS_LEFT || direction==View.FOCUS_RIGHT
+        if(event.action!=KeyEvent.ACTION_DOWN)return true
+        if(horizontal && outer is RecyclerView){
+            adapter.rememberShelf(outer)
+            val child=outer.findContainingItemView(focused)
+            val index=child?.let{outer.getChildAdapterPosition(it)}?:return true
+            val step=if(direction==View.FOCUS_RIGHT)1 else -1
+            val target=index+step
+            if(target<0){if(event.repeatCount==0)openMenu();return true}
+            if(target<(outer.adapter?.itemCount?:0)){
+                outer.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()?:run{
+                    outer.scrollToPosition(target);outer.post{if(current==model.state.value.screen && outer.hasFocus())outer.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()}
+                }
+            }
+            return true
+        }
+        if(horizontal && outer is android.widget.HorizontalScrollView){
+            val choices=outer.getFocusables(View.FOCUS_FORWARD)
+            val index=choices.indexOf(focused);val step=if(direction==View.FOCUS_RIGHT)1 else -1
+            choices.getOrNull(index+step)?.requestFocus()?:run{if(step<0 && event.repeatCount==0)openMenu()}
+            return true
+        }
+        val focusable=adapter.rows.map{row->when(row.kind){Kind.TEXT,Kind.PROFILE->false;Kind.HEADING->row.click!=null;else->true}}
+        val target=remoteGridTarget(adapter.rows.indices.map{grid.spanSizeLookup.getSpanSize(it)},focusable,grid.spanCount,position,direction)
+        if(target==null){
+            if(direction==View.FOCUS_LEFT && event.repeatCount==0)openMenu()
+            if(direction==View.FOCUS_DOWN){when{current is Screen.Catalog->model.loadMoreCatalog();current is Screen.Section->model.loadMoreSection();isAccountList(current)->loadAccountReleases(current);current==Screen.AccountHistory->loadAccountHistory()}}
+            return true
+        }
+        val screen=current;val key=adapter.rows[target].key;val token=++remoteFocusToken
+        fun apply(){if(token==remoteFocusToken && current==screen && !menuOpen){val index=adapter.rows.indexOfFirst{it.key==key};focusItem(list.findViewHolderForAdapterPosition(index)?.itemView)}}
+        val item=list.findViewHolderForAdapterPosition(target)?.itemView
+        if(item!=null){apply()}else{
+            list.stopScroll();list.doOnNextLayout{apply()};grid.scrollToPositionWithOffset(target,dp(16));list.requestLayout()
+        }
+        return true
+    }
     override fun dispatchKeyEvent(event:KeyEvent):Boolean {
+        if(menuOpen && event.keyCode in listOf(KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN)){
+            if(event.action==KeyEvent.ACTION_DOWN){val choices=menu.getFocusables(View.FOCUS_FORWARD);val index=choices.indexOf(currentFocus);choices.getOrNull(index+if(event.keyCode==KeyEvent.KEYCODE_DPAD_DOWN)1 else -1)?.requestFocus()};return true
+        }
+        if(pageRemoteKey(event))return true
         if(detailKey(event))return true
         if((current is Screen.Library || current is Screen.Franchise) && !menuOpen){
             val position=list.findFocus()?.let{list.findContainingItemView(it)}?.let{list.getChildAdapterPosition(it)}?:-1
@@ -401,6 +463,13 @@ class MainActivity : ComponentActivity() {
             }
         })
         list.viewTreeObserver.addOnGlobalFocusChangeListener{_,focus->
+            if(focus!=null)list.findContainingItemView(focus)?.let{item->
+                val key=item.tag as?String
+                if(key!=null && item is ViewGroup && item !is RecyclerView){
+                    val index=item.getFocusables(View.FOCUS_FORWARD).indexOf(focus)
+                    if(index>=0)childFocusMemory[screenKey(current) to key]=index
+                }
+            }
             if(current is Screen.Detail && focus!=null && list.findContainingItemView(focus)!=null)rememberDetailFocus()
             if((current is Screen.Catalog || current is Screen.Section) && !menuOpen && focus!=null){
                 val item=list.findContainingItemView(focus)
@@ -1363,7 +1432,7 @@ class MainActivity : ComponentActivity() {
                 ?: if(key!=null && adapter.contentStart>=0) (adapter.contentStart until rows.size).firstOrNull{rows[it].kind!=Kind.HEADING}?:adapter.contentStart
                 else rows.indexOfFirst{it.kind in listOf(Kind.ACTION,Kind.SETTING,Kind.ACCOUNT_TILE,Kind.POSTER,Kind.HERO,Kind.SPOTLIGHT,Kind.SHELF,Kind.FEATURE,Kind.GENRE,Kind.FRANCHISE,Kind.CONTINUE,Kind.MORE,Kind.CATALOG_BAR)}
             if(index>=0&&!state.loading){list.doOnNextLayout{
-                if(current!=state.screen || (current==Screen.Home && menuOpen))return@doOnNextLayout
+                if(current!=state.screen || menuOpen)return@doOnNextLayout
                 val item=list.findViewHolderForAdapterPosition(index)?.itemView
                 if((!sameHome && !sameCatalog && !sameSection && !sameProfile && !sameAccountHistory) || list.findFocus()==null)focusItem(item)
             };val scroll=scrollMemory[screenKey(state.screen)]

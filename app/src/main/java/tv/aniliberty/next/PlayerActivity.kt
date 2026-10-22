@@ -283,8 +283,8 @@ class PlayerActivity : ComponentActivity() {
             KeyEvent.KEYCODE_MEDIA_PLAY->{if(event.action==KeyEvent.ACTION_DOWN)player?.play();return true}
             KeyEvent.KEYCODE_MEDIA_PAUSE->{if(event.action==KeyEvent.ACTION_DOWN){player?.pause();save()};return true}
             KeyEvent.KEYCODE_MENU->{if(event.action==KeyEvent.ACTION_DOWN)episodes();return true}
-            KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN->{if(controls.visibility!=View.VISIBLE){if(event.action==KeyEvent.ACTION_UP)showControls();return true}}
-            KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT->{if(controls.visibility!=View.VISIBLE){if(event.action==KeyEvent.ACTION_UP){showControls(seek);pendingSeek=player?.currentPosition};return true}}
+            KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN->{if(controls.visibility!=View.VISIBLE){if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0)showControls();return true}}
+            KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT->{if(controls.visibility!=View.VISIBLE){if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0){showControls(seek);pendingSeek=player?.currentPosition};return true}}
         }
         if(event.action==KeyEvent.ACTION_DOWN)refreshControls()
         return super.dispatchKeyEvent(event)
