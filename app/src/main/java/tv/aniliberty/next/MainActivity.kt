@@ -181,7 +181,7 @@ class MainActivity : ComponentActivity() {
             val position=list.findFocus()?.let{list.findContainingItemView(it)}?.let{list.getChildAdapterPosition(it)}?:-1
             val kinds=listOf(Kind.POSTER,Kind.GENRE,Kind.FRANCHISE,Kind.FEATURE)
             if(adapter.rows.getOrNull(position)?.kind in kinds){
-                val columns=if((current as?Screen.Section)?.kind==HomeSection.FRANCHISES)3 else 4
+                val columns=4
                 val groupHeader=(0 until position).lastOrNull{adapter.rows[it].kind==Kind.HEADING}?:-1
                 val first=(groupHeader+1..position).firstOrNull{adapter.rows[it].kind in kinds}?:position
                 val column=(position-first)%columns
@@ -605,7 +605,7 @@ class MainActivity : ComponentActivity() {
         val section=when(current){Screen.Home->0;is Screen.Catalog,is Screen.Section,is Screen.Franchise->1;is Screen.Library->3;else->selectedSection}
         if(section!=selectedSection){selectedSection=section;buildMenu()}
         homeMenuLayout()
-        val spans=if((current as?Screen.Section)?.kind==HomeSection.FRANCHISES)15 else if(current is Screen.Catalog || current is Screen.Section || current is Screen.Library || current is Screen.Franchise)20 else 15
+        val spans=if(current is Screen.Catalog || current is Screen.Section || current is Screen.Library || current is Screen.Franchise)20 else 15
         if(grid.spanCount!=spans)grid.spanCount=spans
         menu.visibility=if(current==Screen.Welcome)View.GONE else View.VISIBLE
         val rows=mutableListOf<Row>()
