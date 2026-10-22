@@ -10,6 +10,15 @@ import java.net.URLDecoder
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[30])
 class CatalogTest{
+    @Test fun episodePeriodsOnlyIncludeTheLastMonthWithDisjointGroups(){
+        val dates=listOf("2026-10-22","2026-10-15","2026-10-02","2026-09-22","2026-09-21","2025-06-01")
+        val releases=dates.mapIndexed{i,date->parseRelease(org.json.JSONObject().put("id",i+1).put("updated_at",date+"T12:00:00Z"))}
+        val groups=episodePeriods(releases,java.time.ZoneId.of("Europe/Moscow"),java.time.LocalDate.of(2026,10,22))
+        assertEquals(listOf("На этой неделе","На прошлой неделе","Ранее за месяц"),groups.map{it.title})
+        assertEquals(listOf(1,2,3,4),groups.flatMap{it.releases}.map{it.id})
+        val rollover=episodePeriods(listOf(releases.first().copy(updatedAt="2025-12-31T12:00:00Z")),java.time.ZoneId.of("UTC"),java.time.LocalDate.of(2026,1,2))
+        assertEquals("На этой неделе",rollover.single().title)
+    }
     @Test fun sectionSearchUsesAllWordsAndNormalizesRussianYo(){
         val source=SectionData(releases=listOf(parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Ёж и кот","english":"Hedgehog Cat"}}""")),parseRelease(org.json.JSONObject("""{"id":2,"name":{"main":"Другое"}}"""))))
         assertEquals(listOf(1),filterSectionData(source,"еж кот").releases.map{it.id})

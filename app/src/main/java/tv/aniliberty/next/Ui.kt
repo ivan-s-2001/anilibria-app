@@ -55,7 +55,7 @@ fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int
 }
 
 enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE, REFRESH, CONTINUE, CATALOG_BAR }
-data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList(),val queryChanged:((String)->Unit)?=null,val searchDone:(()->Unit)?=null)
+data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList(),val watching:ContinueEpisode?=null,val longClick:(()->Unit)?=null,val controls:List<Pair<String,()->Unit>> = emptyList(),val homeStyle:Boolean=false,val queryChanged:((String)->Unit)?=null,val searchDone:(()->Unit)?=null)
 
 class PageAdapter(
     private val navigate: (Int) -> Unit,
@@ -364,7 +364,9 @@ class PageAdapter(
                 val title=content.getChildAt(0)as TextView
                 val meta=content.getChildAt(1)as TextView
                 val genre=row.kind==Kind.GENRE
-                val franchisePage=row.kind==Kind.FRANCHISE && !shelfMode
+                val cardStyleHome=shelfMode || row.homeStyle
+                val franchisePage=row.kind==Kind.FRANCHISE && !cardStyleHome
+                if(row.homeStyle)box.layoutParams=box.layoutParams.apply{height=view.cardDp(if(genre)236 else 190)}
                 if(franchisePage)box.layoutParams=box.layoutParams.apply{height=view.dp(180)}
                 box.focusBackground(radiusDp=12);box.clipToOutline=true
                 image.load(row.image);image.scaleType=ImageView.ScaleType.CENTER_CROP
@@ -373,20 +375,20 @@ class PageAdapter(
                     shade.background=GenreShade();shade.visibility=View.VISIBLE
                     content.layoutParams=FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM)
                     content.setPadding(view.dp(12),view.dp(12),view.dp(12),view.dp(18))
-                    title.label(row.title,if(shelfMode)20f else 17f,WHITE,true);title.gravity=if(franchisePage)Gravity.START else Gravity.CENTER;title.maxLines=2
-                    meta.label(row.subtitle,if(shelfMode)14f else 12f,0xFFBDBDBD.toInt(),true);meta.gravity=if(franchisePage)Gravity.START else Gravity.CENTER;meta.maxLines=1
+                    title.label(row.title,if(cardStyleHome)20f else 17f,WHITE,true);title.gravity=if(franchisePage)Gravity.START else Gravity.CENTER;title.maxLines=2
+                    meta.label(row.subtitle,if(cardStyleHome)14f else 12f,0xFFBDBDBD.toInt(),true);meta.gravity=if(franchisePage)Gravity.START else Gravity.CENTER;meta.maxLines=1
                     title.layoutParams=LinearLayout.LayoutParams(-1,-2)
                     meta.layoutParams=LinearLayout.LayoutParams(-1,-2).apply{topMargin=view.dp(5)}
                     content.setBackgroundColor(Color.TRANSPARENT)
                 }else{
-                    val width=if(shelfMode)view.cardDp(150)else ((view.resources.displayMetrics.widthPixels-view.dp(140))/3/2)
+                    val width=if(cardStyleHome)view.cardDp(150)else ((view.resources.displayMetrics.widthPixels-view.dp(140))/3/2)
                     image.layoutParams=FrameLayout.LayoutParams(width,-1,Gravity.START)
                     shade.visibility=View.GONE
                     content.layoutParams=FrameLayout.LayoutParams(-1,-1).apply{marginStart=width}
                     content.setPadding(view.dp(14),view.dp(14),view.dp(12),view.dp(14))
                     content.setBackgroundColor(0xFF212121.toInt())
-                    title.label(row.title,if(shelfMode)18f else 15f,WHITE,true);title.gravity=Gravity.START;title.maxLines=4
-                    meta.label(row.subtitle,if(shelfMode)14f else 12f,MUTED);meta.gravity=Gravity.BOTTOM;meta.maxLines=4
+                    title.label(row.title,if(cardStyleHome)18f else 15f,WHITE,true);title.gravity=Gravity.START;title.maxLines=4
+                    meta.label(row.subtitle,if(cardStyleHome)14f else 12f,MUTED);meta.gravity=Gravity.BOTTOM;meta.maxLines=4
                     title.layoutParams=LinearLayout.LayoutParams(-1,-2)
                     meta.layoutParams=LinearLayout.LayoutParams(-1,0,1f).apply{topMargin=view.dp(10)}
                 }

@@ -94,7 +94,12 @@ class Api {
         TorrentLink(t.text("label").ifBlank{listOf(t.display("quality"),t.display("codec")).filter(String::isNotBlank).joinToString(" · ")},t.text("description"),t.text("magnet").takeIf{it.startsWith("magnet:")})
     }
     suspend fun section(section:HomeSection,page:Int=1):SectionData = when(section){
-        HomeSection.LATEST -> latest(page*30).let{SectionData(releases=it,more=it.size>=page*30)}
+        HomeSection.LATEST -> latest(page*30).let{items->
+            val recent=recentEpisodeReleases(items)
+            val cutoff=java.time.LocalDate.now().minusMonths(1)
+            val reachedEnd=items.any{episodeUpdateDate(it,java.time.ZoneId.systemDefault())?.isBefore(cutoff)==true}
+            SectionData(releases=recent,more=items.size>=page*30 && !reachedEnd)
+        }
         HomeSection.SCHEDULE -> SectionData(releases=JSONObject(request("/anime/schedule/week")).optJSONArray("data").objects().mapNotNull{entry->
             entry.optJSONObject("release")?.let{release->entry.optJSONObject("published_release_episode")?.let{release.put("latest_episode",it)};parseRelease(release)}
         }.distinctBy{it.id})

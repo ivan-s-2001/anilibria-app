@@ -174,10 +174,12 @@ class MainActivity : ComponentActivity() {
             val kinds=listOf(Kind.POSTER,Kind.GENRE,Kind.FRANCHISE,Kind.FEATURE)
             if(adapter.rows.getOrNull(position)?.kind in kinds){
                 val columns=if((current as?Screen.Section)?.kind==HomeSection.FRANCHISES)3 else 4
-                val first=adapter.rows.indexOfFirst{it.kind in kinds};val column=(position-first)%columns
+                val groupHeader=(0 until position).lastOrNull{adapter.rows[it].kind==Kind.HEADING}?:-1
+                val first=(groupHeader+1..position).firstOrNull{adapter.rows[it].kind in kinds}?:position
+                val column=(position-first)%columns
                 if(event.keyCode==KeyEvent.KEYCODE_DPAD_RIGHT && (column==columns-1 || adapter.rows.getOrNull(position+1)?.kind !in kinds))return true
                 if(event.keyCode==KeyEvent.KEYCODE_DPAD_LEFT && column==0){if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0)openMenu();return true}
-                if(event.keyCode==KeyEvent.KEYCODE_DPAD_UP && position-first<columns){
+                if(event.keyCode==KeyEvent.KEYCODE_DPAD_UP && position-first<columns && adapter.rows.take(groupHeader.coerceAtLeast(0)).none{it.kind in kinds}){
                     if(event.action==KeyEvent.ACTION_DOWN){val tools=adapter.rows.indexOfFirst{it.key=="section-tools"};grid.scrollToPositionWithOffset(tools,list.dp(12));list.post{focusItem(list.findViewHolderForAdapterPosition(tools)?.itemView)}}
                     return true
                 }
@@ -642,7 +644,12 @@ class MainActivity : ComponentActivity() {
                         HomeSection.FRANCHISES,HomeSection.GENRES->featureCards(filtered.features,screen.kind)
                         HomeSection.VIDEOS->videoCards(filtered.videos)
                     }
-                    rows+=cards
+                    if(screen.kind==HomeSection.LATEST){
+                        episodePeriods(filtered.releases).forEach{period->
+                            rows+=Row("period:${period.key}",Kind.HEADING,period.title,selected=1)
+                            rows+=releaseCards(period.releases,screen.kind.name)
+                        }
+                    }else rows+=cards.map{it.copy(homeStyle=true)}
                     if(query.isNotBlank() && cards.isEmpty() && state.more && !state.loadingMore && state.moreError==null){
                         list.post{if(model.state.value.screen==screen && sectionQueries[screen.kind]==query)model.loadMoreSection()}
                     }
