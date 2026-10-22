@@ -22,7 +22,7 @@ class TvModel : ViewModel() {
     private val stack = mutableListOf<Screen>()
     private var job: Job? = null
     private var homeCache: HomeData? = null
-    private val sectionCache=linkedMapOf<Screen.Section,SectionData>()
+    private val sectionCache=linkedMapOf<Screen.Section,UiState>()
     private val catalogCache=linkedMapOf<Screen.Catalog,UiState>()
     private var navigationGeneration=0
     private val featureJobs=mutableMapOf<HomeSection,Job>()
@@ -36,7 +36,7 @@ class TvModel : ViewModel() {
             state.value = UiState(screen, home = homeCache, homeDay = selectedHomeDay)
             return
         }
-        if(screen is Screen.Section && sectionCache[screen]!=null){state.value=UiState(screen,section=sectionCache[screen]);return}
+        if(screen is Screen.Section && sectionCache[screen]!=null){state.value=sectionCache.getValue(screen);return}
         if(screen is Screen.Catalog && catalogCache[screen]!=null){state.value=catalogCache.getValue(screen);return}
         val previous = state.value
         if (screen is Screen.Detail && previous.detail?.id == screen.id) {
@@ -56,7 +56,7 @@ class TvModel : ViewModel() {
                     }
                     is Screen.Section -> api.section(screen.kind,screen.page).let{data->
                         if(sectionCache.size>=16)sectionCache.remove(sectionCache.keys.first())
-                        sectionCache[screen]=data;UiState(screen,section=data)
+                        UiState(screen,section=data,more=data.more,catalogPage=screen.page).also{sectionCache[screen]=it}
                     }
                     is Screen.Franchise -> UiState(screen, releases = api.franchise(screen.id))
                     is Screen.Detail -> UiState(screen, detail = api.release(screen.id))
@@ -92,6 +92,24 @@ class TvModel : ViewModel() {
         }
     }
     fun homeDay(index: Int) { selectedHomeDay = index; state.value = state.value.copy(homeDay = index) }
+    fun loadMoreSection(){
+        val before=state.value
+        val screen=before.screen as?Screen.Section?:return
+        val previous=before.section?:return
+        if(before.loading || before.loadingMore || !before.more)return
+        val generation=navigationGeneration
+        state.value=before.copy(loadingMore=true,moreError=null)
+        job=viewModelScope.launch{
+            try{
+                val next=api.section(screen.kind,before.catalogPage+1)
+                if(generation!=navigationGeneration || state.value.screen!=screen)return@launch
+                val merged=mergeSectionData(previous,next)
+                val updated=state.value.copy(section=merged,more=merged.more,catalogPage=before.catalogPage+1,loadingMore=false)
+                sectionCache[screen]=updated;state.value=updated
+            }catch(e:CancellationException){throw e}
+            catch(_:Exception){if(generation==navigationGeneration && state.value.screen==screen)state.value=state.value.copy(loadingMore=false,moreError="Не удалось загрузить ещё")}
+        }
+    }
     fun loadMoreCatalog(){
         val before=state.value
         val screen=before.screen as?Screen.Catalog?:return

@@ -271,7 +271,7 @@ class PageAdapter(
                     }
                     line.addView(input,LinearLayout.LayoutParams(0,view.dp(48),1f).apply{marginEnd=view.dp(8)})
                     row.controls.drop(1).forEachIndexed{index,(title,callback)->
-                        val icon=when(index){0->R.drawable.ic_filter;1->R.drawable.ic_sort;else->R.drawable.ic_refresh}
+                        val icon=when(index){0->if(row.controls.size==2)R.drawable.ic_refresh else R.drawable.ic_filter;1->R.drawable.ic_sort;else->R.drawable.ic_refresh}
                         line.addView(action(line,"",icon=icon,click=callback).apply{
                             contentDescription=title;setPadding(dp(14),0,dp(14),0);compoundDrawablePadding=0
                         },LinearLayout.LayoutParams(view.dp(48),view.dp(48)).apply{if(index<row.controls.size-2)marginEnd=view.dp(8)})
@@ -288,7 +288,7 @@ class PageAdapter(
                 val focused=line.indexOfChild(line.findFocus())
                 line.removeAllViews();line.setPadding(0,view.dp(4),0,view.dp(8))
                 row.controls.forEachIndexed{index,(title,callback)->
-                    val icon=when(index){0->R.drawable.ic_search;1->R.drawable.ic_filter;2->R.drawable.ic_sort;else->R.drawable.ic_refresh}
+                    val icon=when(index){0->R.drawable.ic_search;1->if(row.controls.size==2)R.drawable.ic_refresh else R.drawable.ic_filter;2->R.drawable.ic_sort;else->R.drawable.ic_refresh}
                     line.addView(action(line,title,icon=icon,click=callback).apply{
                         textSize=14f;setSingleLine();ellipsize=android.text.TextUtils.TruncateAt.END
                         if(index==0)gravity=Gravity.CENTER_VERTICAL or Gravity.START

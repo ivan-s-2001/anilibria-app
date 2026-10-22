@@ -192,3 +192,20 @@ fun parseHomeVideos(body:String):List<HomeVideo>{
             item.optJSONObject("image")?.image(),url)
     }.distinctBy{it.id}
 }
+
+internal fun mergeSectionData(previous:SectionData,next:SectionData):SectionData {
+    val releases=(previous.releases+next.releases).distinctBy{it.id}
+    val features=(previous.features+next.features).distinctBy{it.id}
+    val videos=(previous.videos+next.videos).distinctBy{it.id}
+    val grew=releases.size>previous.releases.size || features.size>previous.features.size || videos.size>previous.videos.size
+    return SectionData(releases,features,videos,next.more && grew)
+}
+
+internal fun filterSectionData(data:SectionData,query:String):SectionData {
+    val tokens=query.trim().lowercase().replace('ё','е').split(Regex("\\s+")).filter{it.isNotBlank()}
+    fun matches(vararg fields:String):Boolean {
+        val text=fields.joinToString(" ").lowercase().replace('ё','е')
+        return tokens.all{text.contains(it)}
+    }
+    return data.copy(releases=data.releases.filter{matches(it.title,it.english)},features=data.features.filter{matches(it.title)},videos=data.videos.filter{matches(it.title)})
+}

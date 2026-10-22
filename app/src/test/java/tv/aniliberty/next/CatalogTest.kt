@@ -10,6 +10,15 @@ import java.net.URLDecoder
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[30])
 class CatalogTest{
+    @Test fun sectionSearchUsesAllWordsAndNormalizesRussianYo(){
+        val source=SectionData(releases=listOf(parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Ёж и кот","english":"Hedgehog Cat"}}""")),parseRelease(org.json.JSONObject("""{"id":2,"name":{"main":"Другое"}}"""))))
+        assertEquals(listOf(1),filterSectionData(source,"еж кот").releases.map{it.id})
+        assertEquals(listOf(1),filterSectionData(source,"hedgehog").releases.map{it.id})
+        assertEquals(2,filterSectionData(source,"  ").releases.size)
+        val merged=mergeSectionData(source,source.copy(more=true))
+        assertFalse(merged.more)
+        assertEquals(2,merged.releases.size)
+    }
     @Test fun ongoingUsesAvailableEpisodesInsteadOfPlannedTotal(){
         val release=parseRelease(org.json.JSONObject("""{"id":1,"is_ongoing":true,"episodes_total":24,"episodes":[{"id":"a","ordinal":1},{"id":"b","ordinal":2},{"id":"special","ordinal":2.5}]}"""))
         assertEquals(3,release.catalogueEpisodeCount)
