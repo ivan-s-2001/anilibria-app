@@ -248,7 +248,7 @@ class PageAdapter(
                 val line=(view as HorizontalScrollView).getChildAt(0) as LinearLayout;line.removeAllViews()
                 if(row.title.isNotBlank())line.addView(TextView(view.context).apply{label(row.title,24f,WHITE,true);isFocusable=false},LinearLayout.LayoutParams(-2,-2).apply{marginEnd=view.dp(24)})
                 listOf("Вчера","Сегодня","Завтра").forEachIndexed { index, title ->
-                    line.addView(action(line,title,click={day(index)}).apply { textSize=18f;setTextColor(if(index==row.selected)RED else MUTED) },LinearLayout.LayoutParams(-2,view.dp(48)).apply{marginEnd=view.dp(8)})
+                    line.addView(action(line,title,click={day(index)}).apply { textSize=16f;setTextColor(if(index==row.selected)RED else WHITE);webControlBackground() },LinearLayout.LayoutParams(-2,view.dp(48)).apply{marginEnd=view.dp(8)})
                 }
             }
             Kind.NAV -> {
