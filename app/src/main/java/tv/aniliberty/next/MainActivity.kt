@@ -194,13 +194,13 @@ class MainActivity : ComponentActivity() {
             if(settings.enabled("menu-random",false))add(Triple(8,"Случайный релиз",R.drawable.ic_refresh))
             if(settings.enabled("menu-settings"))add(Triple(7,"Настройки",R.drawable.ic_settings))
         }
-        val buttons=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
-        menu.addView(android.widget.ScrollView(this).apply{isFillViewport=false;isFocusable=false;addView(buttons)},LinearLayout.LayoutParams(-1,0,1f))
+        val buttons=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;descendantFocusability=ViewGroup.FOCUS_AFTER_DESCENDANTS}
+        menu.addView(android.widget.ScrollView(this).apply{isFillViewport=false;isFocusable=false;descendantFocusability=ViewGroup.FOCUS_AFTER_DESCENDANTS;addView(buttons)},LinearLayout.LayoutParams(-1,0,1f))
         routes.forEach { (route,title,icon) ->
             buttons.addView(action(buttons,if(menuOpen)title else "",icon=icon){
                 selectedSection=route;closeMenu(false);navigate(route)
             }.apply {
-                tag="menu-route:$route";contentDescription=title
+                tag="menu-route:$route";contentDescription=title;isFocusableInTouchMode=true
                 if(route==selectedSection)setTextColor(WHITE)
                 setOnKeyListener{_,key,event->if(key==KeyEvent.KEYCODE_DPAD_RIGHT){if(event.action==KeyEvent.ACTION_UP)closeMenu();true}else false}
             },LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(6)})
