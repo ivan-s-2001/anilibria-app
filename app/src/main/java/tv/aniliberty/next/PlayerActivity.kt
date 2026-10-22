@@ -37,7 +37,6 @@ class PlayerActivity : ComponentActivity() {
     private lateinit var floatingSkip:TextView
     private lateinit var floatingWatch:TextView
     private val skipOffers=SkipOfferState()
-    private val expireSkip=Runnable{updateChrome()}
     private lateinit var seekPreview:TextView
     private lateinit var skipButton:TextView
     private var lastPlaying:Boolean?=null
@@ -233,11 +232,11 @@ class PlayerActivity : ComponentActivity() {
                 skipButton.text=range.skipLabel
                 floatingSkip.text=range.skipLabel;floatingWatch.text=range.watchLabel
             }
-            val remaining=skipOffers.hiddenRemaining(range?.key,android.os.SystemClock.elapsedRealtime(),available && controls.visibility!=View.VISIBLE)
-            handler.removeCallbacks(expireSkip)
-            if(remaining<=0 && skipPrompt.hasFocus()){remoteClick.cancel();video.requestFocus()}
-            skipPrompt.visibility=if(remaining>0)View.VISIBLE else View.GONE
-            if(remaining>0)handler.postDelayed(expireSkip,remaining)
+            val visible=skipOffers.visible(range?.key,available && controls.visibility!=View.VISIBLE)
+            val appeared=visible && skipPrompt.visibility!=View.VISIBLE
+            if(!visible && skipPrompt.hasFocus()){remoteClick.cancel();video.requestFocus()}
+            skipPrompt.visibility=if(visible)View.VISIBLE else View.GONE
+            if(appeared)floatingSkip.requestFocus()
         }
     }
 
@@ -379,7 +378,7 @@ class PlayerActivity : ComponentActivity() {
         if(focused!==seek && (controls.visibility==View.VISIBLE || panel!=null || nextOffer!=null || skipPrompt.hasFocus()) && remoteClick.handle(event,focused))return true
 
         if(event.keyCode==KeyEvent.KEYCODE_BACK)return super.dispatchKeyEvent(event)
-        if(skipPrompt.hasFocus() && event.keyCode in listOf(KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT,KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN)){
+        if(skipPrompt.visibility==View.VISIBLE && controls.visibility!=View.VISIBLE && panel==null && nextOffer==null && event.keyCode in listOf(KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT,KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN)){
             if(event.action==KeyEvent.ACTION_DOWN){when(event.keyCode){KeyEvent.KEYCODE_DPAD_LEFT->floatingSkip.requestFocus();KeyEvent.KEYCODE_DPAD_RIGHT->floatingWatch.requestFocus();else->showControls(seek)}};return true
         }
         if(panel!=null){
