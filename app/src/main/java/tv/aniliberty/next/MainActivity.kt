@@ -323,7 +323,7 @@ class MainActivity : ComponentActivity() {
             if (settings.enabled("menu-collections"))
                 add(Triple(5, "Коллекции", R.drawable.ic_library))
             add(Triple(6, "История", R.drawable.ic_previous))
-            add(Triple(3, "Профиль", R.drawable.ic_library))
+            add(Triple(3, "Профиль", R.drawable.ic_account))
             if (settings.enabled("menu-random", false))
                 add(Triple(8, "Случайный релиз", R.drawable.ic_refresh))
             if (settings.enabled("menu-settings"))
@@ -1944,7 +1944,7 @@ class MainActivity : ComponentActivity() {
         panel.message(
             "Войдите, чтобы сохранять избранное и коллекции в аккаунте. Можно также сохранить тайтл только на этом ТВ."
         )
-        panel.addChoice("Войти в аккаунт", icon = R.drawable.ic_library) {
+        panel.addChoice("Войти в аккаунт", icon = R.drawable.ic_account) {
             panel.dismiss()
             login()
         }
@@ -2806,7 +2806,7 @@ class MainActivity : ComponentActivity() {
                                     Kind.ACCOUNT_TILE,
                                     "Данные аккаунта",
                                     "Имя, логин и безопасность",
-                                    selected = R.drawable.ic_library,
+                                    selected = R.drawable.ic_account,
                                     click = { model.open(Screen.AccountSettings("identity")) },
                                 )
                             rows +=
