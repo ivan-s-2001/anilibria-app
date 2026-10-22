@@ -157,6 +157,7 @@ data class Row(
     val episodeProgress: Pair<Long, Long>? = null,
     val profile: AccountProfile? = null,
     val activeControls: Set<Int> = emptySet(),
+    val isFavorite: Boolean = false,
 )
 
 class PageAdapter(
@@ -1696,9 +1697,7 @@ class PageAdapter(
                             }
                     episodeBadge.label(
                         if (schedulePoster) scheduleEpisodeLabel(release)
-                        else if (cataloguePoster)
-                            release?.latestEpisode?.let { "${number(it.ordinal)} эпизод" }
-                                ?: "Релиз"
+                        else if (cataloguePoster) release?.type?.ifBlank { "Аниме" } ?: "Аниме"
                         else
                             release?.latestEpisode?.let { "${number(it.ordinal)} эпизод" }
                                 ?: "Релиз",
@@ -1710,7 +1709,7 @@ class PageAdapter(
                     episodeBadge.setPadding(view.dp(10), 0, view.dp(10), 0)
                     episodeBadge.background =
                         shape(
-                            if (schedulePoster || cataloguePoster) 0xCC181818.toInt() else 0x1AFFFFFF,
+                            if (schedulePoster) 0xCC181818.toInt() else 0x1AFFFFFF,
                             view.dp(6).toFloat(),
                         )
                     episodeBadge.isFocusable = false
@@ -1745,12 +1744,9 @@ class PageAdapter(
                                 FrameLayout.LayoutParams(
                                         -2,
                                         view.dp(28),
-                                        Gravity.TOP or Gravity.END,
+                                        Gravity.TOP or Gravity.CENTER_HORIZONTAL,
                                     )
-                                    .apply {
-                                        topMargin = view.dp(10)
-                                        marginEnd = view.dp(8)
-                                    }
+                                    .apply { topMargin = view.dp(10) }
                             val status =
                                 (box.getChildAt(4) as? TextView)
                                     ?: TextView(view.context).also { box.addView(it) }
@@ -1769,7 +1765,7 @@ class PageAdapter(
                             status.includeFontPadding = false
                             status.background = null
                             status.isFocusable = false
-                            status.apply { visibility = View.GONE }
+                            status
                         } else {
                             episodeBadge.layoutParams =
                                 FrameLayout.LayoutParams(
@@ -1788,7 +1784,7 @@ class PageAdapter(
                     subtitle.maxLines = 1
                     fun focusPoster(focused: Boolean) {
                         box.findViewWithTag<TextView>("favorite-count")?.visibility =
-                            if ((focused && !schedulePoster && release?.favoriteCount != null) || cataloguePoster)
+                            if ((focused && !schedulePoster && release?.favoriteCount != null) || cataloguePoster || row.isFavorite)
                                 View.VISIBLE
                             else View.GONE
                         content.visibility = if (focused) View.VISIBLE else View.GONE
@@ -1817,9 +1813,9 @@ class PageAdapter(
                             subtitle.visibility = if (focused) View.VISIBLE else View.GONE
                         }
                         episodeBadge.visibility =
-                            if (focused || schedulePoster || cataloguePoster) View.VISIBLE else View.GONE
+                            if (focused || schedulePoster) View.VISIBLE else View.GONE
                         statusBadge?.visibility =
-                            View.GONE
+                            if (focused && release?.ongoing != null) View.VISIBLE else View.GONE
                         updateLabel?.visibility =
                             if (focused && updateLabel.text.isNotBlank()) View.VISIBLE
                             else View.GONE
@@ -1861,7 +1857,7 @@ class PageAdapter(
                                 )
                             else null
                     }
-                    if (row.selected == 2 && !cataloguePoster) {
+                    if (row.selected == 2) {
                         val count =
                             box.findViewWithTag<TextView>("episode-count")
                                 ?: TextView(view.context).also {
@@ -1869,21 +1865,21 @@ class PageAdapter(
                                     box.addView(it)
                                 }
                         count.layoutParams =
-                            FrameLayout.LayoutParams(-2, view.dp(24), Gravity.TOP or Gravity.END)
+                            FrameLayout.LayoutParams(-2, view.dp(28), Gravity.TOP or Gravity.END)
                                 .apply {
                                     topMargin = view.dp(10)
                                     marginEnd = view.dp(8)
                                 }
                         count.label(
                             release?.catalogueEpisodeCount?.let { "$it эп." }.orEmpty(),
-                            10f,
+                            12f,
                             WHITE,
                             true,
                         )
                         count.gravity = Gravity.CENTER
                         count.includeFontPadding = false
-                        count.setPadding(view.dp(6), 0, view.dp(6), 0)
-                        count.background = shape(0x1AFFFFFF, view.dp(4).toFloat())
+                        count.setPadding(view.dp(10), 0, view.dp(10), 0)
+                        count.background = shape(0xCC181818.toInt(), view.dp(6).toFloat())
                         count.visibility =
                             if (release?.catalogueEpisodeCount != null) View.VISIBLE else View.GONE
                         count.isFocusable = false
@@ -1912,7 +1908,8 @@ class PageAdapter(
                     favorites.setPadding(view.dp(if (cataloguePoster) 8 else 6), 0, view.dp(if (cataloguePoster) 8 else 6), 0)
                     favorites.compoundDrawablePadding = view.dp(3)
                     favorites.setCompoundDrawablesRelative(
-                        view.context.getDrawable(R.drawable.ic_favorite)?.apply {
+                        view.context.getDrawable(R.drawable.ic_favorite)?.mutate()?.apply {
+                            setTint(if (row.isFavorite) 0xFFFFD54F.toInt() else WHITE)
                             setBounds(0, 0, view.dp(13), view.dp(13))
                         },
                         null,
@@ -1949,7 +1946,8 @@ class PageAdapter(
                         )
                         rating.compoundDrawablePadding = view.dp(4)
                         rating.setCompoundDrawablesRelative(
-                            view.context.getDrawable(R.drawable.ic_favorite)?.apply {
+                            view.context.getDrawable(R.drawable.ic_favorite)?.mutate()?.apply {
+                                setTint(if (row.isFavorite) 0xFFFFD54F.toInt() else WHITE)
                                 setBounds(0, 0, view.dp(13), view.dp(13))
                             },
                             null,
