@@ -169,6 +169,7 @@ class AccountPanel(
         addAction("Отмена") { dismiss() }.requestFocus()
         task =
             scope.launch {
+                var stage = "получить код устройства"
                 try {
                     val device = account.session.deviceId
                     val code = account.api.deviceCode(device)
@@ -183,6 +184,7 @@ class AccountPanel(
                                 "Код устройства: ${code.code.toCharArray().joinToString(" ")}"
                         }
                     )
+                    stage = "показать QR-код"
                     val matrix = QRCodeWriter().encode(link, BarcodeFormat.QR_CODE, 256, 256)
                     val bitmap = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888)
                     val pixels =
@@ -215,6 +217,7 @@ class AccountPanel(
                     body.addView(status)
                     val deadline =
                         android.os.SystemClock.elapsedRealtime() + code.remainingSeconds * 1000L
+                    stage = "подтвердить вход"
                     val token = coroutineScope {
                         var progress = "Ожидаем подтверждение на телефоне…"
                         val ticker = launch {
@@ -271,11 +274,25 @@ class AccountPanel(
                     message("Срок действия кода истёк. Получите новый код.")
                 } catch (e: CancellationException) {
                     throw e
-                } catch (_: Exception) {
-                    message("Не удалось войти. Проверьте подключение и повторите.")
+                } catch (e: Exception) {
+                    val reason =
+                        when (e) {
+                            is java.net.UnknownHostException ->
+                                "Не удалось найти сервер. Проверьте интернет и DNS на ТВ."
+                            is java.net.SocketTimeoutException -> "Сервер не ответил вовремя."
+                            is javax.net.ssl.SSLException ->
+                                "Не удалось установить защищённое соединение. Проверьте дату и время на ТВ."
+                            is AccountHttpException -> "Сервер ответил HTTP ${e.status}."
+                            is AccountValidationException -> e.message ?: "Сервис отклонил запрос."
+                            is org.json.JSONException -> "Сервис вернул неожиданный ответ."
+                            is java.io.IOException -> "Нет соединения с сервером."
+                            else -> "Ошибка ${e.javaClass.simpleName}."
+                        }
+                    message("Не удалось $stage.\n$reason")
                 }
                 footer.removeAllViews()
                 addAction("Получить новый код", true) { requestCode() }
+                addAction("Войти по паролю") { passwordForm() }
                 addAction("Закрыть") { dismiss() }
                 footer.getChildAt(0)?.requestFocus()
             }
