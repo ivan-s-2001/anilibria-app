@@ -33,7 +33,11 @@ class PlayerActivity : ComponentActivity() {
     private lateinit var buffering:android.widget.ProgressBar
     private var errorPanel:TvSidePanel?=null
     private lateinit var chrome:PlayerChrome
-    private lateinit var skipPrompt:TextView
+    private lateinit var skipPrompt:LinearLayout
+    private lateinit var floatingSkip:TextView
+    private lateinit var floatingWatch:TextView
+    private val skipOffers=SkipOfferState()
+    private val expireSkip=Runnable{updateChrome()}
     private lateinit var seekPreview:TextView
     private lateinit var skipButton:TextView
     private var lastPlaying:Boolean?=null
@@ -82,7 +86,7 @@ class PlayerActivity : ComponentActivity() {
                     val episode=current
                     listOf("opening" to episode?.opening,"ending" to episode?.ending).forEach{(key,range)->
                         val identity="${episode?.id}:$key"
-                        if(settings.enabled("skip-$key",false) && identity !in skippedRanges){
+                        if(settings.enabled("skip-$key",false) && identity !in skippedRanges && !skipOffers.dismissed(identity)){
                             skipTarget(range,position,duration)?.let{target->skippedRanges.add(identity);engine.seekTo(target);Toast.makeText(this@PlayerActivity,if(key=="opening")"Опенинг пропущен"else"Эндинг пропущен",Toast.LENGTH_SHORT).show()}
                         }
                     }
@@ -115,7 +119,11 @@ class PlayerActivity : ComponentActivity() {
         chrome.visibility=View.GONE
         seekPreview=TextView(this).apply{label("",34f,WHITE,true);gravity=Gravity.CENTER;setPadding(dp(24),dp(14),dp(24),dp(14));background=shape(0xDD181818.toInt(),dp(12).toFloat());visibility=View.GONE;isFocusable=false}
         root.addView(seekPreview,FrameLayout.LayoutParams(-2,-2,Gravity.CENTER))
-        skipPrompt=TextView(this).apply{label("",15f,WHITE,true);setPadding(dp(18),dp(12),dp(18),dp(12));background=shape(0xDD181818.toInt(),dp(8).toFloat());visibility=View.GONE;isFocusable=false}
+        skipPrompt=LinearLayout(this).apply{gravity=Gravity.CENTER_VERTICAL;setPadding(dp(8),dp(8),dp(8),dp(8));background=shape(0xE8181818.toInt(),dp(8).toFloat());visibility=View.GONE}
+        floatingSkip=action(skipPrompt,"Пропустить опенинг",true,R.drawable.ic_next){skipSegment()}
+        floatingWatch=action(skipPrompt,"Смотреть опенинг"){watchSegment()}
+        skipPrompt.addView(floatingSkip,LinearLayout.LayoutParams(-2,dp(48)).apply{marginEnd=dp(8)})
+        skipPrompt.addView(floatingWatch,LinearLayout.LayoutParams(-2,dp(48)))
         root.addView(skipPrompt,FrameLayout.LayoutParams(-2,-2,Gravity.END or Gravity.BOTTOM).apply{setMargins(dp(28),dp(28),dp(28),dp(28))})
         seek.setOnKeyListener{_,key,event->
             when(key){
@@ -138,11 +146,8 @@ class PlayerActivity : ComponentActivity() {
         chrome.buttons.addView(View(this),LinearLayout.LayoutParams(0,1,1f))
         episodesButton=chrome.button("Серии",R.drawable.ic_episodes){episodes()}
         qualityButton=chrome.button("Настройки",R.drawable.ic_settings){playerSettings()}
-        skipButton=chrome.button("Пропустить",R.drawable.ic_next){
-            val engine=player
-            val range=manualSkipRange()
-            if(engine!=null && range!=null){engine.seekTo(range.second);updateChrome();pause.requestFocus()}
-        }.apply{visibility=View.INVISIBLE;layoutParams=LinearLayout.LayoutParams(dp(116),dp(48)).apply{marginEnd=dp(8)}}
+        skipButton=action(chrome.skipActions,"Пропустить опенинг",true,R.drawable.ic_next){skipSegment()}
+        chrome.skipActions.addView(skipButton,LinearLayout.LayoutParams(-2,dp(48)).apply{marginEnd=dp(8)})
         setContentView(root)
         onBackPressedDispatcher.addCallback(this,object:OnBackPressedCallback(true){override fun handleOnBackPressed(){
             remoteClick.cancel()
@@ -180,9 +185,29 @@ class PlayerActivity : ComponentActivity() {
         dialog.show()
     }
     private fun refreshControls(){updateChrome();handler.removeCallbacks(hide);handler.postDelayed(hide,5000)}
-    private fun manualSkipRange():Pair<String,Long>? {
+    private fun manualSkipRange():SkipSegment? {
         val engine=player?:return null;val episode=current?:return null
-        return listOf("Пропустить опенинг" to episode.opening,"Пропустить эндинг" to episode.ending).firstNotNullOfOrNull{(label,range)->skipTarget(range,engine.currentPosition,engine.duration)?.let{label to it}}
+        return listOf("opening" to episode.opening,"ending" to episode.ending).firstNotNullOfOrNull{(key,range)->
+            val identity="${episode.id}:$key"
+            if(skipOffers.dismissed(identity))null else skipTarget(range,engine.currentPosition,engine.duration)?.let{stop->
+                val name=if(key=="opening")"опенинг"else"эндинг"
+                SkipSegment(identity,"Пропустить $name","Смотреть $name",stop)
+            }
+        }
+    }
+    private fun skipSegment(){
+        val range=manualSkipRange()?:return
+        skippedRanges+=range.key;skipOffers.dismiss(range.key)
+        player?.seekTo(range.stop);remoteClick.cancel();updateChrome()
+        if(controls.visibility==View.VISIBLE)seek.requestFocus()else video.requestFocus()
+        refreshControls()
+    }
+    private fun watchSegment(){
+        val range=manualSkipRange()?:return
+        skipOffers.dismiss(range.key);skippedRanges+=range.key
+        remoteClick.cancel();updateChrome()
+        if(controls.visibility==View.VISIBLE)seek.requestFocus()else video.requestFocus()
+        refreshControls()
     }
     private fun updateChrome(){
         if(!::chrome.isInitialized)return
@@ -200,14 +225,21 @@ class PlayerActivity : ComponentActivity() {
         }
         if(::skipButton.isInitialized){
             val range=manualSkipRange()
-            if(range==null && skipButton.hasFocus())pause.requestFocus()
-            skipButton.visibility=if(range!=null && pendingSeek==null)View.VISIBLE else View.INVISIBLE
-            skipButton.text=if(range?.first?.contains("эндинг")==true)"Эндинг"else"Опенинг"
-            skipButton.contentDescription=range?.first?:"Пропустить заставку"
-            skipPrompt.text=range?.let{"↓  ${it.first}  ·  OK"}.orEmpty()
-            skipPrompt.visibility=if(range!=null && controls.visibility!=View.VISIBLE && panel==null && nextOffer==null)View.VISIBLE else View.GONE
+            val available=range!=null && pendingSeek==null && panel==null && nextOffer==null
+            if(!available && skipButton.hasFocus())seek.requestFocus()
+            chrome.skipActions.visibility=if(available)View.VISIBLE else View.GONE
+            if(range!=null){
+                skipButton.text=range.skipLabel
+                floatingSkip.text=range.skipLabel;floatingWatch.text=range.watchLabel
+            }
+            val remaining=skipOffers.hiddenRemaining(range?.key,android.os.SystemClock.elapsedRealtime(),available && controls.visibility!=View.VISIBLE)
+            handler.removeCallbacks(expireSkip)
+            if(remaining<=0 && skipPrompt.hasFocus()){remoteClick.cancel();video.requestFocus()}
+            skipPrompt.visibility=if(remaining>0)View.VISIBLE else View.GONE
+            if(remaining>0)handler.postDelayed(expireSkip,remaining)
         }
     }
+
     private fun showControls(focus:View?=null){controls.visibility=View.VISIBLE;skipPrompt.visibility=View.GONE;(focus?:pause).requestFocus();refreshControls()}
     private fun hideControls(){controls.visibility=View.GONE;seekPreview.visibility=View.GONE;skipPrompt.visibility=View.GONE;pendingSeek=null;video.requestFocus()}
     private fun togglePause(){val engine=player?:return;if(engine.isPlaying)engine.pause()else{if(engine.playbackState==Player.STATE_ENDED)engine.seekTo(0);engine.play()};desiredPlay=engine.playWhenReady;save();if(panel==null && nextOffer==null)showControls()else updateChrome()}
@@ -333,10 +365,13 @@ class PlayerActivity : ComponentActivity() {
     override fun dispatchKeyEvent(event:KeyEvent):Boolean{
         if(remoteRepeat.discard(event))return true
         if(event.action==KeyEvent.ACTION_UP && event.keyCode==revealKey){revealKey=-1;return true}
-        val focused=panel?.findFocus()?:nextOffer?.findFocus()?:controls.findFocus()
-        if(focused!==seek && (controls.visibility==View.VISIBLE || panel!=null || nextOffer!=null) && remoteClick.handle(event,focused))return true
+        val focused=panel?.findFocus()?:nextOffer?.findFocus()?:skipPrompt.findFocus()?:controls.findFocus()
+        if(focused!==seek && (controls.visibility==View.VISIBLE || panel!=null || nextOffer!=null || skipPrompt.hasFocus()) && remoteClick.handle(event,focused))return true
 
         if(event.keyCode==KeyEvent.KEYCODE_BACK)return super.dispatchKeyEvent(event)
+        if(skipPrompt.hasFocus() && event.keyCode in listOf(KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT,KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN)){
+            if(event.action==KeyEvent.ACTION_DOWN){when(event.keyCode){KeyEvent.KEYCODE_DPAD_LEFT->floatingSkip.requestFocus();KeyEvent.KEYCODE_DPAD_RIGHT->floatingWatch.requestFocus();else->showControls(seek)}};return true
+        }
         if(panel!=null){
             val direction=when(event.keyCode){KeyEvent.KEYCODE_DPAD_LEFT->View.FOCUS_LEFT;KeyEvent.KEYCODE_DPAD_RIGHT->View.FOCUS_RIGHT;KeyEvent.KEYCODE_DPAD_UP->View.FOCUS_UP;KeyEvent.KEYCODE_DPAD_DOWN->View.FOCUS_DOWN;else->0}
             if(direction!=0){
@@ -369,17 +404,23 @@ class PlayerActivity : ComponentActivity() {
             KeyEvent.KEYCODE_MEDIA_PLAY->{if(event.action==KeyEvent.ACTION_DOWN)player?.play();return true}
             KeyEvent.KEYCODE_MEDIA_PAUSE->{if(event.action==KeyEvent.ACTION_DOWN){player?.pause();save()};return true}
             KeyEvent.KEYCODE_MENU->{if(event.action==KeyEvent.ACTION_DOWN)episodes();return true}
-            KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN->{if(controls.visibility!=View.VISIBLE){if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0){revealKey=event.keyCode;if(event.keyCode in listOf(KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER))togglePause()else showControls(if(event.keyCode==KeyEvent.KEYCODE_DPAD_DOWN && skipButton.visibility==View.VISIBLE)skipButton else null)};return true}}
+            KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN->{if(controls.visibility!=View.VISIBLE){if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0){revealKey=event.keyCode;if(event.keyCode in listOf(KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER))togglePause()else if(event.keyCode==KeyEvent.KEYCODE_DPAD_DOWN && skipPrompt.visibility==View.VISIBLE)floatingSkip.requestFocus()else showControls(if(event.keyCode==KeyEvent.KEYCODE_DPAD_UP)seek else null)};return true}}
             KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT->{if(controls.visibility!=View.VISIBLE){if(event.action==KeyEvent.ACTION_DOWN && event.repeatCount==0){showControls(seek);pendingSeek=remoteSeekTarget(player?.currentPosition?:0,player?.duration?:0,event.keyCode==KeyEvent.KEYCODE_DPAD_RIGHT,0)};return true}}
         }
         if(controls.visibility==View.VISIBLE && panel==null && nextOffer==null){
             val direction=event.keyCode
+            if(focused===seek && direction==KeyEvent.KEYCODE_DPAD_UP){if(event.action==KeyEvent.ACTION_DOWN && chrome.skipActions.visibility==View.VISIBLE)skipButton.requestFocus();return true}
+            if(focused===skipButton){
+                if(direction in listOf(KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN,KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT)){
+                    if(event.action==KeyEvent.ACTION_DOWN){when(direction){KeyEvent.KEYCODE_DPAD_DOWN->seek.requestFocus();KeyEvent.KEYCODE_DPAD_LEFT->skipButton.requestFocus();KeyEvent.KEYCODE_DPAD_RIGHT->skipButton.requestFocus()};refreshControls()};return true
+                }
+            }
             if(focused===seek && direction==KeyEvent.KEYCODE_DPAD_DOWN){if(event.action==KeyEvent.ACTION_DOWN)(lastControl?.takeIf{it.isShown && it.isEnabled}?:pause).requestFocus();return true}
             if(focused!==seek && focused!=null && insideView(focused,controls) && direction in listOf(KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN,KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT)){
                 if(event.action==KeyEvent.ACTION_DOWN){
                     lastControl=focused
                     if(direction==KeyEvent.KEYCODE_DPAD_UP)seek.requestFocus()
-                    else if(direction!=KeyEvent.KEYCODE_DPAD_DOWN){val choices=controls.getFocusables(View.FOCUS_FORWARD).filter{it!==seek && it.isEnabled && it.isShown};val index=choices.indexOf(focused);choices.getOrNull(index+if(direction==KeyEvent.KEYCODE_DPAD_RIGHT)1 else -1)?.requestFocus()}
+                    else if(direction!=KeyEvent.KEYCODE_DPAD_DOWN){val choices=chrome.buttons.getFocusables(View.FOCUS_FORWARD).filter{it.isEnabled && it.isShown};val index=choices.indexOf(focused);choices.getOrNull(index+if(direction==KeyEvent.KEYCODE_DPAD_RIGHT)1 else -1)?.requestFocus()}
                     refreshControls()
                 };return true
             }

@@ -20,6 +20,7 @@ class PlayerChrome(context:Context):LinearLayout(context){
     val elapsed=TextView(context).apply{label("0:00",14f,WHITE,true)}
     val remaining=TextView(context).apply{label("",13f,MUTED);gravity=Gravity.END}
     val seek=SeekBar(context).apply{max=1000;progressTintList=android.content.res.ColorStateList.valueOf(RED);thumbTintList=android.content.res.ColorStateList.valueOf(WHITE);contentDescription="Перемотка";tag="player-seek";focusBackground(radiusDp=8)}
+    val skipActions=LinearLayout(context).apply{gravity=Gravity.END or Gravity.CENTER_VERTICAL;visibility=View.GONE;tag="player-skip-actions"}
     val buttons=LinearLayout(context).apply{gravity=Gravity.CENTER_VERTICAL}
     val hint=TextView(context).apply{label("← → перемотка   ·   OK пауза   ·   ↓ управление",12f,MUTED);maxLines=1}
     init{
@@ -32,6 +33,7 @@ class PlayerChrome(context:Context):LinearLayout(context){
             addView(episode,LayoutParams(0,-2,1f).apply{marginStart=dp(16)})
         },LayoutParams(-1,-2).apply{bottomMargin=dp(12)})
         addView(LinearLayout(context).apply{gravity=Gravity.CENTER_VERTICAL;addView(elapsed,LayoutParams(0,-2,1f));addView(remaining,LayoutParams(0,-2,1f))})
+        addView(skipActions,LayoutParams(-1,dp(48)).apply{topMargin=dp(4);bottomMargin=dp(4)})
         addView(seek,LayoutParams(-1,dp(36)))
         addView(buttons,LayoutParams(-1,dp(56)).apply{topMargin=dp(6);bottomMargin=dp(10)})
         addView(hint)

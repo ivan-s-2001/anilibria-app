@@ -48,4 +48,17 @@ class PlayerChromeTest {
         assertTrue(holder.status.text.contains("Сейчас"))
         assertTrue(holder.box.isFocusable)
     }
+    @Test fun skipActionIsAboveTimelineAndOutsideTransportRow(){
+        val chrome=PlayerChrome(RuntimeEnvironment.getApplication())
+        val skip=action(chrome.skipActions,"Пропустить опенинг"){}
+        chrome.skipActions.addView(skip,android.widget.LinearLayout.LayoutParams(-2,chrome.dp(48)))
+        chrome.skipActions.visibility=View.VISIBLE
+        chrome.measure(View.MeasureSpec.makeMeasureSpec(960,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));chrome.layout(0,0,960,chrome.measuredHeight)
+        assertTrue(chrome.skipActions.bottom<=chrome.seek.top)
+        assertEquals("Пропустить опенинг",skip.text.toString())
+        assertTrue(skip.width<=chrome.skipActions.width)
+        assertEquals(0,chrome.buttons.childCount)
+        assertEquals(1,chrome.skipActions.childCount)
+    }
+
 }
