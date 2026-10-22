@@ -33,9 +33,6 @@ class PlayerActivity : ComponentActivity() {
     private lateinit var video: PlayerView
     private lateinit var buffering: android.widget.ProgressBar
     private var errorPanel: TvSidePanel? = null
-    private var enhancementDialog: QualityEnhancementDialog? = null
-    private var enhancementButton: TextView? = null
-    private var anime4kActive = false
     private lateinit var chrome: PlayerChrome
     private lateinit var skipPrompt: LinearLayout
     private lateinit var floatingSkip: TextView
@@ -467,14 +464,6 @@ class PlayerActivity : ComponentActivity() {
         chrome.episode.text =
             listOf(episode.label, stream.first, "${options.getFloat("speed",1f)}×")
                 .joinToString("  ·  ")
-        val enhancement = Anime4kMode.fromKey(options.getString("anime4k", "off"))
-        anime4kActive = enhancement != Anime4kMode.OFF
-        if (anime4kActive) {
-            @Suppress("DEPRECATION") val mode = windowManager.defaultDisplay.mode
-            engine.setVideoEffects(
-                listOf(Anime4kEffect(enhancement, mode.physicalWidth, mode.physicalHeight))
-            )
-        }
         engine.setPlaybackSpeed(options.getFloat("speed", 1f))
         video.resizeMode =
             options.getInt("resize", androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT)
@@ -498,21 +487,6 @@ class PlayerActivity : ComponentActivity() {
 
                 override fun onPlayerError(error: PlaybackException) {
                     if (player !== engine || stopped) return
-                    if (anime4kActive && isAnime4kProcessingFailure(error)) {
-                        val position = engine.currentPosition
-                        val playing = engine.playWhenReady
-                        options.edit().putString("anime4k", "off").apply()
-                        enhancementButton?.text = enhancementLabel()
-                        enhancementDialog?.dismiss()
-                        Toast.makeText(
-                                this@PlayerActivity,
-                                "Anime4K отключён: устройство не поддерживает обработку этого видео",
-                                Toast.LENGTH_LONG,
-                            )
-                            .show()
-                        startEpisode(episode, quality, playing, position)
-                        return
-                    }
                     save()
                     cancelNext()
                     showControls()
@@ -751,17 +725,6 @@ class PlayerActivity : ComponentActivity() {
                     null
                 }
             }
-            enhancementButton =
-                action(content, enhancementLabel()) { showEnhancementDialog() }
-                    .apply {
-                        gravity = Gravity.START or Gravity.CENTER_VERTICAL
-                        textSize = 14f
-                        maxLines = 2
-                    }
-            content.addView(
-                enhancementButton,
-                LinearLayout.LayoutParams(-1, dp(64)).apply { topMargin = dp(8) },
-            )
             listOf(
                     "auto-next" to "Следующая серия автоматически",
                     "skip-opening" to "Автопропуск опенинга",
@@ -777,59 +740,6 @@ class PlayerActivity : ComponentActivity() {
                 }
             null
         }
-    }
-
-    private fun enhancementSizes(): Pair<Anime4kSize, Anime4kSize>? {
-        val format = player?.videoFormat ?: return null
-        if (format.width <= 0 || format.height <= 0) return null
-        @Suppress("DEPRECATION") val screen = windowManager.defaultDisplay.mode
-        val input = Anime4kSize(format.width, format.height)
-        return input to
-            anime4kOutputSize(
-                input.width,
-                input.height,
-                screen.physicalWidth,
-                screen.physicalHeight,
-            )
-    }
-
-    private fun displayedEnhancementMode(): Anime4kMode {
-        val requested = Anime4kMode.fromKey(options.getString("anime4k", "off"))
-        val sizes = enhancementSizes() ?: return requested
-        return effectiveAnime4kMode(requested, sizes.first, sizes.second)
-    }
-
-    private fun enhancementLabel(): String =
-        "Улучшение качества · ${displayedEnhancementMode().title}\nЭкспериментально"
-
-    private fun showEnhancementDialog() {
-        if (enhancementDialog?.isShowing == true) return
-        val requested = Anime4kMode.fromKey(options.getString("anime4k", "off"))
-        val sizes = enhancementSizes()
-        val secondaryAvailable =
-            sizes != null &&
-                effectiveAnime4kMode(Anime4kMode.AA, sizes.first, sizes.second) == Anime4kMode.AA
-        val dialog =
-            QualityEnhancementDialog(this, displayedEnhancementMode(), secondaryAvailable) { mode ->
-                if (mode != requested) {
-                    options.edit().putString("anime4k", mode.key).apply()
-                    enhancementButton?.text = enhancementLabel()
-                    val engine = player
-                    current?.let { episode ->
-                        // Restart the renderer at the same position; the parent settings retain
-                        // pause.
-                        startEpisode(
-                            episode,
-                            quality,
-                            engine?.playWhenReady ?: false,
-                            engine?.currentPosition,
-                        )
-                    }
-                }
-            }
-        enhancementDialog = dialog
-        dialog.setOnDismissListener { if (enhancementDialog === dialog) enhancementDialog = null }
-        dialog.show()
     }
 
     private fun qualities() {
@@ -893,7 +803,10 @@ class PlayerActivity : ComponentActivity() {
                 cancelNext()
                 startEpisode(episode)
             }
-        offer.addView(now, LinearLayout.LayoutParams(-2, dp(48)).apply { marginEnd = dp(8) })
+        offer.addView(
+            now,
+            LinearLayout.LayoutParams(-2, dp(48)).apply { marginEnd = dp(8) },
+        )
         offer.addView(
             action(offer, "Отмена") {
                 cancelNext()
@@ -1199,8 +1112,6 @@ class PlayerActivity : ComponentActivity() {
         errorPanel?.dismiss()
         errorPanel = null
         stopped = true
-        enhancementDialog?.dismiss()
-        enhancementDialog = null
         desiredPlay = player?.playWhenReady ?: desiredPlay
         save()
         cancelNext()
