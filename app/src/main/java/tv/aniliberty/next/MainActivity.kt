@@ -598,7 +598,7 @@ class MainActivity : ComponentActivity() {
                     rows+=Row("catalogue-heading",Kind.HEADING,screen.title?:"Каталог",total,selected=1)
                     val sort=catalogReferences["sorting"]?.firstOrNull{it.value==screen.filters.sorting}?.title?:when(screen.filters.sorting){"RATING_DESC"->"По рейтингу";"YEAR_DESC"->"Сначала новые";"YEAR_ASC"->"Сначала старые";else->"Сортировка"}
                     rows+=Row("catalogue-tools",Kind.CATALOG_BAR,controls=listOf(
-                        (if(screen.query.isBlank())"Поиск"else screen.query.take(40)) to {catalogSearch(screen)},
+                        (if(screen.query.isBlank())"Поиск по каталогу…"else screen.query.take(40)) to {catalogSearch(screen)},
                         "Фильтры${if(screen.filters.count+(if(screen.genre!=null)1 else 0)>0)" · ${screen.filters.count+(if(screen.genre!=null)1 else 0)}"else ""}" to {catalogFilters(screen)},
                         sort to {catalogSorting(screen)},
                         "Сбросить" to {rememberFocus();model.open(Screen.Catalog(),false)}
