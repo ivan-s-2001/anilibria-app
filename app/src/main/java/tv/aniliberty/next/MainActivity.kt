@@ -1897,6 +1897,25 @@ class MainActivity : ComponentActivity() {
 
     private fun isFavorite(id: Int): Boolean = account.lists?.favorites?.contains(id) == true
 
+    private fun withFavoriteState(items: List<Row>): List<Row> =
+        items.map { row ->
+            row.copy(
+                isFavorite = row.release?.let { isFavorite(it.id) } ?: false,
+                cards =
+                    if (row.cards.isNotEmpty()) withFavoriteState(row.cards)
+                    else if (row.items.isNotEmpty())
+                        row.items.map {
+                            Row(
+                                "${row.key}:release:${it.id}",
+                                Kind.POSTER,
+                                release = it,
+                                isFavorite = isFavorite(it.id),
+                            )
+                        }
+                    else emptyList(),
+            )
+        }
+
     private fun favorite(release: Release) {
         if (!account.signedIn) account.local.remember(release)
         accountAction {
@@ -3605,7 +3624,7 @@ class MainActivity : ComponentActivity() {
                 current is Screen.Detail &&
                 !enterContent &&
                 list.findFocus()?.let { list.findContainingItemView(it)?.tag } == "tabs"
-        adapter.submit(rows)
+        adapter.submit(withFavoriteState(rows))
         if (startupVisible) return
         if (state.screen is Screen.Detail && !state.loading && rows.any { it.kind == Kind.HERO }) {
             if (menuOpen || !list.hasWindowFocus()) return
