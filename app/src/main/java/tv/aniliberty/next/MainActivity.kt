@@ -148,7 +148,7 @@ class MainActivity : ComponentActivity() {
             try{
                 val known=history.latestWatched().associateBy{it.releaseId}
                 val legacy=prefs.all.keys.filter{it.startsWith("last:")}.mapNotNull{it.substringAfter(":").toIntOrNull()}.filter{it !in known}
-                val candidates=(known.values.filter{it.completed}.map{it.releaseId}+legacy).distinct().take(16)
+                val candidates=(history.hiddenReleaseIds()+known.values.filter{it.completed}.map{it.releaseId}+legacy).distinct().take(16)
                 for(id in candidates){
                     try{
                         val item=model.api.release(id,refresh=true)
@@ -270,6 +270,7 @@ class MainActivity : ComponentActivity() {
         return Row("shelf:$key",Kind.SHELF,selected=style,cards=cards)
     }
     private fun render(state:UiState){
+        (state.screen as?Screen.Detail)?.let{history.restore(it.id)}
         if(current==state.screen && !state.loading && adapter.rows.none{it.key=="loading"})rememberFocus()
         val retainedFocus = if(current==state.screen) list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String } else null
         current=state.screen

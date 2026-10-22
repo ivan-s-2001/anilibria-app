@@ -32,10 +32,19 @@ class ViewingHistory(private val prefs:SharedPreferences){
             else->null
         }
     }.sortedByDescending{it.updatedAt}
-    fun dismiss(releaseId:Int){prefs.edit().putLong("continue-hidden:$releaseId",System.currentTimeMillis()).apply()}
+    fun dismiss(releaseId:Int){
+        prefs.edit().putLong("continue-hidden:$releaseId",System.currentTimeMillis())
+            .putStringSet("continue-hidden-episodes:$releaseId",prefs.getStringSet("continue-available:$releaseId",emptySet())).apply()
+    }
+    fun restore(releaseId:Int){prefs.edit().remove("continue-hidden:$releaseId").remove("continue-hidden-episodes:$releaseId").apply()}
+    fun hiddenReleaseIds():List<Int> = prefs.all.keys.filter{it.startsWith("continue-hidden:")}.mapNotNull{it.substringAfter(":").toIntOrNull()}
     fun knownReleaseIds():Set<Int> = records().map{it.current.releaseId}.toSet()
     fun latestWatched():List<ContinueEpisode> = records().groupBy{it.current.releaseId}.values.mapNotNull{it.maxByOrNull{r->r.current.updatedAt}?.current}.sortedByDescending{it.updatedAt}
     fun save(release:Release,episode:Episode,position:Long,duration:Long,updatedAt:Long=System.currentTimeMillis()){
+        val available=release.episodes.filter{it.streams.isNotEmpty()}.map{it.id}.toSet()
+        val hiddenEpisodes=prefs.getStringSet("continue-hidden-episodes:${release.id}",null)
+        if(hiddenEpisodes!=null && available.any{it !in hiddenEpisodes})restore(release.id)
+        prefs.edit().putStringSet("continue-available:${release.id}",available).apply()
         val entry=ContinueEpisode(release.id,episode.id,release.title,episode.ordinal,episode.name,episode.preview,position.coerceAtLeast(0),duration.coerceAtLeast(0),updatedAt)
         val index=release.episodes.indexOfFirst{it.id==episode.id}
         val next=if(entry.completed && index>=0 && !release.blocked)release.episodes.drop(index+1).firstOrNull{e->

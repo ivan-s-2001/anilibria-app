@@ -32,6 +32,16 @@ class ViewingHistoryTest {
         history.save(release,release.episodes[0],310000,1200000,prefs.getLong("continue-hidden:42",0)+1)
         assertEquals("first",history.items().single().episodeId)
     }
+    @Test fun openingReleaseOrPublishingAnEpisodeRestoresDismissedCard(){
+        history.save(release,release.episodes[0],300000,1200000,10)
+        history.dismiss(42)
+        history.restore(42)
+        assertEquals("first",history.items().single().episodeId)
+        history.dismiss(42)
+        val expanded=release.copy(episodes=release.episodes+release.episodes.last().copy(id="new-episode",ordinal=13.0))
+        history.save(expanded,expanded.episodes[0],300000,1200000,10)
+        assertEquals("first",history.items().single().episodeId)
+    }
     @Test fun unfinishedEpisodeKeepsExactUuidAndActualPreview(){
         history.save(release,release.episodes[0],300000,1200000,10)
         val item=history.items().single()
