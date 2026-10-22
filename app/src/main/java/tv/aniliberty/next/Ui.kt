@@ -327,15 +327,7 @@ class PageAdapter(
                     episodeBadge.label(if(cataloguePoster)release?.type?.takeIf{it.isNotBlank()}?:"Аниме"else release?.latestEpisode?.let{"${number(it.ordinal)} эпизод"}?:"Релиз",12f,WHITE,true)
                     episodeBadge.gravity=Gravity.CENTER;episodeBadge.setPadding(view.dp(10),0,view.dp(10),0)
                     episodeBadge.background=shape(0x1AFFFFFF,view.dp(6).toFloat());episodeBadge.isFocusable=false
-                    val watchHint=(box.getChildAt(4)as?TextView)?:TextView(view.context).also{
-                        box.addView(it,FrameLayout.LayoutParams(-2,view.dp(30),Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply{bottomMargin=view.dp(10)})
-                    }
-                    watchHint.label(if(cataloguePoster)"Подробнее"else"Смотреть",12f,WHITE,true)
-                    watchHint.gravity=Gravity.CENTER;watchHint.setPadding(view.dp(10),0,view.dp(10),0)
-                    watchHint.background=shape(0x1AFFFFFF,view.dp(6).toFloat());watchHint.isFocusable=false
-                    val icon=view.context.getDrawable(R.drawable.ic_play)!!.mutate().apply{setTint(WHITE);setBounds(0,0,view.dp(14),view.dp(14))}
-                    watchHint.setCompoundDrawables(icon,null,null,null);watchHint.compoundDrawablePadding=view.dp(4)
-                    content.setPadding(view.dp(10),view.dp(44),view.dp(10),view.dp(46))
+                    content.setPadding(view.dp(10),view.dp(44),view.dp(10),view.dp(12))
                     title.layoutParams=LinearLayout.LayoutParams(-1,0,1f)
                     subtitle.maxLines=3
                     fun focusPoster(focused:Boolean){
@@ -343,13 +335,12 @@ class PageAdapter(
                         if(cataloguePoster){
                             box.getChildAt(1).apply{background=GenreShade();visibility=View.VISIBLE}
                             content.gravity=if(focused)Gravity.CENTER else Gravity.BOTTOM
-                            content.setPadding(view.dp(10),view.dp(if(focused)44 else 10),view.dp(10),view.dp(if(focused)46 else 12))
+                            content.setPadding(view.dp(10),view.dp(if(focused)44 else 10),view.dp(10),view.dp(12))
                             title.layoutParams=LinearLayout.LayoutParams(-1,if(focused)0 else -2,if(focused)1f else 0f)
                             title.maxLines=if(focused)4 else 3
                             subtitle.visibility=if(focused)View.VISIBLE else View.GONE
                         }
                         episodeBadge.visibility=if(focused)View.VISIBLE else View.GONE
-                        watchHint.visibility=if(focused)View.VISIBLE else View.GONE
                         image.colorFilter=if(focused)android.graphics.ColorMatrixColorFilter(floatArrayOf(.045f,0f,0f,0f,12.75f,0f,.045f,0f,0f,12.75f,0f,0f,.045f,0f,12.75f,0f,0f,0f,1f,0f))else null
                     }
                     focusPoster(box.hasFocus())
@@ -381,16 +372,7 @@ class PageAdapter(
                     badge.label("${number(item.ordinal)} эпизод",12f,WHITE,true)
                     badge.gravity=Gravity.CENTER;badge.setPadding(view.dp(10),0,view.dp(10),0)
                     badge.background=shape(0x1AFFFFFF,view.dp(6).toFloat())
-                    val playHint=(box.getChildAt(5)as?TextView)?:TextView(view.context).also{
-                        box.addView(it,FrameLayout.LayoutParams(-2,view.dp(28),Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply{bottomMargin=view.dp(10)})
-                    }
-                    playHint.label(if(item.nextUp)"Смотреть"else"Продолжить",12f,WHITE,true)
-                    playHint.gravity=Gravity.CENTER;playHint.setPadding(view.dp(10),0,view.dp(10),0)
-                    playHint.background=shape(0x1AFFFFFF,view.dp(6).toFloat())
-                    val playIcon=view.context.getDrawable(R.drawable.ic_play)!!.mutate().apply{setTint(WHITE);setBounds(0,0,view.dp(14),view.dp(14))}
-                    playHint.setCompoundDrawables(playIcon,null,null,null);playHint.compoundDrawablePadding=view.dp(4)
-                    // One focus target per episode: this visual action uses the card's OK handler.
-                    badge.isFocusable=false;playHint.isFocusable=false
+                    badge.isFocusable=false
                     subtitle.text=listOf(item.episodeName,row.subtitle.substringAfter("\n","")).filter(String::isNotBlank).joinToString("\n")
                     if(subtitle.text.isBlank())subtitle.text="Эпизод ${number(item.ordinal)}"
                     subtitle.maxLines=2;subtitle.textSize=12f
@@ -398,9 +380,8 @@ class PageAdapter(
                         title.visibility=View.VISIBLE
                         title.maxLines=2
                         title.layoutParams=LinearLayout.LayoutParams(-1,if(focused)0 else -2,if(focused)1f else 0f)
-                        content.setPadding(view.dp(12),view.dp(if(focused)38 else 12),view.dp(12),view.dp(if(focused)42 else 16))
+                        content.setPadding(view.dp(12),view.dp(if(focused)38 else 12),view.dp(12),view.dp(16))
                         badge.visibility=if(focused)View.VISIBLE else View.GONE
-                        playHint.visibility=if(focused)View.VISIBLE else View.GONE
                         subtitle.visibility=if(focused)View.VISIBLE else View.GONE
                         image.colorFilter=if(focused)android.graphics.ColorMatrixColorFilter(floatArrayOf(.2f,0f,0f,0f,0f,0f,.2f,0f,0f,0f,0f,0f,.2f,0f,0f,0f,0f,0f,1f,0f))else null
                     }

@@ -83,11 +83,10 @@ class HomeShelfTest {
         assertNotNull((card.getChildAt(0)as android.widget.ImageView).colorFilter)
         assertEquals(height,card.layoutParams.height)
         assertEquals(android.view.View.VISIBLE,card.getChildAt(3).visibility)
-        assertEquals("Смотреть",(card.getChildAt(4)as android.widget.TextView).text.toString())
-        assertFalse(card.getChildAt(4).isFocusable)
+        assertEquals(4,card.childCount)
     }
 
-    @Test fun catalogueKeepsTitleVisibleAndShowsReleaseActionsOnFocus(){
+    @Test fun catalogueKeepsTitleVisibleAndShowsBadgeOnFocus(){
         val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
         val release=parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Название"},"year":2026}"""))
         adapter.submit(listOf(Row("catalogue:1",Kind.POSTER,release=release)))
@@ -95,10 +94,10 @@ class HomeShelfTest {
         adapter.onBindViewHolder(holder,0)
         val card=holder.itemView as FrameLayout
         assertEquals(android.view.View.VISIBLE,card.getChildAt(2).visibility)
-        assertEquals(android.view.View.GONE,card.getChildAt(4).visibility)
+        assertEquals(android.view.View.GONE,card.getChildAt(3).visibility)
         card.requestFocus()
-        assertEquals(android.view.View.VISIBLE,card.getChildAt(4).visibility)
-        assertEquals("Подробнее",(card.getChildAt(4)as android.widget.TextView).text.toString())
+        assertEquals(android.view.View.VISIBLE,card.getChildAt(3).visibility)
+        assertEquals(4,card.childCount)
         assertNotNull((card.getChildAt(0)as android.widget.ImageView).colorFilter)
     }
 
@@ -178,8 +177,7 @@ class HomeShelfTest {
         assertEquals(android.view.View.VISIBLE,title.visibility)
         assertEquals(android.view.View.VISIBLE,information.visibility)
         assertEquals(android.view.View.VISIBLE,badge.visibility)
-        assertEquals(android.view.View.VISIBLE,card.getChildAt(5).visibility)
-        assertFalse(card.getChildAt(5).isFocusable)
+        assertEquals(5,card.childCount)
         assertNotNull((card.getChildAt(0)as android.widget.ImageView).colorFilter)
         val root=FrameLayout(RuntimeEnvironment.getApplication())
         root.addView(card)

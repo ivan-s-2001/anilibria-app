@@ -42,8 +42,9 @@ class FocusTest {
         val content=box.getChildAt(2)as LinearLayout
         val metadata=content.getChildAt(1)as android.widget.TextView
         val height=box.layoutParams.height
-        assertEquals(android.view.View.VISIBLE,metadata.visibility)
-        assertTrue(metadata.text.contains("Эп. 3"))
+        assertEquals(android.view.View.VISIBLE,content.getChildAt(0).visibility)
+        assertEquals("Тайтл",(content.getChildAt(0)as android.widget.TextView).text.toString())
+        assertEquals(android.view.View.GONE,metadata.visibility)
         box.requestFocus()
         assertEquals(android.view.View.VISIBLE,metadata.visibility)
         assertTrue(metadata.text.contains("2026"))
