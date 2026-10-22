@@ -157,7 +157,11 @@ class HomeShelfTest {
         assertEquals(android.view.View.VISIBLE,title.visibility)
         assertEquals(android.view.View.VISIBLE,information.visibility)
         assertNotNull((card.getChildAt(0)as android.widget.ImageView).colorFilter)
-        card.clearFocus()
+        val root=FrameLayout(RuntimeEnvironment.getApplication())
+        root.addView(card)
+        val other=android.widget.TextView(root.context).apply{isFocusable=true;isFocusableInTouchMode=true}
+        root.addView(other)
+        other.requestFocus()
         assertEquals(android.view.View.VISIBLE,title.visibility)
         assertEquals(android.view.View.GONE,information.visibility)
         assertNull((card.getChildAt(0)as android.widget.ImageView).colorFilter)
