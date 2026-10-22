@@ -36,7 +36,7 @@ class MainActivity : ComponentActivity() {
     private var lastHistoryHydration=0L
     private var resumedOnce=false
     private val focusMemory = mutableMapOf<Screen, String>()
-    private val scrollMemory=mutableMapOf<Screen,Pair<Int,Int>>()
+    private val scrollMemory=mutableMapOf<Screen,Pair<String,Int>>()
     private fun screenKey(screen:Screen)=if(screen is Screen.Detail)screen.copy(tab=0)else screen
     private fun focusItem(item:View?) {
         when(item){
@@ -170,7 +170,7 @@ class MainActivity : ComponentActivity() {
     private fun rememberFocus(){
         list.findFocus()?.let{v->list.findContainingItemView(v)?.tag as?String}?.let{focusMemory[screenKey(current)]=it}
         val first=grid.findFirstVisibleItemPosition()
-        scrollMemory[screenKey(current)]=first to (grid.findViewByPosition(first)?.top?:list.paddingTop)
+        adapter.rows.getOrNull(first)?.key?.let{scrollMemory[screenKey(current)]=it to (grid.findViewByPosition(first)?.top?:list.paddingTop)}
     }
     private fun navigate(index:Int){
         rememberFocus()
@@ -270,6 +270,7 @@ class MainActivity : ComponentActivity() {
         return Row("shelf:$key",Kind.SHELF,selected=style,cards=cards)
     }
     private fun render(state:UiState){
+        if(current==state.screen && !state.loading && adapter.rows.none{it.key=="loading"})rememberFocus()
         val retainedFocus = if(current==state.screen) list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String } else null
         current=state.screen
         menu.visibility=if(current==Screen.Welcome)View.GONE else View.VISIBLE
@@ -405,7 +406,8 @@ class MainActivity : ComponentActivity() {
                 val item=list.findViewHolderForAdapterPosition(index)?.itemView
                 focusItem(item)
             };val scroll=scrollMemory[screenKey(state.screen)]
-                grid.scrollToPositionWithOffset(scroll?.first?:if(key==null)0 else index,scroll?.second?:if(key==null)0 else list.dp(12))}
+                val anchor=scroll?.first?.let{saved->rows.indexOfFirst{it.key==saved}.takeIf{it>=0}}
+                grid.scrollToPositionWithOffset(anchor?:if(key==null)0 else index,scroll?.second?:if(key==null)0 else list.dp(12))}
         }
     }
 }
