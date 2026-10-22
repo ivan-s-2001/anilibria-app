@@ -123,4 +123,18 @@ class HomeShelfTest {
         assertEquals(3,replaced.franchises!!.size)
     }
 
+    @Test fun scheduleHeadingAndDayChoicesShareOneHorizontalRow(){
+        var day=-1
+        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},day={day=it})
+        adapter.submit(listOf(Row("schedule-days",Kind.DAYS,"Расписание релизов",selected=1)))
+        val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.DAYS.ordinal)
+        adapter.onBindViewHolder(holder,0)
+        val line=(holder.itemView as android.widget.HorizontalScrollView).getChildAt(0)as android.widget.LinearLayout
+        assertEquals(android.widget.LinearLayout.HORIZONTAL,line.orientation)
+        assertEquals(4,line.childCount)
+        assertEquals("Расписание релизов",(line.getChildAt(0)as android.widget.TextView).text.toString())
+        assertFalse(line.getChildAt(0).isFocusable)
+        line.getChildAt(2).performClick();assertEquals(1,day)
+    }
+
 }
