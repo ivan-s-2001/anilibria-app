@@ -58,13 +58,12 @@ class Api(private val transport:AccountTransport=AccountHttpTransport()) {
     private val discoveryCache = linkedMapOf<Int, Pair<Long,Discovery>>()
     private suspend fun request(path:String):String=transport.request(path,"GET",null,null)
     suspend fun home(): HomeData = supervisorScope {
-        val promotions = async { optional { JSONObject(request("/media/promotions")).optJSONArray("data").objects().filter { !it.optBoolean("is_ad") && it.optJSONObject("release") != null }.map { Promotion(it.text("id"), it.optJSONObject("image")?.image(), parseRelease(it.getJSONObject("release"))) } } }
         val latest = async { latest() }
         val schedule = async { optional { val json = JSONObject(request("/anime/schedule/now")); listOf("yesterday", "today", "tomorrow").map { day -> parseScheduleEntries(json.optJSONArray(day)?:JSONArray()) } } }
         val franchises = async { optional { randomFeatures(HomeSection.FRANCHISES) } }
         val genres = async { optional { randomFeatures(HomeSection.GENRES) } }
         val videos = async { optional { videos(9) } }
-        HomeData(promotions.await(),latest.await(),schedule.await(),franchises.await(),genres.await(),videos.await())
+        HomeData(latest.await(),schedule.await(),franchises.await(),genres.await(),videos.await())
     }
     suspend fun randomFeatures(section:HomeSection):List<Feature> = when(section){
         HomeSection.GENRES->features("/anime/genres/random?limit=4",false)
@@ -162,9 +161,8 @@ class Api(private val transport:AccountTransport=AccountHttpTransport()) {
 }
 
 
-data class Promotion(val id: String, val image: String?, val release: Release)
 data class Feature(val id: String, val title: String, val subtitle: String, val image: String?)
-data class HomeData(val promotions: List<Promotion>?, val latest: List<Release>, val schedule: List<List<Release>>?, val franchises: List<Feature>?, val genres: List<Feature>?, val videos: List<HomeVideo>? = null)
+data class HomeData(val latest: List<Release>, val schedule: List<List<Release>>?, val franchises: List<Feature>?, val genres: List<Feature>?, val videos: List<HomeVideo>? = null)
 
 data class HomeVideo(val id: String, val title: String, val subtitle: String, val image: String?, val url: String)
 

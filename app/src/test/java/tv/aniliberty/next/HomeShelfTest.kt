@@ -333,7 +333,7 @@ class HomeShelfTest {
     }
     @Test fun refreshChangesOnlyTheRequestedHomeCollection(){
         val old=listOf(Feature("old","Старое","",null))
-        val home=HomeData(null,emptyList(),null,old,old,emptyList())
+        val home=HomeData(emptyList(),null,old,old,emptyList())
         val updated=replaceHomeFeatures(home,HomeSection.GENRES,(1..5).map{Feature("$it","Жанр $it","",null)})
         assertEquals(4,updated.genres!!.size)
         assertSame(home.franchises,updated.franchises)
@@ -349,7 +349,7 @@ class HomeShelfTest {
         assertEquals(3,cards.count{it.kind==Kind.FRANCHISE})
         assertEquals(Kind.REFRESH,cards[3].kind)
         assertEquals(Kind.MORE,cards[4].kind)
-        val original=HomeData(null,emptyList(),null,emptyList(),emptyList())
+        val original=HomeData(emptyList(),null,emptyList(),emptyList())
         val replaced=replaceHomeFeatures(original,HomeSection.FRANCHISES,(1..9).map{Feature("$it","Часть $it","",null)})
         assertEquals(3,replaced.franchises!!.size)
     }

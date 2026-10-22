@@ -471,7 +471,7 @@ class MainActivity : ComponentActivity() {
         setContentView(root)
         onBackPressedDispatcher.addCallback(this,object:OnBackPressedCallback(true){override fun handleOnBackPressed(){remoteClick.cancel();remotePendingKey=null;remoteFocusToken++;shelfMoveToken++;pendingShelf=null;if(catalogSearchEditing){finishCatalogSearch();return};if(menuOpen){closeMenu();return}
             rememberFocus()
-            if(current==Screen.Home){if(list.computeVerticalScrollOffset()>0){val index=adapter.rows.indexOfFirst{it.kind==Kind.SPOTLIGHT || it.kind==Kind.SHELF};if(index>=0){grid.scrollToPositionWithOffset(0,0);list.doOnNextLayout{focusItem(list.findViewHolderForAdapterPosition(index)?.itemView)};list.requestLayout()}}else finish()}
+            if(current==Screen.Home){if(list.computeVerticalScrollOffset()>0){val index=adapter.rows.indexOfFirst{it.kind==Kind.SHELF};if(index>=0){grid.scrollToPositionWithOffset(0,0);list.doOnNextLayout{focusItem(list.findViewHolderForAdapterPosition(index)?.itemView)};list.requestLayout()}}else finish()}
             else if(!model.back())finish()}})
         lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED){model.state.collect{render(it)}} }
         if(model.state.value.screen==Screen.Welcome && getSharedPreferences("viewing",MODE_PRIVATE).getBoolean("welcomed",false))model.open(Screen.Home,false)
@@ -1102,9 +1102,7 @@ class MainActivity : ComponentActivity() {
             else when(val screen=state.screen){
                 Screen.Home->{
                     val home=state.home?:return
-                    home.promotions?.firstOrNull()?.let { promotion ->
-                        rows+=Row("promotion:${promotion.id}",Kind.SPOTLIGHT,release=promotion.release,image=promotion.image)
-                    }
+
                     rows+=Row("latest-heading",Kind.HEADING,"Новые эпизоды",selected=1,click={
                         if(!model.state.value.loading){rememberFocus();lastHistoryHydration=0;hydrateHistory();model.retry()}
                     })
@@ -1433,7 +1431,7 @@ class MainActivity : ComponentActivity() {
             val key=retainedFocus?:focusMemory[screenKey(state.screen)]
             val index=rows.indexOfFirst{it.key==key}.takeIf{it>=0}
                 ?: if(key!=null && adapter.contentStart>=0) (adapter.contentStart until rows.size).firstOrNull{rows[it].kind!=Kind.HEADING}?:adapter.contentStart
-                else rows.indexOfFirst{it.kind in listOf(Kind.ACTION,Kind.SETTING,Kind.ACCOUNT_TILE,Kind.POSTER,Kind.HERO,Kind.SPOTLIGHT,Kind.SHELF,Kind.FEATURE,Kind.GENRE,Kind.FRANCHISE,Kind.CONTINUE,Kind.MORE,Kind.CATALOG_BAR)}
+                else rows.indexOfFirst{it.kind in listOf(Kind.ACTION,Kind.SETTING,Kind.ACCOUNT_TILE,Kind.POSTER,Kind.HERO,Kind.SHELF,Kind.FEATURE,Kind.GENRE,Kind.FRANCHISE,Kind.CONTINUE,Kind.MORE,Kind.CATALOG_BAR)}
             if(index>=0&&!state.loading){list.doOnNextLayout{
                 if(current!=state.screen || menuOpen)return@doOnNextLayout
                 val item=list.findViewHolderForAdapterPosition(index)?.itemView

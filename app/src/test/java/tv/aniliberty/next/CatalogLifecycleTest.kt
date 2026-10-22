@@ -35,7 +35,7 @@ class CatalogLifecycleTest{
         render(UiState(screen=Screen.Catalog(),releases=releases.take(30),more=true))
         render(UiState(screen=Screen.Catalog(),releases=releases,more=false))
         render(UiState(screen=Screen.Catalog(query="Нет совпадений")))
-        render(UiState(screen=Screen.Home,home=HomeData(null,emptyList(),listOf(emptyList(),emptyList(),emptyList()),emptyList(),emptyList(),emptyList())))
+        render(UiState(screen=Screen.Home,home=HomeData(emptyList(),listOf(emptyList(),emptyList(),emptyList()),emptyList(),emptyList(),emptyList())))
         render(UiState(screen=Screen.Catalog(),releases=releases.take(4)))
         val list=MainActivity::class.java.getDeclaredField("list").apply{isAccessible=true}.get(activity)as RecyclerView
         val grid=list.layoutManager as androidx.recyclerview.widget.GridLayoutManager
