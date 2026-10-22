@@ -158,6 +158,7 @@ data class Row(
     val profile: AccountProfile? = null,
     val activeControls: Set<Int> = emptySet(),
     val isFavorite: Boolean = false,
+    val collectionType: CollectionType? = null,
 )
 
 class PageAdapter(
@@ -1794,7 +1795,7 @@ class PageAdapter(
                     subtitle.maxLines = 1
                     fun focusPoster(focused: Boolean) {
                         box.findViewWithTag<TextView>("favorite-count")?.visibility =
-                            if ((focused && !schedulePoster && release?.favoriteCount != null) || cataloguePoster || row.isFavorite)
+                            if (!schedulePoster && ((focused && release?.favoriteCount != null) || cataloguePoster || row.isFavorite))
                                 View.VISIBLE
                             else View.GONE
                         content.visibility = if (focused) View.VISIBLE else View.GONE
@@ -1972,6 +1973,37 @@ class PageAdapter(
                             release?.favoriteCount?.let { "В избранном у $it пользователей" }
                                 ?: "Количество добавлений в избранное неизвестно"
                     }
+                    val collectionBadge =
+                        box.findViewWithTag<TextView>("collection-status")
+                            ?: TextView(view.context).also {
+                                it.tag = "collection-status"
+                                box.addView(it)
+                            }
+                    collectionBadge.layoutParams =
+                        FrameLayout.LayoutParams(view.dp(28), view.dp(28), Gravity.TOP or Gravity.START)
+                            .apply {
+                                topMargin = view.dp(42)
+                                marginStart = view.dp(8)
+                            }
+                    collectionBadge.text = ""
+                    collectionBadge.gravity = Gravity.CENTER
+                    collectionBadge.background = shape(0xCC181818.toInt(), view.dp(6).toFloat())
+                    collectionBadge.isFocusable = false
+                    collectionBadge.setCompoundDrawablesRelative(
+                        row.collectionType?.let { type ->
+                            view.context.getDrawable(type.icon)?.mutate()?.apply {
+                                setTint(type.color)
+                                setBounds(0, 0, view.dp(18), view.dp(18))
+                            }
+                        },
+                        null,
+                        null,
+                        null,
+                    )
+                    collectionBadge.contentDescription =
+                        row.collectionType?.let { "Коллекция: ${it.title}" }.orEmpty()
+                    collectionBadge.visibility =
+                        if (row.collectionType != null) View.VISIBLE else View.GONE
                     focusPoster(box.hasFocus())
                     box.setOnFocusChangeListener { _, focused ->
                         focusPoster(focused)
