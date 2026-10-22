@@ -10,10 +10,11 @@ fun nextEpisode(episodes: List<Episode>, currentId: String?): Episode? {
 fun resumeEpisode(
     episodes: List<Episode>,
     lastId: String?,
+    watchedPercent: Int = DEFAULT_WATCHED_PERCENT,
     progress: (String) -> Pair<Long, Long>,
 ): Episode? {
     val saved = episodes.firstOrNull { it.id == lastId } ?: return episodes.firstOrNull()
     val (position, duration) = progress(saved.id)
-    return if (duration > 0 && position >= duration - 1000) nextEpisode(episodes, saved.id) ?: saved
+    return if (isEpisodeWatched(position, duration, watchedPercent)) nextEpisode(episodes, saved.id) ?: saved
     else saved
 }

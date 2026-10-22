@@ -114,7 +114,15 @@ class PlayerActivity : ComponentActivity() {
                             }
                     }
                     updateChrome()
-                    if (++progressTicks % 10 == 0) save()
+                    val reachedWatchedThreshold = current?.let { episode ->
+                        isEpisodeWatched(engine.currentPosition, duration, settings.watchedPercent) &&
+                            !isEpisodeWatched(
+                                prefs.getLong("position:${episode.id}", 0),
+                                duration,
+                                settings.watchedPercent,
+                            )
+                    } == true
+                    if (++progressTicks % 10 == 0 || reachedWatchedThreshold) save()
                 }
                 if (!stopped) handler.postDelayed(this, 1000)
             }
@@ -515,7 +523,7 @@ class PlayerActivity : ComponentActivity() {
         val saved = prefs.getLong("position:${episode.id}", 0)
         val duration = prefs.getLong("duration:${episode.id}", 0)
         engine.seekTo(
-            positionOverride ?: if (duration > 0 && saved >= duration - 1000) 0 else saved
+            positionOverride ?: if (isEpisodeWatched(saved, duration, settings.watchedPercent)) 0 else saved
         )
         engine.playWhenReady = play
         if (panel == null) hideControls()
@@ -723,6 +731,12 @@ class PlayerActivity : ComponentActivity() {
                             )
                         }
                     null
+                }
+            }
+            choice("Считать просмотренной после · ${settings.watchedPercent}%") {
+                showWatchedPercent(this) {
+                    save()
+                    playerSettings()
                 }
             }
             listOf(

@@ -19,6 +19,13 @@ class PlaybackOrderTest {
     }
 
     @Test
+    fun resumeUsesConfiguredThreshold() {
+        val episodes = listOf(episode("a", 1.0, 0), episode("b", 2.0, 1))
+        assertEquals("b", resumeEpisode(episodes, "a", 85) { 850L to 1000L }?.id)
+        assertEquals("a", resumeEpisode(episodes, "a", 95) { 850L to 1000L }?.id)
+    }
+
+    @Test
     fun nextUsesServerOrderIncludingFractionalAndMissingOrdinals() {
         val episodes =
             listOf(episode("a", 1.0, 0), episode("special", 12.5, 1), episode("last", 20.0, 2))

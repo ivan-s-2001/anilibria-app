@@ -34,6 +34,20 @@ class ViewingHistoryTest {
     }
 
     @Test
+    fun configuredThresholdOffersNextEpisodeWithoutLosingActualPosition() {
+        prefs.edit().putInt(WATCHED_PERCENT_KEY, 85).commit()
+        history.save(release, release.episodes[0], 1019999, 1200000, 10)
+        assertEquals("first", history.items().single().episodeId)
+        history.save(release, release.episodes[0], 1020000, 1200000, 11)
+        assertEquals("special", history.items().single().episodeId)
+        assertEquals(1020000L, history.latestWatched().single().position)
+        assertTrue(history.latestWatched().single().completed)
+        prefs.edit().putInt(WATCHED_PERCENT_KEY, 95).commit()
+        assertEquals("first", history.items().single().episodeId)
+        assertFalse(history.latestWatched().single().completed)
+    }
+
+    @Test
     fun dismissedReleaseStaysHiddenAfterMetadataRefreshUntilNewPlayback() {
         prefs.edit().putLong("position:first", 300000).apply()
         history.save(release, release.episodes[0], 300000, 1200000, 10)

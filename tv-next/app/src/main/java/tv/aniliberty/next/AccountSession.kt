@@ -381,7 +381,7 @@ fun queueAccountProgress(context: Context, episodeId: String, position: Long, du
             AccountTimecode(
                 episodeId,
                 position.coerceAtLeast(0) / 1000.0,
-                position > 0 && duration > 0 && position >= duration - 1000,
+                isEpisodeWatched(position, duration, TvSettings(context).watchedPercent),
             )
         ),
     )
@@ -406,7 +406,7 @@ internal fun localTimecodes(prefs: SharedPreferences): List<AccountTimecode> =
             val position = prefs.getLong(key, 0)
             val duration = prefs.getLong("duration:$id", 0)
             if (position <= 0 || id.isBlank()) null
-            else AccountTimecode(id, position / 1000.0, duration > 0 && position >= duration - 1000)
+            else AccountTimecode(id, position / 1000.0, isEpisodeWatched(position, duration, watchedPercent(prefs)))
         }
 
 internal fun importCandidates(
