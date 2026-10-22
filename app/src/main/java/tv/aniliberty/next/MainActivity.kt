@@ -93,7 +93,7 @@ class MainActivity : ComponentActivity() {
         adapter=PageAdapter(::navigate,::selectTab,::play,::favorite,{rememberFocus();model.open(Screen.Detail(it.id))},
             { id -> prefs.getLong("position:$id",0) to prefs.getLong("duration:$id",0) },
             { id -> prefs.getString("last:$id",null) },::returnToTabs, { index -> enterDay=true;val previous=model.state.value;model.homeDay(index);if(previous==model.state.value)render(model.state.value) },::quickActions)
-        grid.spanSizeLookup=object:GridLayoutManager.SpanSizeLookup(){override fun getSpanSize(position:Int)=when(adapter.rows[position].kind){Kind.POSTER->3;Kind.EPISODE,Kind.FEATURE->5;else->15}}
+        grid.spanSizeLookup=object:GridLayoutManager.SpanSizeLookup(){override fun getSpanSize(position:Int)=when(adapter.rows[position].kind){Kind.POSTER,Kind.GENRE->3;Kind.EPISODE,Kind.FEATURE,Kind.FRANCHISE->5;else->15}}
         list.adapter=adapter
         shell=LinearLayout(this).apply{setBackgroundColor(0xFF121212.toInt())}
         menu=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(12),dp(4),0);setBackgroundColor(0xFF212121.toInt())}
@@ -192,15 +192,17 @@ class MainActivity : ComponentActivity() {
     private fun openSection(kind:HomeSection){rememberFocus();model.open(Screen.Section(kind))}
     private fun releaseCards(items:List<Release>,key:String)=items.distinctBy{it.id}.map{Row("$key:release:${it.id}",Kind.POSTER,release=it)}
     private fun featureCards(items:List<Feature>,kind:HomeSection)=items.map{feature->
-        Row("${kind.name}:${feature.id}",Kind.FEATURE,feature.title,feature.subtitle,image=feature.image,click={
+        Row("${kind.name}:${feature.id}",if(kind==HomeSection.GENRES)Kind.GENRE else Kind.FRANCHISE,feature.title,feature.subtitle,image=feature.image,click={
             rememberFocus()
             if(kind==HomeSection.FRANCHISES)model.open(Screen.Franchise(feature.id,feature.title))
             else model.open(Screen.Catalog(genre=feature.id.toIntOrNull(),title=feature.title))
         })
     }
     private fun videoCards(items:List<HomeVideo>)=items.map{video->Row("video:${video.id}",Kind.FEATURE,video.title,video.subtitle,image=video.image,click={openLink(video.url.takeIf{it.startsWith("https://")})})}
-    private fun homeShelf(kind:HomeSection,items:List<Row>,wide:Boolean=false,key:String=kind.name):Row =
-        Row("shelf:$key",Kind.SHELF,selected=if(wide)1 else 0,cards=shelfCards(key,kind.title,items,wide){openSection(kind)})
+    private fun homeShelf(kind:HomeSection,items:List<Row>,wide:Boolean=false,key:String=kind.name):Row {
+        val style=when(kind){HomeSection.GENRES->2;HomeSection.FRANCHISES->3;else->if(wide)1 else 0}
+        return Row("shelf:$key",Kind.SHELF,selected=style,cards=shelfCards(key,kind.title,items,wide,style){openSection(kind)})
+    }
     private fun render(state:UiState){
         val retainedFocus = if(current==state.screen) list.findFocus()?.let { list.findContainingItemView(it)?.tag as? String } else null
         current=state.screen
@@ -326,7 +328,7 @@ class MainActivity : ComponentActivity() {
             val key=retainedFocus?:focusMemory[screenKey(state.screen)]
             val index=rows.indexOfFirst{it.key==key}.takeIf{it>=0}
                 ?: if(key!=null && adapter.contentStart>=0) (adapter.contentStart until rows.size).firstOrNull{rows[it].kind!=Kind.HEADING}?:adapter.contentStart
-                else rows.indexOfFirst{it.kind in listOf(Kind.ACTION,Kind.POSTER,Kind.HERO,Kind.SPOTLIGHT,Kind.SHELF,Kind.FEATURE,Kind.MORE)}
+                else rows.indexOfFirst{it.kind in listOf(Kind.ACTION,Kind.POSTER,Kind.HERO,Kind.SPOTLIGHT,Kind.SHELF,Kind.FEATURE,Kind.GENRE,Kind.FRANCHISE,Kind.MORE)}
             if(index>=0&&!state.loading){list.doOnNextLayout{
                 val item=list.findViewHolderForAdapterPosition(index)?.itemView
                 focusItem(item)

@@ -44,4 +44,29 @@ class HomeShelfTest {
         assertEquals(feature.itemView.layoutParams.width,more.itemView.layoutParams.width)
         assertEquals(feature.itemView.layoutParams.height,more.itemView.layoutParams.height)
     }
+    @Test fun genrePlacesCaptionInsideImageLikeWeb(){
+        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
+        adapter.submit(listOf(Row("genre:1",Kind.GENRE,"Фэнтези","628 релизов")))
+        val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.GENRE.ordinal)
+        adapter.onBindViewHolder(holder,0)
+        val card=holder.itemView as FrameLayout
+        assertEquals(-1,card.getChildAt(0).layoutParams.height)
+        val content=card.getChildAt(2)as android.widget.LinearLayout
+        assertEquals(android.view.Gravity.BOTTOM,(content.layoutParams as FrameLayout.LayoutParams).gravity)
+        assertEquals(android.view.Gravity.CENTER,(content.getChildAt(0)as android.widget.TextView).gravity)
+        assertEquals(android.view.View.VISIBLE,card.getChildAt(1).visibility)
+    }
+    @Test fun franchiseUsesSeparateSideInformationPanel(){
+        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{},shelfMode=true)
+        adapter.submit(listOf(Row("franchise:1",Kind.FRANCHISE,"Франшиза","2020–2026 · 3 части")))
+        val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.FRANCHISE.ordinal)
+        adapter.onBindViewHolder(holder,0)
+        val card=holder.itemView as FrameLayout
+        val image=card.getChildAt(0)
+        val content=card.getChildAt(2)
+        assertTrue(image.layoutParams.width>0)
+        assertEquals(image.layoutParams.width,(content.layoutParams as FrameLayout.LayoutParams).marginStart)
+        assertEquals(android.view.View.GONE,card.getChildAt(1).visibility)
+    }
+
 }

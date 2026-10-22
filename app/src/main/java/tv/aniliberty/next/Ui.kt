@@ -47,7 +47,7 @@ fun action(parent: ViewGroup, title: String, primary: Boolean = false, icon: Int
     setOnClickListener { click() }
 }
 
-enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE }
+enum class Kind { NAV, HERO, TABS, POSTER, EPISODE, HEADING, TEXT, ACTION, SPOTLIGHT, FEATURE, DAYS, SHELF, MORE, GENRE, FRANCHISE }
 data class Row(val key: String, val kind: Kind, val title: String = "", val subtitle: String = "", val release: Release? = null, val episode: Episode? = null, val selected: Int = 0, val click: (() -> Unit)? = null, val image: String? = null, val items: List<Release> = emptyList(), val cards:List<Row> = emptyList())
 
 class PageAdapter(
@@ -114,7 +114,7 @@ class PageAdapter(
                 orientation=LinearLayout.VERTICAL;setPadding(0,dp(8),0,dp(4))
                 addView(TextView(context));addView(TextView(context),LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(4)})
             }
-            Kind.POSTER, Kind.SPOTLIGHT, Kind.FEATURE -> FrameLayout(context).apply {
+            Kind.POSTER, Kind.SPOTLIGHT, Kind.FEATURE, Kind.GENRE, Kind.FRANCHISE -> FrameLayout(context).apply {
                 isFocusable = true; isClickable = true; focusBackground(); clipToOutline=true; setPadding(dp(3),dp(3),dp(3),dp(3))
                 addView(ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_CROP },FrameLayout.LayoutParams(-1,-1))
                 addView(View(context).apply { background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,intArrayOf(0xF5121212.toInt(),0x10121212)) },FrameLayout.LayoutParams(-1,-1))
@@ -133,7 +133,7 @@ class PageAdapter(
             }
             else -> TextView(context)
         }
-        view.layoutParams = RecyclerView.LayoutParams(if(shelfMode)view.dp(if(Kind.entries[type]==Kind.FEATURE)232 else 144)else -1, when(Kind.entries[type]){Kind.EPISODE->view.dp(160);Kind.POSTER->view.dp(270);Kind.MORE->view.dp(270);Kind.SHELF->view.dp(286);Kind.SPOTLIGHT->view.dp(160);Kind.FEATURE->view.dp(204);else->-2}).apply {
+        view.layoutParams = RecyclerView.LayoutParams(if(shelfMode)view.dp(when(Kind.entries[type]){Kind.FEATURE->232;Kind.GENRE->172;Kind.FRANCHISE->312;else->144})else -1, when(Kind.entries[type]){Kind.EPISODE->view.dp(160);Kind.GENRE->view.dp(236);Kind.FRANCHISE->view.dp(190);Kind.POSTER->view.dp(270);Kind.MORE->view.dp(270);Kind.SHELF->view.dp(286);Kind.SPOTLIGHT->view.dp(160);Kind.FEATURE->view.dp(204);else->-2}).apply {
             val card = Kind.entries[type] in listOf(Kind.POSTER,Kind.EPISODE,Kind.FEATURE)
             setMargins(view.dp(4), view.dp(4),view.dp(4),view.dp(4))
         }
@@ -155,14 +155,14 @@ class PageAdapter(
                 val oldKey=shelf.getTag(R.id.shelf_key) as? String
                 if(oldKey!=row.key){shelf.adapter=PageAdapter(navigate,tab,play,favorite,details,progress,lastEpisode,returnToTabs,day,quickActions,true);shelf.scrollToPosition(0)}
                 shelf.setTag(R.id.shelf_key,row.key)
-                shelf.layoutParams=shelf.layoutParams.apply{height=view.dp(if(row.selected==1)220 else 286)}
+                shelf.layoutParams=shelf.layoutParams.apply{height=view.dp(when(row.selected){1->220;2->252;3->206;else->286})}
                 val cards=if(row.cards.isNotEmpty())row.cards else row.items.map{Row("${row.key}:release:${it.id}",Kind.POSTER,release=it)}
                 (shelf.adapter as PageAdapter).submit(cards)
                 restoreShelf(shelf,false)
             }
             Kind.MORE -> {
                 val text=view as TextView
-                text.layoutParams=text.layoutParams.apply{if(shelfMode){width=view.dp(if(row.selected==1)232 else 144);height=view.dp(if(row.selected==1)204 else 270)}}
+                text.layoutParams=text.layoutParams.apply{if(shelfMode){width=view.dp(when(row.selected){1->232;2->172;3->312;else->144});height=view.dp(when(row.selected){1->204;2->236;3->190;else->270})}}
                 text.label("Все\n${row.title}",16f,WHITE,true)
                 val arrow=view.context.getDrawable(R.drawable.ic_arrow_right)!!.mutate().apply{setBounds(0,0,view.dp(32),view.dp(32));setTint(WHITE)}
                 text.setCompoundDrawables(null,arrow,null,null);text.compoundDrawablePadding=view.dp(12)
@@ -226,6 +226,43 @@ class PageAdapter(
                 if(episode!=null && !r.blocked) controls.addView(action(controls,if(progress(episode.id).first>0) "Продолжить" else "Смотреть",true,R.drawable.ic_play){play(episode)},LinearLayout.LayoutParams(-2,-1).apply{marginEnd=view.dp(12)})
                 controls.addView(action(controls,"В библиотеку",icon=R.drawable.ic_favorite){favorite(r)},LinearLayout.LayoutParams(-2,-1))
                 if(r.blocked)text("Просмотр ограничен правообладателем или регионом",15f,MUTED)
+            }
+            Kind.GENRE,Kind.FRANCHISE -> {
+                val box=view as FrameLayout
+                val image=box.getChildAt(0)as ImageView
+                val shade=box.getChildAt(1)
+                val content=box.getChildAt(2)as LinearLayout
+                val title=content.getChildAt(0)as TextView
+                val meta=content.getChildAt(1)as TextView
+                val genre=row.kind==Kind.GENRE
+                box.focusBackground();box.clipToOutline=true
+                image.load(row.image);image.scaleType=ImageView.ScaleType.CENTER_CROP
+                if(genre){
+                    image.layoutParams=FrameLayout.LayoutParams(-1,-1)
+                    shade.background=GenreShade();shade.visibility=View.VISIBLE
+                    content.layoutParams=FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM)
+                    content.setPadding(view.dp(12),view.dp(12),view.dp(12),view.dp(18))
+                    title.label(row.title,17f,WHITE,true);title.gravity=Gravity.CENTER;title.maxLines=2
+                    meta.label(row.subtitle,12f,0xFFBDBDBD.toInt(),true);meta.gravity=Gravity.CENTER;meta.maxLines=1
+                    title.layoutParams=LinearLayout.LayoutParams(-1,-2)
+                    meta.layoutParams=LinearLayout.LayoutParams(-1,-2).apply{topMargin=view.dp(5)}
+                    content.setBackgroundColor(Color.TRANSPARENT)
+                }else{
+                    val width=if(shelfMode)view.dp(150)else ((view.resources.displayMetrics.widthPixels-view.dp(140))/3/2)
+                    image.layoutParams=FrameLayout.LayoutParams(width,-1,Gravity.START)
+                    shade.visibility=View.GONE
+                    content.layoutParams=FrameLayout.LayoutParams(-1,-1).apply{marginStart=width}
+                    content.setPadding(view.dp(14),view.dp(14),view.dp(12),view.dp(14))
+                    content.setBackgroundColor(0xFF212121.toInt())
+                    title.label(row.title,15f,WHITE,true);title.gravity=Gravity.START;title.maxLines=4
+                    meta.label(row.subtitle,12f,MUTED);meta.gravity=Gravity.BOTTOM;meta.maxLines=4
+                    title.layoutParams=LinearLayout.LayoutParams(-1,-2)
+                    meta.layoutParams=LinearLayout.LayoutParams(-1,0,1f).apply{topMargin=view.dp(10)}
+                }
+                meta.visibility=if(row.subtitle.isBlank())View.GONE else View.VISIBLE
+                box.contentDescription=listOf(row.title,row.subtitle).filter(String::isNotBlank).joinToString(". ")
+                box.setOnClickListener{row.click?.invoke()}
+                box.setOnFocusChangeListener{_,focused->box.animate().scaleX(if(focused)1.025f else 1f).scaleY(if(focused)1.025f else 1f).setDuration(140).start()}
             }
             Kind.SPOTLIGHT,Kind.FEATURE,Kind.POSTER -> {
                 val box=view as FrameLayout
@@ -310,5 +347,18 @@ class PageAdapter(
 
 
 /** Home previews contain at most nine real cards and one explicit full-section destination. */
-fun shelfCards(key:String,title:String,items:List<Row>,wide:Boolean=false,openAll:()->Unit):List<Row> =
-    items.take(9)+Row("$key:all",Kind.MORE,title,selected=if(wide)1 else 0,click=openAll)
+fun shelfCards(key:String,title:String,items:List<Row>,wide:Boolean=false,style:Int=if(wide)1 else 0,openAll:()->Unit):List<Row> =
+    items.take(9)+Row("$key:all",Kind.MORE,title,selected=style,click=openAll)
+
+
+/** Same three stops as genresProxy: transparent, 20% black at 70%, opaque bottom. */
+private class GenreShade:android.graphics.drawable.Drawable(){
+    private val paint=android.graphics.Paint()
+    override fun onBoundsChange(bounds:android.graphics.Rect){
+        paint.shader=android.graphics.LinearGradient(0f,bounds.top.toFloat(),0f,bounds.bottom.toFloat(),intArrayOf(0x00101010,0x33101010,Color.BLACK),floatArrayOf(0f,.7f,1f),android.graphics.Shader.TileMode.CLAMP)
+    }
+    override fun draw(canvas:android.graphics.Canvas){canvas.drawRect(bounds,paint)}
+    override fun setAlpha(alpha:Int){paint.alpha=alpha;invalidateSelf()}
+    override fun setColorFilter(filter:android.graphics.ColorFilter?){paint.colorFilter=filter;invalidateSelf()}
+    @Deprecated("Deprecated in Java") override fun getOpacity()=android.graphics.PixelFormat.TRANSLUCENT
+}
