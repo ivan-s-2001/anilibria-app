@@ -156,7 +156,7 @@ class HomeShelfTest {
     }
 
     @Test
-    fun catalogueFavoriteCounterAppearsOnFocusAndSurvivesReuseInWatchOrder() {
+    fun catalogueFavoriteBadgeAppearsOnFocusAndSurvivesReuseInWatchOrder() {
         val adapter = PageAdapter({}, {}, {}, {}, { 0L to 0L }, { null }, {})
         val release =
             parseRelease(
@@ -178,13 +178,15 @@ class HomeShelfTest {
         parent.addView(other)
         val favorites = card.findViewWithTag<android.widget.TextView>("favorite-count")
         assertEquals("25.6к", favorites.text.toString())
+        val badge = card.findViewWithTag<android.widget.LinearLayout>("poster-meta-badge")
         assertEquals(android.view.View.GONE, favorites.visibility)
         card.requestFocus()
-        assertEquals(android.view.View.VISIBLE, favorites.visibility)
-        val favoriteParams = favorites.layoutParams as FrameLayout.LayoutParams
+        assertEquals(android.view.View.VISIBLE, badge.visibility)
+        assertEquals("25.6к", (badge.getChildAt(0) as android.widget.TextView).text.toString())
+        val badgeParams = badge.layoutParams as FrameLayout.LayoutParams
         assertEquals(
             android.view.Gravity.START,
-            favoriteParams.gravity and android.view.Gravity.RELATIVE_HORIZONTAL_GRAVITY_MASK,
+            badgeParams.gravity and android.view.Gravity.RELATIVE_HORIZONTAL_GRAVITY_MASK,
         )
         adapter.submit(listOf(Row("poster", Kind.POSTER, release = release, selected = 2)))
         adapter.onBindViewHolder(holder, 0)
@@ -194,6 +196,7 @@ class HomeShelfTest {
         assertEquals("25.6к", favorites.text.toString())
         other.requestFocus()
         assertEquals(android.view.View.GONE, favorites.visibility)
+        assertEquals(android.view.View.VISIBLE, badge.visibility)
     }
 
     @Test
