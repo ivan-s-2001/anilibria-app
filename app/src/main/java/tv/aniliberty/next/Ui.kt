@@ -411,7 +411,7 @@ class PageAdapter(
                         scaleType=ImageView.ScaleType.FIT_CENTER;isFocusable=false;contentDescription=rating.source
                         load("file:///android_asset/brands/$file.svg"){decoderFactory(coil3.svg.SvgDecoder.Factory())}
                     },LinearLayout.LayoutParams(view.dp(if(file=="shikimori")24 else 36),view.dp(24)))
-                    badge.addView(TextView(view.context).apply{label("%.1f".format(rating.value),16f,if(rating.value>=8)0xFF78C99F.toInt()else WHITE,true)},LinearLayout.LayoutParams(-2,-2).apply{marginStart=view.dp(7)})
+                    badge.addView(TextView(view.context).apply{label("%.1f".format(rating.value),16f,WHITE,true)},LinearLayout.LayoutParams(-2,-2).apply{marginStart=view.dp(7)})
                     ratings.addView(badge,LinearLayout.LayoutParams(-2,view.dp(32)).apply{marginEnd=view.dp(8)})
                 }
                 r.favoriteCount?.let{count->

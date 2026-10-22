@@ -24,6 +24,7 @@ class HomeShelfTest {
         assertEquals("Title",(info.getChildAt(1)as android.widget.TextView).text.toString())
         val ratings=(info.getChildAt(2)as android.widget.HorizontalScrollView).getChildAt(0)as android.widget.LinearLayout
         assertEquals(4,ratings.childCount)
+        for(index in 0..1)assertEquals(WHITE,((ratings.getChildAt(index)as android.widget.LinearLayout).getChildAt(1)as android.widget.TextView).currentTextColor)
         assertEquals("Онгоинг",(ratings.getChildAt(3)as android.widget.TextView).text.toString())
         assertEquals(0xFF68B5FF.toInt(),(ratings.getChildAt(3)as android.widget.TextView).currentTextColor)
         assertEquals("25.6к",(ratings.getChildAt(2)as android.widget.TextView).text.toString())
@@ -388,7 +389,7 @@ class HomeShelfTest {
         assertEquals(android.view.View.VISIBLE,title.visibility)
         assertEquals(android.view.View.VISIBLE,information.visibility)
         assertEquals(android.view.View.VISIBLE,badge.visibility)
-        assertEquals(android.view.View.GONE,card.findViewWithTag<android.widget.TextView>("favorite-count").visibility)
+        assertEquals(5,card.childCount)
         assertNotNull((card.getChildAt(0)as android.widget.ImageView).colorFilter)
         val root=FrameLayout(RuntimeEnvironment.getApplication())
         root.addView(card)
