@@ -13,6 +13,22 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[30],application=Application::class)
 class HomeShelfTest {
+    @Test fun titleHeaderUsesNumericAgeAndStatusAfterNamesWithoutSynopsis(){
+        val adapter=PageAdapter({},{},{},{},{},{0L to 0L},{null},{})
+        val release=parseRelease(org.json.JSONObject("""{"id":1,"name":{"main":"Название","english":"Title"},"year":2026,"age_rating":{"description":"18+"},"is_ongoing":true,"description":"СКРЫТОЕ КРАТКОЕ ОПИСАНИЕ","shikimori":{"rating":8.5},"mal":{"rating":8.1}}"""))
+        adapter.submit(listOf(Row("hero",Kind.HERO,release=release)))
+        val holder=adapter.onCreateViewHolder(FrameLayout(RuntimeEnvironment.getApplication()),Kind.HERO.ordinal)
+        adapter.onBindViewHolder(holder,0)
+        val info=(holder.itemView as android.widget.LinearLayout).getChildAt(1)as android.widget.LinearLayout
+        assertEquals("Название",(info.getChildAt(0)as android.widget.TextView).text.toString())
+        assertEquals("Title",(info.getChildAt(1)as android.widget.TextView).text.toString())
+        val ratings=(info.getChildAt(2)as android.widget.HorizontalScrollView).getChildAt(0)as android.widget.LinearLayout
+        assertEquals(3,ratings.childCount)
+        assertEquals("Онгоинг",(ratings.getChildAt(2)as android.widget.TextView).text.toString())
+        val metadata=(info.getChildAt(3)as android.widget.TextView).text.toString()
+        assertTrue(metadata.endsWith("18"));assertFalse(metadata.contains("+"))
+        assertFalse((0 until info.childCount).mapNotNull{info.getChildAt(it)as?android.widget.TextView}.any{it.text.contains("СКРЫТОЕ")})
+    }
     @Test fun detailTabsKeepFocusOnSelectionAndEnterContentOnlyOnDown(){
         var selected=-1;var entered=-1
         val adapter=PageAdapter({},{selected=it},{},{},{},{0L to 0L},{null},{},enterTab={entered=it})

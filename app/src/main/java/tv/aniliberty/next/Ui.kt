@@ -16,6 +16,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import coil3.load
+import coil3.request.allowHardware
+import coil3.request.transformations
 
 const val RED = 0xFFFE3635.toInt()
 const val WHITE = 0xFFFFFFFF.toInt()
@@ -399,11 +401,30 @@ class PageAdapter(
                 }
                 text(r.title,27f,WHITE,true)
                 text(r.english,13f,MUTED,false,1)
-                text(listOf(r.year,r.season,r.type,r.age,r.ongoing?.let{if(it)"Онгоинг"else "Завершён"}.orEmpty()).filter{it.isNotBlank()}.joinToString(" · "),14f,MUTED,false,1)
+                val ratings=LinearLayout(view.context).apply{gravity=Gravity.CENTER_VERTICAL}
+                info.addView(HorizontalScrollView(view.context).apply{isHorizontalScrollBarEnabled=false;addView(ratings)},LinearLayout.LayoutParams(-1,view.dp(36)).apply{bottomMargin=view.dp(8)})
+                r.ratings.forEach{rating->
+                    val badge=LinearLayout(view.context).apply{gravity=Gravity.CENTER_VERTICAL;setPadding(dp(8),dp(3),dp(8),dp(3));background=shape(0xFF212121.toInt(),dp(6).toFloat());contentDescription="${rating.source}: ${rating.value}"}
+                    val file=if(rating.source=="Shikimori")"shikimori"else"myanimelist"
+                    badge.addView(ImageView(view.context).apply{
+                        scaleType=ImageView.ScaleType.FIT_CENTER;isFocusable=false;contentDescription=rating.source
+                        load("file:///android_asset/brands/$file.svg"){decoderFactory(coil3.svg.SvgDecoder.Factory())}
+                    },LinearLayout.LayoutParams(view.dp(if(file=="shikimori")24 else 36),view.dp(24)))
+                    badge.addView(TextView(view.context).apply{label("%.1f".format(rating.value),16f,if(rating.value>=8)0xFF78C99F.toInt()else WHITE,true)},LinearLayout.LayoutParams(-2,-2).apply{marginStart=view.dp(7)})
+                    ratings.addView(badge,LinearLayout.LayoutParams(-2,view.dp(32)).apply{marginEnd=view.dp(8)})
+                }
+                r.ongoing?.let{ongoing->
+                    val color=if(ongoing)0xFF68B5FF.toInt()else 0xFF78C99F.toInt()
+                    ratings.addView(TextView(view.context).apply{
+                        label(if(ongoing)"Онгоинг"else"Завершён",14f,color,true)
+                        gravity=Gravity.CENTER;setPadding(dp(10),0,dp(10),0)
+                        background=shape(if(ongoing)0x1A68B5FF else 0x1A78C99F,dp(6).toFloat())
+                    },LinearLayout.LayoutParams(-2,view.dp(32)))
+                }
+                if(r.ratings.isEmpty() && r.ongoing==null)ratings.parent.let{(it as View).visibility=View.GONE}
+                val age=Regex("[0-9]+").find(r.age)?.value.orEmpty()
+                text(listOf(r.year,r.season,r.type,age).filter{it.isNotBlank()}.joinToString(" · "),14f,MUTED,false,1)
                 text(r.genres.joinToString(" · "),14f,WHITE,false,2)
-                text(r.ratings.joinToString(" · "){"${it.source} ${"%.1f".format(it.value)}"},13f,MUTED,false,1)
-                val description=android.text.Html.fromHtml(r.description,android.text.Html.FROM_HTML_MODE_LEGACY).toString().trim().replace(Regex("\\s+")," ")
-                text(description,14f,MUTED,false,2)
                 val episode=resumeEpisode(r.episodes,lastEpisode(r.id),progress)
                 val controls=LinearLayout(view.context).apply{gravity=Gravity.CENTER_VERTICAL}
                 info.addView(HorizontalScrollView(view.context).apply{isHorizontalScrollBarEnabled=false;addView(controls)},LinearLayout.LayoutParams(-1,view.dp(48)).apply{topMargin=view.dp(4)})
@@ -685,8 +706,12 @@ class PageAdapter(
             }
             Kind.EPISODE -> {
                 val box=view as FrameLayout;val e=row.episode!!
-                (box.getChildAt(0)as ImageView).load(e.preview)
                 val watched=progress(e.id)
+                (box.getChildAt(0)as ImageView).apply{
+                    contentDescription=if(watched.first<=0)"Превью скрыто до начала просмотра"else "Превью серии"
+                    if(watched.first<=0)setImageDrawable(null)
+                    load(e.preview){if(watched.first<=0){allowHardware(false);size(192,108);transformations(SpoilerBlurTransformation())}}
+                }
                 val completed=watched.second>0 && watched.first>=watched.second-1000
                 val episodeTitle=if(e.name.isBlank())e.label else "${number(e.ordinal)} · ${e.name}"
                 val duration=if(e.duration>0)"%d:%02d".format(e.duration/60,e.duration%60)else ""
