@@ -181,10 +181,17 @@ class AccountRepository(private val context: Context, val api: AccountApi = Acco
 
     suspend fun refresh() {
         val value = token()
-        val profile = api.profile(value)
+        var profile = api.profile(value)
+        val preferences = SupportAds(context)
+        if (preferences.decided)
+            profile =
+                syncSupportAds(api, value, profile, preferences.desired()) {
+                    session.token() == value
+                }
+        if (session.token() != value) return
+        session.saveProfile(profile)
         val loaded = api.lists(value)
         if (session.token() == value) {
-            session.saveProfile(profile)
             lists = loaded
             saveLists()
         }

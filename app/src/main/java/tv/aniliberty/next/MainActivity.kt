@@ -961,11 +961,13 @@ class MainActivity : ComponentActivity() {
             StartupScreen(
                 this,
                 start = {
-                    getSharedPreferences("viewing", MODE_PRIVATE)
-                        .edit()
-                        .putBoolean("welcomed", true)
-                        .apply()
-                    model.open(Screen.Home, false)
+                    offerSupportAds {
+                        getSharedPreferences("viewing", MODE_PRIVATE)
+                            .edit()
+                            .putBoolean("welcomed", true)
+                            .apply()
+                        model.open(Screen.Home, false)
+                    }
                 },
                 retry = model::retry,
                 qr = { login("qr") },
@@ -1016,6 +1018,16 @@ class MainActivity : ComponentActivity() {
                 getSharedPreferences("viewing", MODE_PRIVATE).getBoolean("welcomed", false)
         )
             model.open(Screen.Home, false)
+        if (getSharedPreferences("viewing", MODE_PRIVATE).getBoolean("welcomed", false))
+            root.post {
+                offerSupportAds {
+                    if (account.signedIn)
+                        lifecycleScope.launch {
+                            accountJob?.join()
+                            refreshAccount(force = true)
+                        }
+                }
+            }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -1340,6 +1352,53 @@ class MainActivity : ComponentActivity() {
             .joinToString(" · ")
     }
 
+    private fun offerSupportAds(continueStartup: () -> Unit) {
+        val ads = SupportAds(this)
+        if (ads.decided) {
+            continueStartup()
+            return
+        }
+        val panel = TvSidePanel(this, "Поддержите AniLiberty")
+        panel.message(
+            "Если хотите поддержать проект, можете включить рекламу. Эти настройки действуют на ТВ и после входа сохраняются в аккаунте."
+        )
+        listOf(
+                Triple("support-video-ads", "Показывать видеорекламу", "Перед просмотром эпизодов"),
+                Triple(
+                    "support-video-ads-always",
+                    "Перед каждым эпизодом",
+                    "Максимальная поддержка проекта",
+                ),
+                Triple(
+                    "support-content-ads",
+                    "Показывать контентную рекламу",
+                    "Баннеры и рекламные материалы",
+                ),
+            )
+            .forEach { (key, title, description) ->
+                val toggle =
+                    android.widget.Switch(this).apply {
+                        text = "$title\n$description"
+                        textSize = 15f
+                        setTextColor(WHITE)
+                        isChecked = settings.enabled(key, false)
+                        isFocusable = true
+                        setPadding(dp(12), dp(12), dp(12), dp(12))
+                        focusBackground()
+                        setOnCheckedChangeListener { _, value ->
+                            if (settings.enabled(key, false) != value) settings.toggle(key, false)
+                        }
+                    }
+                panel.body.addView(toggle, LinearLayout.LayoutParams(-1, dp(88)))
+            }
+        panel.addAction("Продолжить", true) { panel.dismiss() }
+        panel.setOnDismissListener {
+            ads.completeChoice()
+            continueStartup()
+        }
+        panel.show()
+    }
+
     private fun login(method: String? = null) {
         val fromWelcome = current == Screen.Welcome
         val previousUser = account.session.userId
@@ -1359,16 +1418,18 @@ class MainActivity : ComponentActivity() {
                 Toast.makeText(this, "Вход выполнен", Toast.LENGTH_SHORT).show()
                 if (previousUser != null && previousUser != account.session.userId)
                     model.resetNavigation(Screen.Profile)
-                if (fromWelcome) {
-                    getSharedPreferences("viewing", MODE_PRIVATE)
-                        .edit()
-                        .putBoolean("welcomed", true)
-                        .apply()
-                    model.open(Screen.Home, false)
+                offerSupportAds {
+                    if (fromWelcome) {
+                        getSharedPreferences("viewing", MODE_PRIVATE)
+                            .edit()
+                            .putBoolean("welcomed", true)
+                            .apply()
+                        model.open(Screen.Home, false)
+                    }
+                    rememberFocus()
+                    render(model.state.value)
+                    refreshAccount(force = true, after = { offerLocalHistory(automatic = true) })
                 }
-                rememberFocus()
-                render(model.state.value)
-                refreshAccount(force = true, after = { offerLocalHistory(automatic = true) })
             }
         when (method) {
             "qr" -> panel.startQr()
@@ -2955,6 +3016,15 @@ class MainActivity : ComponentActivity() {
                                         if (settings.enabled(key, default)) "Вкл. ●" else "Выкл. ○",
                                     click = {
                                         settings.toggle(key, default)
+                                        if (key.startsWith("support-")) {
+                                            SupportAds(this).completeChoice()
+                                            if (account.signedIn) {
+                                                lifecycleScope.launch {
+                                                    accountJob?.join()
+                                                    refreshAccount(force = true)
+                                                }
+                                            }
+                                        }
                                         rememberFocus()
                                         buildMenu()
                                         render(model.state.value)
@@ -2970,60 +3040,25 @@ class MainActivity : ComponentActivity() {
                             "",
                             prefs.getBoolean("auto-next", true),
                         )
-                        rows += Row("settings-ads", Kind.HEADING, "Реклама на сайте AniLiberty")
-                        if (account.signedIn) {
-                            val profile = account.session.profile()
-                            listOf(
-                                    Triple("video", "Показывать видеорекламу", profile?.videoAds),
-                                    Triple(
-                                        "always",
-                                        "Реклама перед каждым эпизодом",
-                                        profile?.videoAdsAlways,
-                                    ),
-                                    Triple(
-                                        "content",
-                                        "Показывать контентную рекламу",
-                                        profile?.contentAds,
-                                    ),
-                                )
-                                .forEach { (key, title, value) ->
-                                    rows +=
-                                        Row(
-                                            "setting-ad:$key",
-                                            Kind.SETTING,
-                                            title,
-                                            favoriteTitle =
-                                                when (value) {
-                                                    true -> "Вкл. ●"
-                                                    false -> "Выкл. ○"
-                                                    null -> "—"
-                                                },
-                                            click = {
-                                                accountAction {
-                                                    account.refresh()
-                                                    if (value != null) {
-                                                        val fresh = account.session.profile()
-                                                        val actual =
-                                                            when (key) {
-                                                                "video" -> fresh?.videoAds
-                                                                "always" -> fresh?.videoAdsAlways
-                                                                else -> fresh?.contentAds
-                                                            }
-                                                        if (actual == value)
-                                                            account.toggleAdPreference(key)
-                                                    }
-                                                }
-                                            },
-                                        )
-                                }
-                        } else
-                            rows +=
-                                Row(
-                                    "settings-ads-login",
-                                    Kind.ACTION,
-                                    "Войти для настройки рекламы",
-                                    click = { login() },
-                                )
+                        rows += Row("settings-ads", Kind.HEADING, "Реклама")
+                        localToggle(
+                            "support-video-ads",
+                            "Показывать видеорекламу",
+                            "Перед просмотром эпизодов. В обычном режиме — не чаще раза в 30 минут.",
+                            false,
+                        )
+                        localToggle(
+                            "support-video-ads-always",
+                            "Перед каждым эпизодом",
+                            "Максимальная поддержка проекта. Работает при включённой видеорекламе.",
+                            false,
+                        )
+                        localToggle(
+                            "support-content-ads",
+                            "Показывать контентную рекламу",
+                            "Баннеры и рекламные материалы. Выбор сохраняется и в аккаунте.",
+                            false,
+                        )
                         rows += Row("settings-menu", Kind.HEADING, "Кнопки бокового меню")
                         localToggle("menu-random", "Случайный релиз", "", false)
                         localToggle("menu-search", "Поиск", "")
