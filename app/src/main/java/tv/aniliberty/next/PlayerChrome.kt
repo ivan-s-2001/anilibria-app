@@ -19,7 +19,7 @@ class PlayerChrome(context:Context):LinearLayout(context){
     val episode=TextView(context).apply{label("",14f,MUTED);maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END}
     val elapsed=TextView(context).apply{label("0:00",14f,WHITE,true)}
     val remaining=TextView(context).apply{label("",13f,MUTED);gravity=Gravity.END}
-    val seek=SeekBar(context).apply{max=1000;progressTintList=android.content.res.ColorStateList.valueOf(RED);thumbTintList=android.content.res.ColorStateList.valueOf(WHITE);contentDescription="Перемотка";tag="player-seek"}
+    val seek=SeekBar(context).apply{max=1000;progressTintList=android.content.res.ColorStateList.valueOf(RED);thumbTintList=android.content.res.ColorStateList.valueOf(WHITE);contentDescription="Перемотка";tag="player-seek";focusBackground(radiusDp=8)}
     val buttons=LinearLayout(context).apply{gravity=Gravity.CENTER_VERTICAL}
     val hint=TextView(context).apply{label("← → перемотка   ·   OK пауза   ·   ↓ управление",12f,MUTED);maxLines=1}
     init{

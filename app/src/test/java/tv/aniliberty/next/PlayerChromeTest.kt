@@ -36,7 +36,7 @@ class PlayerChromeTest {
         chrome.measure(View.MeasureSpec.makeMeasureSpec(960,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));chrome.layout(0,0,960,chrome.measuredHeight)
         assertTrue(chrome.buttons.getChildAt(5).right<=chrome.buttons.width)
         assertEquals("Пауза",chrome.buttons.getChildAt(1).contentDescription)
-        assertTrue(chrome.measuredHeight<350)
+        assertTrue("Control height: ${chrome.measuredHeight}px",chrome.measuredHeight<chrome.dp(300))
     }
     @Test fun episodeAdapterUsesLazyRowsAndPreservesRealEpisodeLabels(){
         val episode=parseRelease(JSONObject("""{"id":1,"episodes":[{"id":"e","ordinal":3,"name":"Название","hls_720":"https://example.test/e.m3u8"}]}""")).episodes.single()
