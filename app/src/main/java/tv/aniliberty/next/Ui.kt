@@ -233,7 +233,7 @@ class PageAdapter(
                 row.controls.forEachIndexed{index,(title,callback)->
                     val icon=when(index){0->R.drawable.ic_search;1->R.drawable.ic_filter;2->R.drawable.ic_sort;else->R.drawable.ic_refresh}
                     line.addView(action(line,title,icon=icon,click=callback).apply{
-                        textSize=14f;setSingleLine();ellipsize=TextUtils.TruncateAt.END
+                        textSize=14f;setSingleLine();ellipsize=android.text.TextUtils.TruncateAt.END
                         if(index==0)gravity=Gravity.CENTER_VERTICAL or Gravity.START
                         background=StateListDrawable().apply{
                             addState(intArrayOf(android.R.attr.state_focused),shape(0xFF292929.toInt(),view.dp(6).toFloat(),WHITE,view.dp(2)))
