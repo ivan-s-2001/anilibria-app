@@ -27,6 +27,40 @@ class SupportAdsTest {
     }
 
     @Test
+    fun supportScreenHasThreeRealSwitchesAndContinuesAfterChoice() {
+        context.getSharedPreferences("viewing", Context.MODE_PRIVATE).edit().clear().commit()
+        val controller = org.robolectric.Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller.get()
+        var continued = 0
+        val callback: () -> Unit = { continued++ }
+        MainActivity::class
+            .java
+            .getDeclaredMethod("offerSupportAds", kotlin.jvm.functions.Function0::class.java)
+            .apply { isAccessible = true }
+            .invoke(activity, callback)
+        val dialog = org.robolectric.shadows.ShadowDialog.getLatestDialog()
+        fun views(view: android.view.View): List<android.view.View> =
+            listOf(view) +
+                if (view is android.view.ViewGroup)
+                    (0 until view.childCount).flatMap { views(view.getChildAt(it)) }
+                else emptyList()
+        val nodes = views(dialog.window!!.decorView)
+        val switches = nodes.filterIsInstance<android.widget.Switch>()
+        assertEquals(3, switches.size)
+        assertTrue(switches.none { it.isChecked })
+        switches.first().performClick()
+        assertTrue(SupportAds(context).enabled)
+        assertEquals(0, continued)
+        nodes
+            .filterIsInstance<android.widget.TextView>()
+            .single { it.text.toString() == "Продолжить" }
+            .performClick()
+        assertEquals(1, continued)
+        assertTrue(SupportAds(context).decided)
+        controller.pause().stop().destroy()
+    }
+
+    @Test
     fun disabledByDefaultDoesNotContactAdService() = runBlocking {
         val ads =
             SupportAds(
