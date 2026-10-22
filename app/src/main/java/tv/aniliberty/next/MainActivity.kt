@@ -353,11 +353,6 @@ class MainActivity : ComponentActivity() {
                         contentDescription = title
                         isFocusableInTouchMode = true
                         if (route == selectedSection) setTextColor(WHITE)
-                        if (route == 4 || route == 6)
-                            compoundDrawablesRelative[0]?.mutate()?.setTint(
-                                if (route == 4) CollectionVisuals.FAVORITE_COLOR
-                                else CollectionVisuals.HISTORY_COLOR
-                            )
                         setOnKeyListener { _, key, event ->
                             if (key == KeyEvent.KEYCODE_DPAD_RIGHT) {
                                 if (event.action == KeyEvent.ACTION_UP) closeMenu()
