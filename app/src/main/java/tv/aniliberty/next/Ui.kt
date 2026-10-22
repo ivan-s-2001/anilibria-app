@@ -328,9 +328,14 @@ class PageAdapter(
                     val genresLine=(content.getChildAt(2)as?TextView)?:TextView(view.context).also{
                         content.addView(it,LinearLayout.LayoutParams(-1,-2).apply{topMargin=view.dp(3)})
                     }
-                    genresLine.label(release?.genres?.take(2)?.joinToString(" • ").orEmpty(),if(shelfMode)14f else 12f,MUTED)
+                    genresLine.label(release?.genres?.joinToString(" • ").orEmpty(),if(shelfMode)14f else 12f,MUTED)
                     genresLine.gravity=Gravity.CENTER;genresLine.maxLines=1
-                    genresLine.ellipsize=android.text.TextUtils.TruncateAt.END
+                    genresLine.setSingleLine(true)
+                    genresLine.ellipsize=android.text.TextUtils.TruncateAt.MARQUEE
+                    genresLine.marqueeRepeatLimit=-1
+                    genresLine.isHorizontalFadingEdgeEnabled=true
+                    genresLine.setFadingEdgeLength(view.dp(10))
+                    genresLine.isFocusable=false
                     val episodeBadge=(box.getChildAt(3)as?TextView)?:TextView(view.context).also{
                         box.addView(it,FrameLayout.LayoutParams(-2,view.dp(28),Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply{topMargin=view.dp(10)})
                     }
@@ -364,6 +369,7 @@ class PageAdapter(
                     fun focusPoster(focused:Boolean){
                         content.visibility=if(focused || cataloguePoster)View.VISIBLE else View.GONE
                         genresLine.visibility=if(focused && genresLine.text.isNotBlank())View.VISIBLE else View.GONE
+                        genresLine.isSelected=focused
                         if(cataloguePoster){
                             box.getChildAt(1).apply{background=GenreShade();visibility=View.VISIBLE}
                             content.gravity=if(focused)Gravity.CENTER else Gravity.BOTTOM
