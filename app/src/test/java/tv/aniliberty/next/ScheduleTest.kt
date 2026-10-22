@@ -75,6 +75,46 @@ class ScheduleTest {
     }
 
     @Test
+    fun latestCardsMatchScheduleBeforeAndAfterFocus() {
+        val release = parseScheduleWeek(body).first()
+        fun card(style: Int): android.widget.FrameLayout {
+            val adapter = PageAdapter({}, {}, {}, {}, { 0L to 0L }, { null }, {})
+            adapter.submit(
+                listOf(Row("release:42", Kind.POSTER, release = release, selected = style))
+            )
+            val holder =
+                adapter.onCreateViewHolder(
+                    android.widget.FrameLayout(org.robolectric.RuntimeEnvironment.getApplication()),
+                    Kind.POSTER.ordinal,
+                )
+            adapter.onBindViewHolder(holder, 0)
+            return holder.itemView as android.widget.FrameLayout
+        }
+        val latest = card(1)
+        val schedule = card(3)
+        for (focused in listOf(false, true)) {
+            latest.onFocusChangeListener?.onFocusChange(latest, focused)
+            schedule.onFocusChangeListener?.onFocusChange(schedule, focused)
+            assertEquals(schedule.layoutParams.height, latest.layoutParams.height)
+            for (index in 0 until schedule.childCount) {
+                val expected = schedule.getChildAt(index)
+                val actual = latest.getChildAt(index)
+                assertEquals(expected.visibility, actual.visibility)
+                if (expected is android.widget.TextView && actual is android.widget.TextView) {
+                    assertEquals(expected.text.toString(), actual.text.toString())
+                    assertEquals(expected.textSize, actual.textSize, 0f)
+                    assertEquals(expected.currentTextColor, actual.currentTextColor)
+                }
+                val expectedParams =
+                    expected.layoutParams as android.widget.FrameLayout.LayoutParams
+                val actualParams = actual.layoutParams as android.widget.FrameLayout.LayoutParams
+                assertEquals(expectedParams.gravity, actualParams.gravity)
+                assertEquals(expectedParams.topMargin, actualParams.topMargin)
+            }
+        }
+    }
+
+    @Test
     fun favoritesAndCollectionsAreIndependentUnionFilters() {
         val items = (1..4).map { parseRelease(org.json.JSONObject().put("id", it)) }
         val favorites = setOf(1, 2)

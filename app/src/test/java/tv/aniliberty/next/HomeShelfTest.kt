@@ -156,7 +156,7 @@ class HomeShelfTest {
     }
 
     @Test
-    fun posterFavoriteCounterAppearsOnFocusAndSurvivesReuseInCatalogue() {
+    fun catalogueFavoriteCounterAppearsOnFocusAndSurvivesReuseInWatchOrder() {
         val adapter = PageAdapter({}, {}, {}, {}, { 0L to 0L }, { null }, {})
         val release =
             parseRelease(
@@ -164,7 +164,7 @@ class HomeShelfTest {
                     """{"id":1,"name":{"main":"Тайтл"},"added_in_users_favorites":25600,"episodes":[{"id":"ep","ordinal":1}],"latest_episode":{"id":"ep","ordinal":434}}"""
                 )
             )
-        adapter.submit(listOf(Row("poster", Kind.POSTER, release = release, selected = 1)))
+        adapter.submit(listOf(Row("poster", Kind.POSTER, release = release, selected = 0)))
         val parent = FrameLayout(RuntimeEnvironment.getApplication())
         val holder = adapter.onCreateViewHolder(parent, Kind.POSTER.ordinal)
         adapter.onBindViewHolder(holder, 0)
