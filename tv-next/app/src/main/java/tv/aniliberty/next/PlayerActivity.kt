@@ -125,7 +125,7 @@ class PlayerActivity : ComponentActivity() {
                 if (!countdownRunning || stopped || panel != null) return
                 nextRemaining--
                 nextOffer?.getChildAt(0)?.let {
-                    (it as TextView).text = "Следующий эпизод через $nextRemaining с"
+                    (it as TextView).text = "Следующая серия · $nextRemaining с"
                 }
                 if (nextRemaining <= 0) {
                     cancelNext()
@@ -786,40 +786,38 @@ class PlayerActivity : ComponentActivity() {
         }
         val offer =
             LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(20), dp(16), dp(20), dp(16))
-                setBackgroundColor(0xFF212121.toInt())
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(8), dp(8), dp(8), dp(8))
+                background = shape(0xE8181818.toInt(), dp(8).toFloat())
             }
         nextOffer = offer
         nextRemaining = 10
         val auto = settings.enabled("auto-next", prefs.getBoolean("auto-next", true))
-        offer.addView(
-            TextView(this).apply {
-                label(
-                    if (auto) "Следующий эпизод через 10 с" else "Следующий эпизод",
-                    18f,
-                    WHITE,
-                    true,
-                )
-            }
-        )
-        offer.addView(TextView(this).apply { label(episode.label, 16f, MUTED) })
         val now =
-            action(offer, "Смотреть сейчас", true) {
+            action(
+                offer,
+                if (auto) "Следующая серия · $nextRemaining с" else "Следующая серия",
+                true,
+                R.drawable.ic_next,
+            ) {
                 cancelNext()
                 startEpisode(episode)
             }
-        offer.addView(now)
+        offer.addView(
+            now,
+            LinearLayout.LayoutParams(-2, dp(48)).apply { marginEnd = dp(8) },
+        )
         offer.addView(
             action(offer, "Отмена") {
                 cancelNext()
                 showControls()
-            }
+            },
+            LinearLayout.LayoutParams(-2, dp(48)),
         )
         root.addView(
             offer,
-            FrameLayout.LayoutParams(dp(340), -2, Gravity.END or Gravity.BOTTOM).apply {
-                setMargins(dp(20), dp(20), dp(20), dp(20))
+            FrameLayout.LayoutParams(-2, -2, Gravity.END or Gravity.BOTTOM).apply {
+                setMargins(dp(28), dp(28), dp(28), dp(28))
             },
         )
         hideControls()
