@@ -15,7 +15,7 @@ open class TvSidePanel(context:Context,title:String):Dialog(context){
     val heading=TextView(context).apply{label(title,24f,WHITE,true);includeFontPadding=false;maxLines=3;ellipsize=android.text.TextUtils.TruncateAt.END;setPadding(0,dp(4),0,dp(20))}
     val body=LinearLayout(context).apply{orientation=LinearLayout.VERTICAL}
     val footer=LinearLayout(context).apply{orientation=LinearLayout.VERTICAL}
-    private val scroll=ScrollView(context).apply{isFillViewport=false;addView(body);overScrollMode=View.OVER_SCROLL_NEVER}
+    private val scroll=ScrollView(context).apply{isFillViewport=false;isFocusable=true;addView(body);overScrollMode=View.OVER_SCROLL_NEVER}
     private val shell=LinearLayout(context).apply{
         orientation=LinearLayout.VERTICAL
         setPadding(dp(24),dp(24),dp(24),dp(24))
@@ -41,6 +41,17 @@ open class TvSidePanel(context:Context,title:String):Dialog(context){
     override fun dispatchKeyEvent(event:android.view.KeyEvent):Boolean {
         if(remoteRepeat.discard(event))return true
         if(remoteClick.handle(event,currentFocus))return true
+        val vertical=event.keyCode in listOf(android.view.KeyEvent.KEYCODE_DPAD_UP,android.view.KeyEvent.KEYCODE_DPAD_DOWN)
+        if(vertical && body.getFocusables(View.FOCUS_FORWARD).isEmpty() &&
+            (scroll.canScrollVertically(-1) || scroll.canScrollVertically(1) || scroll.hasFocus())){
+            if(event.action==android.view.KeyEvent.ACTION_DOWN){
+                val direction=if(event.keyCode==android.view.KeyEvent.KEYCODE_DPAD_DOWN)1 else -1
+                if(scroll.canScrollVertically(direction)){
+                    scroll.requestFocus();scroll.scrollBy(0,direction*dp(96))
+                }else if(direction>0)footer.getFocusables(View.FOCUS_FORWARD).firstOrNull()?.requestFocus()
+            }
+            return true
+        }
         if(event.keyCode in listOf(android.view.KeyEvent.KEYCODE_DPAD_UP,android.view.KeyEvent.KEYCODE_DPAD_DOWN,android.view.KeyEvent.KEYCODE_DPAD_LEFT,android.view.KeyEvent.KEYCODE_DPAD_RIGHT)){
             val focused=currentFocus
             if(focused is TextView && focused !is android.widget.EditText && focused.isClickable){

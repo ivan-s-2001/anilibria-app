@@ -14,6 +14,33 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[30])
 class CatalogPanelTest{
+    @Test fun longDescriptionScrollsFromCloseButtonAndReturnsToItAtTheEnd(){
+        val controller=Robolectric.buildActivity(ComponentActivity::class.java).setup()
+        val panel=TvSidePanel(controller.get(),"Описание")
+        panel.message(List(150){"Длинное описание, строка $it"}.joinToString("\n"))
+        val close=panel.addAction("Закрыть"){panel.dismiss()}
+        panel.show()
+        val decor=panel.window!!.decorView
+        decor.measure(android.view.View.MeasureSpec.makeMeasureSpec(960,android.view.View.MeasureSpec.EXACTLY),android.view.View.MeasureSpec.makeMeasureSpec(540,android.view.View.MeasureSpec.EXACTLY))
+        decor.layout(0,0,960,540)
+        val scroll=panel.body.parent as ScrollView
+        close.requestFocus()
+        fun press(key:Int){
+            panel.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN,key))
+            panel.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP,key))
+        }
+        press(android.view.KeyEvent.KEYCODE_DPAD_DOWN)
+        assertTrue(scroll.scrollY>0)
+        scroll.scrollTo(0,Int.MAX_VALUE)
+        val end=scroll.scrollY
+        press(android.view.KeyEvent.KEYCODE_DPAD_DOWN)
+        assertTrue(close.hasFocus())
+        press(android.view.KeyEvent.KEYCODE_DPAD_UP)
+        assertTrue(scroll.scrollY<end)
+        assertTrue(panel.isShowing)
+        panel.dismiss();controller.pause().stop().destroy()
+    }
+
     @Test fun resetIsOnlyADraftAndCancelDoesNotApply(){
         val controller=Robolectric.buildActivity(ComponentActivity::class.java).setup()
         val activity=controller.get()
