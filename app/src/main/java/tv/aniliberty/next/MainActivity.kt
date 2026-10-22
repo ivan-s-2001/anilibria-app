@@ -1803,13 +1803,19 @@ class MainActivity : ComponentActivity() {
         CollectionType.entries.forEach { type ->
             panel.addChoice(type.title, current == type, type.icon, iconTint = type.color) {
                 panel.dismiss()
-                accountAction { account.collection(release.id, type) }
+                accountAction {
+                    account.collection(release.id, type)
+                    accountReleaseScreen = null
+                }
             }
         }
         if (current != null)
             panel.addChoice("Убрать из коллекции", icon = R.drawable.ic_close) {
                 panel.dismiss()
-                accountAction { account.collection(release.id, null) }
+                accountAction {
+                    account.collection(release.id, null)
+                    accountReleaseScreen = null
+                }
             }
         panel.addAction("Отмена") { panel.dismiss() }
         panel.show()
@@ -1897,9 +1903,20 @@ class MainActivity : ComponentActivity() {
 
     private fun isFavorite(id: Int): Boolean = account.lists?.favorites?.contains(id) == true
 
+    // A successful account mutation can precede a refreshed catalog response.
+    // Keep the displayed aggregate in sync across copies of the same release.
+    private val favoriteCountOverrides = mutableMapOf<Pair<Int?, Int>, Long>()
+
+    private fun favoriteCountRelease(release: Release): Release {
+        if (!account.signedIn) return release
+        val count = favoriteCountOverrides[account.session.userId to release.id] ?: return release
+        return release.copy(favoriteCount = count)
+    }
+
     private fun withFavoriteState(items: List<Row>): List<Row> =
         items.map { row ->
             row.copy(
+                release = row.release?.let(::favoriteCountRelease),
                 isFavorite = row.release?.let { isFavorite(it.id) } ?: false,
                 collectionType = row.release?.let { account.lists?.collections?.get(it.id) },
                 cards =
@@ -1909,7 +1926,7 @@ class MainActivity : ComponentActivity() {
                             Row(
                                 "${row.key}:release:${it.id}",
                                 Kind.POSTER,
-                                release = it,
+                                release = favoriteCountRelease(it),
                                 isFavorite = isFavorite(it.id),
                                 collectionType = account.lists?.collections?.get(it.id),
                             )
@@ -1924,6 +1941,15 @@ class MainActivity : ComponentActivity() {
             if (account.lists == null) account.refresh()
             val added = !isFavorite(release.id)
             account.favorite(release.id, added)
+            if (account.signedIn) {
+                val key = account.session.userId to release.id
+                val previous = favoriteCountOverrides[key] ?: release.favoriteCount
+                if (previous != null)
+                    favoriteCountOverrides[key] =
+                        (previous + (if (added) 1L else -1L)).coerceAtLeast(0L)
+            }
+            // A release removed from Favorites/Collections must disappear from that list too.
+            accountReleaseScreen = null
             Toast.makeText(
                     this,
                     if (added) "Добавлено в избранное" else "Удалено из избранного",
