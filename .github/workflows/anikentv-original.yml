@@ -1,0 +1,52 @@
+name: Build original Aniken/Anilili TV snapshot
+
+on:
+  push:
+    branches:
+      - experiment/anikentv-original
+    paths:
+      - 'anikentv-release/**'
+      - '.github/workflows/anikentv-original.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout isolated branch
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install required Android SDK packages
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.1"
+
+      - name: Assemble provided source without modifications
+        working-directory: anikentv-release
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: anikentv-original-debug
+          path: anikentv-release/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
