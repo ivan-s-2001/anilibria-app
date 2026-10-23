@@ -32,11 +32,13 @@ jobs:
         with:
           gradle-version: '8.13'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install required Android SDK packages
-        run: sdkmanager "platforms;android-36" "build-tools;35.0.1"
+        run: |
+          SDKMANAGER=$(command -v sdkmanager)
+          if [ -z "$SDKMANAGER" ]; then
+            SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n 1)
+          fi
+          "$SDKMANAGER" --install "platforms;android-36" "build-tools;35.0.1"
 
       - name: Assemble provided source without modifications
         working-directory: anikentv-release
