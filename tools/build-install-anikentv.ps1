@@ -13,7 +13,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$RepoDirectory = (Join-Path $PSScriptRoot 'anilibria-app'),
+    [string]$RepoDirectory = '',
     [string]$Tv = '192.168.8.133:5555',
     [string]$Branch = 'experiment/anikentv-original'
 )
@@ -23,6 +23,30 @@ Set-StrictMode -Version Latest
 
 $RepositoryUrl = 'https://github.com/ivan-s-2001/anilibria-app.git'
 $GradleVersion = '8.13'
+
+# PowerShell 5.1 may not populate PSScriptRoot while evaluating param defaults.
+$ScriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
+if ([string]::IsNullOrWhiteSpace($ScriptDirectory)) {
+    $ScriptDirectory = (Get-Location).Path
+}
+
+if ([string]::IsNullOrWhiteSpace($RepoDirectory)) {
+    # When the script is placed in an existing checkout (also in a subfolder), use it.
+    $candidate = $ScriptDirectory
+    while ($true) {
+        if (Test-Path (Join-Path $candidate '.git')) {
+            $RepoDirectory = $candidate
+            break
+        }
+        $parent = Split-Path -Parent $candidate
+        if ([string]::IsNullOrWhiteSpace($parent) -or $parent -eq $candidate) { break }
+        $candidate = $parent
+    }
+
+    if ([string]::IsNullOrWhiteSpace($RepoDirectory)) {
+        $RepoDirectory = Join-Path $ScriptDirectory 'anilibria-app'
+    }
+}
 
 function Run {
     param(
@@ -70,6 +94,15 @@ if (Test-Path (Join-Path $RepoDirectory '.git')) {
 
     $changes = @(& git -C $RepoDirectory status --porcelain --untracked-files=normal)
     if ($LASTEXITCODE -ne 0) { throw 'Unable to check the worktree.' }
+
+    # A standalone copy of this script may be an untracked file in the checkout.
+    # It is safe to leave that one file alone while switching branches.
+    $scriptPath = [System.IO.Path]::GetFullPath($MyInvocation.MyCommand.Path)
+    $repoPrefix = $RepoDirectory.TrimEnd([char[]]@('\', '/')) + [System.IO.Path]::DirectorySeparatorChar
+    if ($scriptPath.StartsWith($repoPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        $scriptRelative = $scriptPath.Substring($repoPrefix.Length).Replace('\', '/')
+        $changes = @($changes | Where-Object { $_ -ne "?? $scriptRelative" })
+    }
     if ($changes.Count -gt 0 -and $changes[0]) {
         throw 'Local changes found. Commit, stash or move them before updating; nothing was overwritten.'
     }
