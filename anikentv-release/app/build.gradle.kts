@@ -40,6 +40,8 @@ android {
 
     buildTypes {
         debug {
+            // This experimental backend must not overwrite the original app or its AniList session.
+            applicationIdSuffix = ".liberty"
             manifestPlaceholders["usesCleartextTraffic"] = "true"
         }
         release {
