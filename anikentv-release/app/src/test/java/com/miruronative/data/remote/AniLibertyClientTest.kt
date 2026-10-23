@@ -12,6 +12,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.LocalDate
 
 class AniLibertyClientTest {
     private val release = """
@@ -89,5 +90,23 @@ class AniLibertyClientTest {
         val result = client.catalog(DiscoverFilters(sort = "SCORE_DESC"))
         assertEquals(1, result.items.size)
         assertTrue(result.hasNextPage)
+    }
+
+    @Test
+    fun scheduleUsesAniLibertyReleaseIdsAndDoesNotInventAirTimes() = runBlocking {
+        val client = client { url ->
+            assertTrue(url.contains("/anime/schedule/week"))
+            """{"data":[
+                {"release":{"id":7439,"name":{"main":"Пятничный релиз"},
+                    "publish_day":{"value":5}},"next_release_episode_number":8},
+                {"release":{"id":7440,"name":{"main":"Субботний релиз"},
+                    "publish_day":{"value":6}},"next_release_episode_number":4}
+            ]}"""
+        }
+        val friday = client.schedule(LocalDate.of(2026, 10, 23))
+        assertEquals(1, friday.size)
+        assertEquals(7439, friday.single().media?.id)
+        assertEquals(8, friday.single().episode)
+        assertEquals(0L, friday.single().airingAt)
     }
 }
