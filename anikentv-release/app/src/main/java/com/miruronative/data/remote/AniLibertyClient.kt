@@ -1,6 +1,7 @@
 package com.miruronative.data.remote
 
 import com.miruronative.data.model.CoverImage
+import com.miruronative.data.model.AiringSchedule
 import com.miruronative.data.model.DiscoverFilters
 import com.miruronative.data.model.DiscoverOptions
 import com.miruronative.data.model.EpisodeItem
@@ -27,6 +28,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
+import java.time.LocalDate
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -107,6 +109,25 @@ class AniLibertyClient(
     suspend fun release(id: Int): Media? {
         val response = get("/anime/releases/$id") as? JsonObject ?: return null
         return response.toMedia()
+    }
+
+    /**
+     * AniLiberty schedules by weekday, not by a precise airing timestamp.
+     * A zero airingAt means "time not provided"; it must never trigger a timed reminder.
+     * Keeping the release's AniLiberty ID ensures schedule cards open the right title.
+     */
+    suspend fun schedule(day: LocalDate): List<AiringSchedule> {
+        val weekday = day.dayOfWeek.value
+        return get("/anime/schedule/week").asList().mapNotNull { item ->
+            val row = item as? JsonObject ?: return@mapNotNull null
+            val release = row.obj("release") ?: return@mapNotNull null
+            if (release.obj("publish_day")?.int("value") != weekday) return@mapNotNull null
+            val media = release.toMedia() ?: return@mapNotNull null
+            val episode = row.int("next_release_episode_number")
+                ?: row.obj("published_release_episode")?.double("ordinal")?.toInt()
+                ?: 0
+            AiringSchedule(episode = episode, airingAt = 0, media = media)
+        }
     }
 
     suspend fun episodes(id: Int): EpisodesResult {
