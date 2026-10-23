@@ -45,29 +45,16 @@ class DetailViewModel : ViewModel() {
         viewModelScope.launch {
             if (force && _state.value is UiState.Success) _isRefreshing.value = true else _state.value = UiState.Loading
             try {
-                // Start independent calls together. Miruro still renders first, while the
-                // slower Anivexa batch no longer waits behind metadata and pipe discovery.
+                // The AniLiberty release and its episodes share one backend. Keep the
+                // existing state model; avoid spawning the legacy foreign-source requests.
                 val infoRequest = async { runCatching { repo.animeInfo(id, force = force) } }
-                val miruroRequest = async { runCatching { repo.miruroEpisodes(id, force = force) } }
-                val anivexaRequest = async { runCatching { repo.anivexaEpisodes(id, force = force) } }
+                val episodesRequest = async { runCatching { repo.miruroEpisodes(id, force = force) } }
 
                 val info = infoRequest.await().getOrThrow() ?: error("Anime not found")
-
-                // 1) Miruro pipe first (fast).
-                val miruroResult = miruroRequest.await()
-                val miruro = miruroResult.getOrDefault(EpisodesResult(emptyList()))
-                applyDefaults(miruro)
-                val firstError = if (miruro.providers.isEmpty() && miruroResult.isFailure) {
-                    "Some servers unavailable"
-                } else null
-                _state.value = UiState.Success(DetailData(info, miruro, firstError, loadingMore = true))
-
-                // 2) Merge the Anivexa batch, which has already been loading in parallel.
-                val anivexa = anivexaRequest.await().getOrDefault(EpisodesResult(emptyList()))
-                val merged = repo.mergeProviders(miruro, anivexa)
-                if (selectedProvider == null) applyDefaults(merged)
-                val err = if (merged.providers.isEmpty()) "No streaming sources found" else null
-                _state.value = UiState.Success(DetailData(info, merged, err, loadingMore = false))
+                val episodes = episodesRequest.await().getOrThrow()
+                applyDefaults(episodes)
+                val error = if (episodes.isEmpty) "No streaming sources found" else null
+                _state.value = UiState.Success(DetailData(info, episodes, error, loadingMore = false))
             } catch (e: Exception) {
                 e.rethrowIfCancellation()
                 _state.value = UiState.Error(e.message ?: "Failed to load")

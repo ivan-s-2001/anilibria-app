@@ -91,6 +91,9 @@ class WatchViewModel : ViewModel() {
                         },
                 )
                 mergedEpisodes = merged
+                if (merged.providers.none { it.hasCategory(category) }) {
+                    category = merged.providers.firstOrNull()?.categories?.firstOrNull() ?: category
+                }
                 repo.animeInfo(id)?.let { info ->
                     seriesTitle = info.title.preferred
                     artworkUrl = info.coverImage.best

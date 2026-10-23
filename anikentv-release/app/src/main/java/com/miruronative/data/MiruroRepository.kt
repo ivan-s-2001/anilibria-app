@@ -11,6 +11,7 @@ import com.miruronative.data.model.SourcesResult
 import com.miruronative.data.cache.AppCache
 import com.miruronative.data.model.DiscoverOptions
 import com.miruronative.data.remote.AniListClient
+import com.miruronative.data.remote.AniLibertyClient
 import com.miruronative.data.remote.AnivexaClient
 import com.miruronative.data.remote.JikanClient
 import com.miruronative.data.remote.PipeClient
@@ -24,12 +25,10 @@ import kotlinx.serialization.builtins.SetSerializer
 import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.builtins.serializer
 
-/**
- * Single entry point the UI talks to. Combines AniList metadata with two streaming backends —
- * the Miruro pipe (WebView bridge) and Anivexa-API (HTTP) — and caches episode lists per source.
- */
+/** Presentation-facing repository. Public metadata and playback are sourced from AniLiberty v1. */
 class MiruroRepository(
     private val aniList: AniListClient,
+    private val liberty: AniLibertyClient,
     private val pipe: PipeClient,
     private val anivexa: AnivexaClient,
     private val jikan: JikanClient,
@@ -38,24 +37,28 @@ class MiruroRepository(
     /** User preference: keep hentai out of every browsing surface. */
     private val hideAdult: Boolean get() = SettingsStore.hideAdultContent.value
 
-    // ---- discovery (AniList) ----
+    // ---- public discovery (AniLiberty) ----
     suspend fun trending(page: Int = 1, force: Boolean = false): MediaPage = mediaPage("trending:$page", COLLECTION_TTL, force) {
-        aniList.collection("TRENDING_DESC", page = page, perPage = 30, hideAdult = hideAdult)
+        if (page == 1) liberty.recommended() else liberty.catalog(
+            DiscoverFilters(sort = "POPULARITY_DESC"), page = page,
+        )
     }
     suspend fun popular(page: Int = 1, force: Boolean = false): MediaPage = mediaPage("popular:$page", COLLECTION_TTL, force) {
-        aniList.collection("POPULARITY_DESC", page = page, perPage = 30, hideAdult = hideAdult)
+        liberty.catalog(DiscoverFilters(sort = "POPULARITY_DESC"), page = page)
     }
     suspend fun topRated(page: Int = 1, force: Boolean = false): MediaPage = mediaPage("top:$page", COLLECTION_TTL, force) {
-        aniList.collection("SCORE_DESC", page = page, perPage = 30, hideAdult = hideAdult)
+        liberty.catalog(DiscoverFilters(sort = "SCORE_DESC"), page = page)
     }
     suspend fun recentlyReleased(page: Int = 1, force: Boolean = false): MediaPage =
         mediaPage("recent:$page", AIRING_TTL, force) {
-            aniList.collection("START_DATE_DESC", status = "RELEASING", page = page, perPage = 30, hideAdult = hideAdult)
+            if (page == 1) liberty.latest() else liberty.catalog(
+                DiscoverFilters(sort = "START_DATE_DESC"), page = page,
+            )
         }
 
     suspend fun airing(page: Int = 1, force: Boolean = false): MediaPage =
         mediaPage("airing:$page", AIRING_TTL, force) {
-            aniList.collection("POPULARITY_DESC", status = "RELEASING", page = page, perPage = 40, hideAdult = hideAdult)
+            liberty.catalog(DiscoverFilters(status = "RELEASING"), page = page, limit = 40)
         }
 
     suspend fun schedule(dayOffset: Int, force: Boolean = false): List<AiringSchedule> {
@@ -74,16 +77,20 @@ class MiruroRepository(
     }
 
     suspend fun search(query: String, page: Int = 1, force: Boolean = false): MediaPage =
-        mediaPage("search:${query.trim().lowercase()}:$page", SEARCH_TTL, force) { aniList.search(query, page, hideAdult = hideAdult) }
+        mediaPage("search:${query.trim().lowercase()}:$page", SEARCH_TTL, force) {
+            liberty.catalog(DiscoverFilters(query = query), page = page)
+        }
 
     suspend fun discover(filters: DiscoverFilters, page: Int = 1, force: Boolean = false): MediaPage =
-        mediaPage("discover:${filters.cacheKey()}:$page", COLLECTION_TTL, force) { aniList.discover(filters, page, hideAdult = hideAdult) }
+        mediaPage("discover:${filters.cacheKey()}:$page", COLLECTION_TTL, force) {
+            liberty.catalog(filters, page = page)
+        }
 
     suspend fun discoverOptions(): DiscoverOptions = cache.getOrFetch(
-        key = "discover-options",
+        key = "discover-options:liberty:v1",
         serializer = DiscoverOptions.serializer(),
         ttlMs = OPTIONS_TTL,
-    ) { aniList.discoverOptions() }
+    ) { liberty.genreOptions() }
 
     // ---- authenticated (AniList login) ----
     suspend fun viewer() = aniList.viewer()
@@ -105,28 +112,24 @@ class MiruroRepository(
     }
 
     suspend fun animeInfo(id: Int, force: Boolean = false): Media? = cache.getOrFetch(
-        key = "anime:v2:$id",
+        key = "anime:liberty:v1:$id",
         serializer = Media.serializer().nullable,
         ttlMs = INFO_TTL,
         forceRefresh = force,
-    ) { aniList.animeInfo(id) }
+    ) { liberty.release(id) }
 
-    // ---- streaming (two backends, cached per source) ----
-    /** Fast source — the Miruro pipe. */
+    // ---- streaming (AniLiberty direct HLS) ----
+    /** AniLiberty provides the episode UUIDs and HLS URLs itself. */
     suspend fun miruroEpisodes(anilistId: Int, force: Boolean = false): EpisodesResult = cache.getOrFetch(
-        key = "episodes:miruro:$anilistId",
+        key = "episodes:liberty:v1:$anilistId",
         serializer = EpisodesResult.serializer(),
         ttlMs = EPISODES_TTL,
         forceRefresh = force,
-    ) { pipe.getEpisodes(anilistId) }.withFillerMarks(anilistId)
+    ) { liberty.episodes(anilistId) }
 
-    /** Extra sources — Anivexa-API (can be slower; loaded in the background by the detail screen). */
-    suspend fun anivexaEpisodes(anilistId: Int, force: Boolean = false): EpisodesResult = cache.getOrFetch(
-        key = "episodes:anivexa:$anilistId",
-        serializer = EpisodesResult.serializer(),
-        ttlMs = EPISODES_TTL,
-        forceRefresh = force,
-    ) { anivexa.getEpisodes(anilistId) }.withFillerMarks(anilistId)
+    /** Legacy ViewModel signature; this backend no longer starts Anivexa discovery. */
+    suspend fun anivexaEpisodes(anilistId: Int, force: Boolean = false): EpisodesResult =
+        EpisodesResult(emptyList())
 
     /**
      * Applies MAL filler flags to every provider's episode list. Providers rarely carry filler
@@ -146,16 +149,8 @@ class MiruroRepository(
         return EpisodesResult(providers.map { it.copy(sub = mark(it.sub), dub = mark(it.dub)) })
     }
 
-    /** Merged view of both sources — used where the full provider list is needed (watch screen). */
-    suspend fun episodes(anilistId: Int): EpisodesResult = coroutineScope {
-        val miruro = async {
-            runCatching { miruroEpisodes(anilistId) }.getOrDefault(EpisodesResult(emptyList()))
-        }
-        val anivexa = async {
-            runCatching { anivexaEpisodes(anilistId) }.getOrDefault(EpisodesResult(emptyList()))
-        }
-        mergeProviders(miruro.await(), anivexa.await())
-    }
+    /** Existing watch screen consumes the same EpisodesResult presentation shape. */
+    suspend fun episodes(anilistId: Int): EpisodesResult = miruroEpisodes(anilistId)
 
     fun mergeProviders(a: EpisodesResult, b: EpisodesResult): EpisodesResult =
         EpisodesResult((a.providers + b.providers).sortedBy { ProviderCatalog.sortKey(it.name) })
@@ -165,18 +160,14 @@ class MiruroRepository(
         provider: String,
         category: Category,
         anilistId: Int,
-    ): SourcesResult = when (ProviderCatalog.sourceOf(provider)) {
+    ): SourcesResult = if (provider == AniLibertyClient.PROVIDER) liberty.sources(pipeId) else when (ProviderCatalog.sourceOf(provider)) {
         ProviderCatalog.Source.ANIVEXA -> anivexa.getSources(pipeId)
         ProviderCatalog.Source.MIRURO -> pipe.getSources(pipeId, provider, category, anilistId)
     }
 
     data class ResolvedSources(val sources: SourcesResult, val provider: String)
 
-    /**
-     * Resolve a playable stream for [number], trying [preferred] first and then other providers
-     * (fast Miruro ones before slower Anivexa scrapers) until one actually returns a stream.
-     * This is the multi-source fallback: picking a server that has no copy silently rolls over.
-     */
+    /** Resolve a playable stream from available AniLiberty episodes. */
     suspend fun resolveSources(
         anilistId: Int,
         number: Double,
@@ -213,7 +204,7 @@ class MiruroRepository(
         // The adult preference is part of the cache key: filtered and unfiltered pages differ.
         val hideAdult = hideAdult
         val page = cache.getOrFetch(
-            key = "media:v2:$key:${if (hideAdult) "sfw" else "all"}",
+            key = "media:liberty:v1:$key:${if (hideAdult) "sfw" else "all"}",
             serializer = MediaPage.serializer(),
             ttlMs = ttlMs,
             forceRefresh = force,

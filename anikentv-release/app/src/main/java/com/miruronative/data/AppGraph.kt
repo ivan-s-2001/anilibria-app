@@ -3,6 +3,7 @@ package com.miruronative.data
 import android.content.Context
 import com.miruronative.data.cache.AppCache
 import com.miruronative.data.remote.AniListClient
+import com.miruronative.data.remote.AniLibertyClient
 import com.miruronative.data.remote.AnivexaClient
 import com.miruronative.data.remote.JikanClient
 import com.miruronative.data.remote.PipeClient
@@ -41,8 +42,10 @@ object AppGraph {
             .build()
 
         val aniList = AniListClient(httpClient, json)
+        val liberty = AniLibertyClient(httpClient, json)
         repository = MiruroRepository(
             aniList = aniList,
+            liberty = liberty,
             pipe = PipeClient(json),
             anivexa = AnivexaClient(httpClient, json, aniList),
             jikan = JikanClient(httpClient, json),
