@@ -1,10 +1,10 @@
 #requires -Version 5.1
 <#
-    Build and install the original Aniken/Anilili Android TV snapshot.
+    Build and install Aniken TV with AniLiberty API (experimental branch).
 
     Examples:
       powershell -ExecutionPolicy Bypass -File .\build-install-anikentv.ps1
-      powershell -ExecutionPolicy Bypass -File .\build-install-anikentv.ps1 -Tv 192.168.8.150:5555
+      powershell -ExecutionPolicy Bypass -File .\build-install-anikentv.ps1 -Tv 192.168.8.118:5555
       powershell -ExecutionPolicy Bypass -File .\build-install-anikentv.ps1 -RepoDirectory C:\Projects\anilibria-app
 
     Requires Git, JDK 17+ and Android SDK. Missing Android command-line
@@ -14,8 +14,8 @@
 [CmdletBinding()]
 param(
     [string]$RepoDirectory = '',
-    [string]$Tv = '192.168.8.133:5555',
-    [string]$Branch = 'experiment/anikentv-original'
+    [string]$Tv = '192.168.8.118:5555',
+    [string]$Branch = 'feature/anikentv-aniliberty-api-v1'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -161,7 +161,9 @@ if (Test-Path (Join-Path $RepoDirectory '.git')) {
         throw 'Local changes found. Commit, stash or move them before updating; nothing was overwritten.'
     }
 
-    Run -Command git -Arguments @('-C', $RepoDirectory, 'fetch', 'origin', $Branch)
+    # Existing single-branch clones of the original version won't fetch the new
+    # experimental remote branch unless we supply an explicit refspec.
+    Run -Command git -Arguments @('-C', $RepoDirectory, 'fetch', 'origin', "refs/heads/${Branch}:refs/remotes/origin/${Branch}")
     $current = (& git -C $RepoDirectory branch --show-current | Out-String).Trim()
     if ($LASTEXITCODE -ne 0) { throw 'Unable to check current branch.' }
     if ($current -ne $Branch) {
@@ -307,5 +309,5 @@ Run -Command $adbPath -Arguments @('-s', $Tv, 'get-state')
 Run -Command $adbPath -Arguments @('-s', $Tv, 'install', '-r', $apk.FullName)
 
 Write-Host "`nDone! Debug APK installed on $Tv" -ForegroundColor Green
-Write-Host 'App ID: com.miruronative (original Anilili snapshot)'
+Write-Host 'App ID: com.miruronative.liberty (AniLiberty API build)'
 Write-Host "APK saved at: $($apk.FullName)"
