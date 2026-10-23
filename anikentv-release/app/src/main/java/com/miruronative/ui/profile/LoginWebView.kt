@@ -1,104 +1,119 @@
 package com.miruronative.ui.profile
 
-import android.annotation.SuppressLint
-import android.graphics.Bitmap
-import android.webkit.WebResourceRequest
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.miruronative.data.auth.AuthManager
-import com.miruronative.diagnostics.CrashReporter
+import com.miruronative.data.AppGraph
+import com.miruronative.data.remote.AniLibertyClient
 import com.miruronative.ui.adaptive.LocalAppDeviceProfile
 import com.miruronative.ui.adaptive.focusHighlight
-import androidx.compose.foundation.shape.RoundedCornerShape
+import kotlinx.coroutines.delay
+import java.io.IOException
 
 /**
- * Fullscreen AniList login. Loads the implicit-grant authorize URL; when AniList redirects to
- * `http://localhost/#access_token=…`, we grab the token before loading that URL.
+ * AniLiberty's TV OTP login displayed inside the original fullscreen login surface.
+ * The code is confirmed in an already authenticated AniLiberty browser session;
+ * the TV exchanges it for a token once confirmation succeeds.
  */
-@SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun LoginWebView(onToken: (String) -> Unit, onCancel: () -> Unit) {
     val device = LocalAppDeviceProfile.current
+    val repo = AppGraph.repository
+    var requestVersion by remember { mutableIntStateOf(0) }
+    var challenge by remember { mutableStateOf<AniLibertyClient.OtpChallenge?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(requestVersion) {
+        loading = true
+        error = null
+        challenge = null
+        try {
+            challenge = repo.requestLoginCode()
+        } catch (e: Exception) {
+            error = e.message ?: "Не удалось получить код"
+        } finally {
+            loading = false
+        }
+    }
+
+    LaunchedEffect(challenge) {
+        val pending = challenge ?: return@LaunchedEffect
+        val deadline = System.currentTimeMillis() + pending.remainingSeconds.coerceAtLeast(1) * 1000L
+        while (System.currentTimeMillis() < deadline) {
+            delay(4_000)
+            try {
+                onToken(repo.completeLogin(pending.code))
+                return@LaunchedEffect
+            } catch (e: IOException) {
+                // 401: code is not yet confirmed by a logged-in user; keep waiting.
+                if (e.message?.contains("HTTP 401") != true) {
+                    error = e.message ?: "Ошибка авторизации"
+                    return@LaunchedEffect
+                }
+            } catch (e: Exception) {
+                error = e.message ?: "Ошибка авторизации"
+                return@LaunchedEffect
+            }
+        }
+        error = "Срок действия кода истёк"
+    }
+
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Box(Modifier.fillMaxSize()) {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { ctx ->
-                    try {
-                        var tokenHandled = false
-                        WebView(ctx).apply {
-                            isFocusable = true
-                            isFocusableInTouchMode = true
-                            settings.javaScriptEnabled = true
-                            settings.domStorageEnabled = true
-                            settings.allowFileAccess = false
-                            settings.allowContentAccess = false
-                            webViewClient = object : WebViewClient() {
-                                private fun handleRedirect(view: WebView?, url: String?): Boolean {
-                                    if (tokenHandled || url == null || !AuthManager.isRedirect(url)) return false
-                                    val token = AuthManager.extractToken(url) ?: return false
-                                    tokenHandled = true
-                                    view?.stopLoading()
-                                    onToken(token)
-                                    return true
-                                }
-
-                                override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                                    handleRedirect(view, url)
-                                }
-
-                                @Suppress("DEPRECATION")
-                                override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                                    return handleRedirect(view, url)
-                                }
-
-                                override fun shouldOverrideUrlLoading(
-                                    view: WebView?,
-                                    request: WebResourceRequest?,
-                                ): Boolean {
-                                    return handleRedirect(view, request?.url?.toString())
-                                }
-                            }
-                            loadUrl(AuthManager.AUTHORIZE_URL)
-                            if (device.isTv) post { requestFocus() }
-                        }
-                    } catch (e: Throwable) {
-                        CrashReporter.logNonFatal("System WebView unavailable; AniList login disabled", e)
-                        android.view.View(ctx)
-                    }
-                },
-                onRelease = { view ->
-                    val web = view as? WebView ?: return@AndroidView
-                    web.stopLoading()
-                    web.loadUrl("about:blank")
-                    web.clearHistory()
-                    web.removeAllViews()
-                    web.destroy()
-                },
-            )
+            Column(
+                modifier = Modifier.align(Alignment.Center).widthIn(max = 560.dp).padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+            ) {
+                Text("AniLiberty", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Text("Откройте на телефоне или компьютере страницу привязки ТВ, войдите в аккаунт AniLiberty и введите код:")
+                Text(
+                    "anilibria.top/app/auth/otp/linkDevice",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                if (loading) CircularProgressIndicator()
+                challenge?.let { pending ->
+                    Text(pending.code, style = MaterialTheme.typography.displayLarge, color = MaterialTheme.colorScheme.primary)
+                    Text("Ожидаем подтверждения · ${pending.remainingSeconds} с")
+                }
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                Button(
+                    onClick = { requestVersion++ },
+                    enabled = !loading,
+                    modifier = Modifier.focusHighlight(RoundedCornerShape(9.dp)),
+                ) { Text(if (challenge == null) "Получить код" else "Новый код") }
+            }
             IconButton(
                 onClick = onCancel,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(device.pagePadding)
+                modifier = Modifier.align(Alignment.TopEnd).padding(device.pagePadding)
                     .focusHighlight(RoundedCornerShape(24.dp)),
-            ) {
-                Icon(Icons.Default.Close, contentDescription = "Cancel")
-            }
+            ) { Icon(Icons.Default.Close, contentDescription = "Закрыть") }
         }
     }
 }

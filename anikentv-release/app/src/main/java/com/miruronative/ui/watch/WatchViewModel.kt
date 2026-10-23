@@ -203,19 +203,39 @@ class WatchViewModel : ViewModel() {
                 durationMs = LibraryStore.historyFor(anilistId)?.takeIf { it.episodeNumber == number }?.durationMs ?: 0L,
             ),
         )
-        if (AuthManager.isLoggedIn && SettingsStore.autoSyncAniList.value) {
-            runCatching { repo.saveAniListProgress(anilistId, number.toInt()) }
-                .onFailure { DiagnosticsLog.throwable("Watch AniList progress sync failed id=$anilistId episode=${fmt(number)}", it) }
-        }
     }
 
     private var lastProgressSave = 0L
+    private var lastRemoteProgressSave = 0L
+    private var lastRemoteEpisode = ""
+    private var lastRemoteWatched = false
     fun onProgress(positionMs: Long, durationMs: Long) {
         val data = (_state.value as? UiState.Success)?.data ?: return
         val now = System.currentTimeMillis()
         if (now - lastProgressSave < 8_000) return
         lastProgressSave = now
         LibraryStore.updateProgress(anilistId, data.current.number, positionMs, durationMs)
+        if (AuthManager.isLoggedIn && SettingsStore.autoSyncAniList.value &&
+            data.provider == com.miruronative.data.remote.AniLibertyClient.PROVIDER
+        ) {
+            val watched = durationMs > 0 && positionMs.toDouble() / durationMs >= 0.90
+            val episodeId = data.current.pipeId
+            // Save the local position frequently, but don't flood the API from a TV player.
+            // Always send the first update for a new episode and the watched transition.
+            if (episodeId != lastRemoteEpisode || watched && !lastRemoteWatched ||
+                now - lastRemoteProgressSave >= 45_000
+            ) {
+                lastRemoteEpisode = episodeId
+                lastRemoteWatched = watched
+                lastRemoteProgressSave = now
+                viewModelScope.launch {
+                    runCatching { repo.saveTimecode(episodeId, positionMs / 1000.0, watched) }
+                        .onFailure {
+                            DiagnosticsLog.throwable("AniLiberty timecode sync failed episode=$episodeId", it)
+                        }
+                }
+            }
+        }
     }
 
     fun playIndex(index: Int) {

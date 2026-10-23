@@ -47,7 +47,7 @@ class ProfileViewModel : ViewModel() {
         viewModelScope.launch {
             if (refresh && _profile.value is UiState.Success) _isRefreshing.value = true else _profile.value = UiState.Loading
             try {
-                val viewer = repo.viewer() ?: error("Couldn't load your AniList profile")
+                val viewer = repo.viewer() ?: error("Не удалось загрузить профиль AniLiberty")
                 val lists = repo.userAnimeList(viewer.id)?.lists ?: emptyList()
                 val watching = lists.filter { it.status == "CURRENT" }.flatMap { it.entries }
                 val rewatching = lists.filter { it.status == "REPEATING" }.flatMap { it.entries }
@@ -74,7 +74,7 @@ class ProfileViewModel : ViewModel() {
                 )
             } catch (e: Exception) {
                 e.rethrowIfCancellation()
-                _profile.value = UiState.Error(e.message ?: "Failed to load AniList")
+                _profile.value = UiState.Error(e.message ?: "Не удалось загрузить AniLiberty")
             } finally {
                 _isRefreshing.value = false
             }

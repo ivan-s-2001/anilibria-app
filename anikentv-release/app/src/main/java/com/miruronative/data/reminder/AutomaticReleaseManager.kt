@@ -62,7 +62,7 @@ object AutomaticReleaseManager {
         appContext = context.applicationContext
         appContext.getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "New episode releases", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "Alerts when a new episode airs for anime saved here or on AniList"
+                description = "Alerts for new episodes of anime saved locally or in AniLiberty"
             },
         )
         val oldestUseful = System.currentTimeMillis() / 1000L - 24 * 60 * 60
@@ -243,16 +243,8 @@ class ReleaseSyncWorker(
                 }.awaitAll().filterNotNull()
             }
             if (AuthManager.isLoggedIn) {
-                runCatching {
-                    val (items, _) = repo.notifications(markAllRead = false)
-                    AniListNotificationPushManager.notifyUnread(applicationContext, items)
-                }
-
-                val aniListTracked = anilistTrackedMedia(repo)
-                val aniListIds = aniListTracked.mapTo(hashSetOf()) { it.id }
-                // AniList notifications are now the canonical push source for logged-in users.
-                // Keep local alarms only for device-only saves that AniList cannot notify about.
-                AutomaticReleaseManager.sync(localSaved.filterNot { it.id in aniListIds })
+                val remoteTracked = libertyTrackedMedia(repo)
+                AutomaticReleaseManager.sync((localSaved + remoteTracked).distinctBy { it.id })
             } else {
                 AutomaticReleaseManager.sync(localSaved.distinctBy { it.id })
             }
@@ -262,7 +254,7 @@ class ReleaseSyncWorker(
         }
     }
 
-    private suspend fun anilistTrackedMedia(repo: com.miruronative.data.MiruroRepository): List<Media> {
+    private suspend fun libertyTrackedMedia(repo: com.miruronative.data.MiruroRepository): List<Media> {
         val viewer = runCatching { repo.viewer() }.getOrNull() ?: return emptyList()
         val activeStatuses = setOf("CURRENT", "REPEATING", "PLANNING", "PAUSED")
         val listMedia = runCatching { repo.userAnimeList(viewer.id) }.getOrNull()

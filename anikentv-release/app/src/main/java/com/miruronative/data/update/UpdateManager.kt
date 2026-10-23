@@ -23,7 +23,7 @@ import okhttp3.Request
 
 /**
  * In-app updates for a sideloaded install: polls the rolling GitHub release
- * (`kompoti121/anilili`, tag `APK-release`), downloads the APK asset, and hands it
+ * from our fork, downloads its TV APK asset, and hands it
  * to the system package installer. Android rejects the install unless the new APK
  * is signed with the same key, so a hijacked release can't replace the app.
  */
@@ -46,7 +46,7 @@ object UpdateManager {
         data class Failed(val message: String) : State
     }
 
-    private const val RELEASES_LATEST = "https://api.github.com/repos/kompoti121/anilili/releases/latest"
+    private const val RELEASES_LATEST = "https://api.github.com/repos/ivan-s-2001/anilibria-app/releases/latest"
     private const val PREFS = "anilili_updates"
     private const val KEY_LAST_CHECK = "last_check_ms"
     private val CHECK_INTERVAL_MS = TimeUnit.HOURS.toMillis(12)
@@ -121,7 +121,7 @@ object UpdateManager {
                 .recoverCatching { context.startActivity(generic) }
                 .onFailure {
                     _state.value = State.Failed(
-                        "Android blocked the install. Allow \"install unknown apps\" for Anilili in system settings, then try again.",
+                        "Android blocked the install. Allow \"install unknown apps\" for AniLiberty TV in system settings, then try again.",
                     )
                 }
             return
@@ -156,7 +156,11 @@ object UpdateManager {
             val version = parseVersion(name) ?: parseVersion(tag) ?: parseVersion(body) ?: return null
             val apk = release["assets"]?.jsonArray
                 ?.map { it.jsonObject }
-                ?.firstOrNull { it["name"]?.jsonPrimitive?.content.orEmpty().endsWith(".apk") }
+                ?.firstOrNull {
+                    val assetName = it["name"]?.jsonPrimitive?.content.orEmpty()
+                    assetName.endsWith(".apk", ignoreCase = true) &&
+                        assetName.contains("anikentv", ignoreCase = true)
+                }
                 ?: return null
             return UpdateInfo(
                 version = version,
@@ -170,7 +174,7 @@ object UpdateManager {
     private fun downloadApk(context: Context, info: UpdateInfo): File {
         val dir = File(context.cacheDir, "updates").apply { mkdirs() }
         dir.listFiles()?.forEach { it.delete() }
-        val file = File(dir, "anilili-${info.version}.apk")
+        val file = File(dir, "anikentv-${info.version}.apk")
         // No call timeout: the release APK takes longer than the API client's 45s cap on slow links.
         val client = AppGraph.httpClient.newBuilder()
             .cache(null)

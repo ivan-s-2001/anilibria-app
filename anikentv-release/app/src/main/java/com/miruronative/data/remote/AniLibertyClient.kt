@@ -7,14 +7,22 @@ import com.miruronative.data.model.DiscoverOptions
 import com.miruronative.data.model.EpisodeItem
 import com.miruronative.data.model.EpisodesResult
 import com.miruronative.data.model.Media
+import com.miruronative.data.model.MediaListCollection
+import com.miruronative.data.model.MediaListEntry
+import com.miruronative.data.model.MediaListGroup
 import com.miruronative.data.model.MediaPage
 import com.miruronative.data.model.MediaTitle
+import com.miruronative.data.model.UserAvatar
+import com.miruronative.data.model.Viewer
 import com.miruronative.data.model.ProviderData
 import com.miruronative.data.model.SkipTimes
 import com.miruronative.data.model.SourcesResult
 import com.miruronative.data.model.StreamItem
+import com.miruronative.data.auth.AuthManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -24,11 +32,17 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.time.LocalDate
+import java.time.OffsetDateTime
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -43,6 +57,113 @@ class AniLibertyClient(
 ) {
     private val genres = ConcurrentHashMap<String, Int>()
     private val root = "https://aniliberty.top/api/v1/"
+
+    data class OtpChallenge(val code: String, val remainingSeconds: Int)
+
+    suspend fun requestOtp(deviceId: String): OtpChallenge {
+        val response = send(
+            "/accounts/otp/get", "POST",
+            buildJsonObject { put("device_id", deviceId) },
+        ) as? JsonObject ?: error("Empty OTP response")
+        return OtpChallenge(
+            code = response.obj("otp")?.string("code") ?: error("OTP code missing"),
+            remainingSeconds = response.int("remaining_time") ?: 120,
+        )
+    }
+
+    /** The user confirms the visible code in an authenticated AniLiberty web session. */
+    suspend fun loginWithOtp(deviceId: String, code: String): String {
+        val response = send(
+            "/accounts/otp/login", "POST",
+            buildJsonObject {
+                put("device_id", deviceId)
+                put("code", code.toIntOrNull() ?: error("Invalid OTP"))
+            },
+        ) as? JsonObject ?: error("Empty login response")
+        return response.string("token")?.takeIf(String::isNotBlank) ?: error("Login token missing")
+    }
+
+    suspend fun viewer(): Viewer? {
+        val response = get("/accounts/users/me/profile", authenticated = true) as? JsonObject ?: return null
+        val id = response.int("id") ?: return null
+        return Viewer(
+            id = id,
+            name = response.string("nickname") ?: response.string("login") ?: "AniLiberty",
+            avatar = UserAvatar(large = response.image("avatar")),
+            createdAt = response.string("created_at")?.let { date ->
+                runCatching { OffsetDateTime.parse(date).toEpochSecond() }.getOrNull()
+            },
+        )
+    }
+
+    suspend fun userAnimeList(): MediaListCollection = coroutineScope {
+        val categories = COLLECTION_STATUSES.map { (libertyStatus, uiStatus) ->
+            async {
+                val releases = accountReleases(
+                    "/accounts/users/me/collections/releases",
+                    mapOf("type_of_collection" to libertyStatus),
+                )
+                MediaListGroup(
+                    name = libertyStatus,
+                    status = uiStatus,
+                    entries = releases.map { media ->
+                        MediaListEntry(id = media.id, status = uiStatus, media = media)
+                    },
+                )
+            }
+        }
+        MediaListCollection(categories.map { it.await() })
+    }
+
+    suspend fun favouriteAnime(): List<Media> =
+        accountReleases("/accounts/users/me/favorites/releases")
+
+    /** Local watchlist corresponds to PLANNED. Do not overwrite another collection status. */
+    suspend fun syncSavedAnime(releaseId: Int, saved: Boolean) {
+        val known = get("/accounts/users/me/collections/ids", authenticated = true)
+            .asList().mapNotNull { item ->
+                val pair = item as? JsonArray ?: return@mapNotNull null
+                val id = (pair.getOrNull(0) as? JsonPrimitive)?.intOrNull ?: return@mapNotNull null
+                val category = (pair.getOrNull(1) as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
+                id to category
+            }.toMap()
+        val category = known[releaseId]
+        if (saved && category == null) {
+            send("/accounts/users/me/collections", "POST", buildJsonArray {
+                add(buildJsonObject {
+                    put("release_id", releaseId)
+                    put("type_of_collection", "PLANNED")
+                })
+            }, authenticated = true)
+        } else if (!saved && category == "PLANNED") {
+            send("/accounts/users/me/collections", "DELETE", buildJsonArray {
+                add(buildJsonObject { put("release_id", releaseId) })
+            }, authenticated = true)
+        }
+    }
+
+    suspend fun saveTimecode(episodeId: String, seconds: Double, watched: Boolean) {
+        send("/accounts/users/me/views/timecodes", "POST", buildJsonArray {
+            add(buildJsonObject {
+                put("release_episode_id", episodeId)
+                put("time", seconds.coerceAtLeast(0.0))
+                put("is_watched", watched)
+            })
+        }, authenticated = true)
+    }
+
+    private suspend fun accountReleases(path: String, extra: Map<String, String> = emptyMap()): List<Media> {
+        val results = mutableListOf<Media>()
+        var page = 1
+        do {
+            val response = get(path, extra + mapOf("page" to page.toString(), "limit" to "100"), authenticated = true)
+            results += response.asList().mapNotNull { (it as? JsonObject)?.toMedia() }
+            val pages = (response as? JsonObject)?.obj("meta")?.obj("pagination")?.int("total_pages") ?: 1
+            if (page >= pages) break
+            page++
+        } while (page <= 100)
+        return results
+    }
 
     suspend fun latest(limit: Int = 30): MediaPage =
         list("/anime/releases/latest", mapOf("limit" to limit.toString()))
@@ -189,16 +310,37 @@ class AniLibertyClient(
         return MediaPage(entries.mapNotNull { (it as? JsonObject)?.toMedia() }, hasNext, page)
     }
 
-    private suspend fun get(path: String, parameters: Map<String, String> = emptyMap()): JsonElement =
+    private suspend fun get(
+        path: String,
+        parameters: Map<String, String> = emptyMap(),
+        authenticated: Boolean = false,
+    ): JsonElement = send(path, "GET", parameters = parameters, authenticated = authenticated)
+
+    private suspend fun send(
+        path: String,
+        method: String,
+        body: JsonElement? = null,
+        parameters: Map<String, String> = emptyMap(),
+        authenticated: Boolean = false,
+    ): JsonElement =
         withContext(Dispatchers.IO) {
             val url = root.toHttpUrl().newBuilder().apply {
                 addPathSegments(path.trimStart('/'))
                 parameters.forEach { (key, value) -> addQueryParameter(key, value) }
             }.build()
-            val request = Request.Builder().url(url).header("Accept", "application/json").build()
+            val builder = Request.Builder().url(url).header("Accept", "application/json")
+            if (authenticated) {
+                builder.header("Authorization", "Bearer ${AuthManager.current() ?: error("Not signed in")}")
+            }
+            if (method != "GET") {
+                val requestBody = (body ?: JsonObject(emptyMap())).toString()
+                    .toRequestBody("application/json; charset=utf-8".toMediaType())
+                builder.method(method, requestBody)
+            }
+            val request = builder.build()
             http.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) throw IOException("AniLiberty HTTP ${response.code} on $path")
-                val payload = response.body?.string() ?: throw IOException("Empty AniLiberty response")
+                val payload = response.body?.string()?.takeIf(String::isNotBlank) ?: "{}"
                 json.parseToJsonElement(payload)
             }
         }
@@ -271,6 +413,13 @@ class AniLibertyClient(
 
     companion object {
         const val PROVIDER = "AniLiberty"
+        private val COLLECTION_STATUSES = listOf(
+            "WATCHING" to "CURRENT",
+            "PLANNED" to "PLANNING",
+            "POSTPONED" to "PAUSED",
+            "WATCHED" to "COMPLETED",
+            "ABANDONED" to "DROPPED",
+        )
         private val RELEASE_TYPES = setOf("TV", "ONA", "WEB", "OVA", "OAD", "MOVIE", "DORAMA", "SPECIAL")
         private val GENRE_ALIASES = mapOf(
             "Action" to listOf("Экшен", "Боевик"),

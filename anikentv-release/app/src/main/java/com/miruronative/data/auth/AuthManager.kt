@@ -2,23 +2,17 @@ package com.miruronative.data.auth
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.net.Uri
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import com.miruronative.data.reminder.AniListNotificationPushManager
 import com.miruronative.data.reminder.ReleaseSyncScheduler
+import java.util.UUID
 
 /**
- * AniList OAuth (Implicit Grant). AniList redirects to `http://localhost/#access_token=…`; the
- * login WebView intercepts that URL before Android networking tries to open localhost. No client
- * secret is stored in the app. Tokens are long-lived (~1 year; AniList has no refresh).
+ * AniLiberty account session. Device ID is stable across app launches; a TV login uses
+ * the OTP challenge confirmed by the user in their already-authenticated browser session.
+ * Never interpret a previously stored AniList token as an AniLiberty session.
  */
 object AuthManager {
-    const val CLIENT_ID = "45552"
-    const val REDIRECT = "http://localhost"
-    const val AUTHORIZE_URL =
-        "https://anilist.co/api/v2/oauth/authorize?client_id=$CLIENT_ID&response_type=token"
-
     private lateinit var prefs: SharedPreferences
     private lateinit var appContext: Context
 
@@ -28,34 +22,27 @@ object AuthManager {
     fun init(context: Context) {
         appContext = context.applicationContext
         prefs = appContext.getSharedPreferences("miruro_auth", Context.MODE_PRIVATE)
-        _token.value = prefs.getString("anilist_token", null)
+        _token.value = prefs.getString("aniliberty_token", null)
     }
 
     fun current(): String? = _token.value
     val isLoggedIn: Boolean get() = _token.value != null
 
+    fun deviceId(): String = synchronized(this) {
+        prefs.getString("aniliberty_device_id", null) ?: UUID.randomUUID().toString().also {
+            prefs.edit().putString("aniliberty_device_id", it).commit()
+        }
+    }
+
     fun setToken(token: String) {
-        prefs.edit().putString("anilist_token", token).apply()
+        prefs.edit().putString("aniliberty_token", token).apply()
         _token.value = token
-        AniListNotificationPushManager.clearDelivered(appContext)
         ReleaseSyncScheduler.runNow(appContext)
     }
 
     fun logout() {
-        prefs.edit().remove("anilist_token").apply()
+        prefs.edit().remove("aniliberty_token").apply()
         _token.value = null
-        AniListNotificationPushManager.clearDelivered(appContext)
         ReleaseSyncScheduler.runNow(appContext)
-    }
-
-    /** True once a redirect URL carries the token; extract it with [extractToken]. */
-    fun isRedirect(url: String): Boolean {
-        val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return false
-        return uri.scheme == "http" && uri.host == "localhost" && uri.fragment?.contains("access_token=") == true
-    }
-
-    fun extractToken(url: String): String? {
-        if (!url.contains("access_token=")) return null
-        return url.substringAfter("access_token=").substringBefore("&").takeIf { it.isNotBlank() }
     }
 }

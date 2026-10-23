@@ -1,16 +1,16 @@
-# Anilili
+# Aniken TV · AniLiberty edition
 
-Anilili is a native Android anime streaming client built with Kotlin, Jetpack Compose, and
-Media3. Metadata, login, library lists, and progress sync are powered by AniList, while
-episodes and stream sources are resolved from multiple providers: Miruro, AniKoto,
-ReAnime, AniZone, AnimeGG, AniNeko, and 2DHive.
+This branch keeps the open-source Aniken/Anilili Android TV user interface and
+playback engine (Kotlin, Jetpack Compose, Media3), but replaces the former
+multi-service backend with **AniLiberty API v1 only**.
 
-Miruro streams are requested through the Miruro pipe endpoint and decoded on device.
-Additional provider sources are resolved through the Anivexa-backed provider client. HLS
-streams play with ExoPlayer; embed providers and fallback playback use WebView.
+Catalog, release details, schedules, episode UUIDs, HLS streams, profile,
+collections, favourites, and watch progress all come from AniLiberty. The old
+AniList, Miruro, Anivexa, Jikan, pipe, and Cloudflare scraping clients have
+been removed. Media3/ExoPlayer plays the official HLS sources natively.
 
-> Personal and educational project. This app is not affiliated with AniList, Miruro,
-> AniKoto, ReAnime, AniZone, AnimeGG, AniNeko, or 2DHive. Distribute as a sideloaded APK.
+> Experimental open-source client. Not an official AniLiberty app.
+> The UI is based on Aniken/Anilili. Distribute as a sideloaded APK.
 
 ## Screenshots
 
@@ -28,25 +28,31 @@ streams play with ExoPlayer; embed providers and fallback playback use WebView.
 ## Features
 
 - Home feeds for trending, popular, and recently released anime.
-- Browse and search with genre, tag, year, status, format, rating, and sort filters.
-- Anime details, provider selection, sub/dub selection, ratings, and episode lists.
-- Multi-provider stream discovery across Miruro, AniKoto, ReAnime, AniZone, AnimeGG,
-  AniNeko, and 2DHive.
-- Native HLS playback with subtitles, skip intro, and auto advance.
-- WebView playback for embed providers and fallback player routes.
-- AniList login with watching, planning, paused, and completed list views.
-- Watch history, continue-watching resume positions, local watchlist, and optional
-  AniList episode progress sync.
+- Browse and search with AniLiberty-supported genre, year, status, format, and sort filters.
+- Anime details and episode lists supplied by AniLiberty.
+- Native HLS playback at the resolutions provided by AniLiberty, intro/outro skip, and auto advance.
+- TV sign-in using an OTP displayed on the TV and accepted at
+  `https://anilibria.top/app/auth/otp/linkDevice` on a signed-in device.
+- Watching, planning, paused, completed, and dropped collections from the account.
+- Watch history, continue-watching resume positions, local watchlist,
+  and optional AniLiberty episode timecode sync.
 - Adaptive Compose UI for phone and TV-style layouts.
+
+The former local library used AniList IDs; the AniLiberty library has its **own
+separate storage** to avoid mixing unrelated titles that have matching numeric IDs.
+The old local library is not erased.
+
+AniLiberty's schedule API does not supply a precise airtime; the app never
+guesses a timestamp for notifications. Filters not supported by the service
+cannot be passed through as old-provider-specific parameters.
 
 ## Project Structure
 
 | Path | Purpose |
 | --- | --- |
-| `app/src/main/java/com/miruronative/data` | Domain models and provider catalog |
-| `app/src/main/java/com/miruronative/data/remote` | AniList, Miruro pipe, and provider clients |
+| `app/src/main/java/com/miruronative/data` | Presentation models, repository and local library |
+| `app/src/main/java/com/miruronative/data/remote` | AniLiberty API v1 client |
 | `app/src/main/java/com/miruronative/ui` | Compose screens and player UI |
-| `docs/PIPE_PROTOCOL.md` | Notes about the Miruro pipe format |
 | `showcase/mobile` | Six optimized 540×1170 WebP screenshots |
 
 ## Build
@@ -54,7 +60,7 @@ streams play with ExoPlayer; embed providers and fallback playback use WebView.
 Requirements:
 
 - JDK 17
-- Android Studio or Android SDK API 35
+- Android Studio or Android SDK API 36 with build-tools 35.0.1
 - Gradle 8.13 if building from the command line without a generated wrapper
 
 Android Studio:

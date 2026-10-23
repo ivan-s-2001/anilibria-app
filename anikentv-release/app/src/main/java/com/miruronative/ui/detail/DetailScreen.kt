@@ -168,11 +168,8 @@ private fun DetailContent(
     val episodeRows = remember(episodes, device.episodeColumns) {
         episodes.chunked(device.episodeColumns)
     }
-    val visibleProviders = remember(data.episodes.providerNames, data.loadingMore) {
-        val pending = if (data.loadingMore) ProviderCatalog.anivexaProviders else emptyList()
-        (data.episodes.providerNames + pending)
-            .distinct()
-            .sortedBy(ProviderCatalog::sortKey)
+    val visibleProviders = remember(data.episodes.providerNames) {
+        data.episodes.providerNames.distinct().sortedBy(ProviderCatalog::sortKey)
     }
     val pendingProviders = remember(visibleProviders, data.episodes.providerNames) {
         visibleProviders.toSet() - data.episodes.providerNames.toSet()
@@ -290,7 +287,7 @@ private fun ContentAdvisoryRow(media: Media) {
             advisory.labels.forEach { label -> AdvisoryBadge(label) }
         }
         Text(
-            "Estimated from AniList tags; not an official age rating",
+            "Предупреждения рассчитаны по жанрам; точный возрастной рейтинг может отличаться",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),

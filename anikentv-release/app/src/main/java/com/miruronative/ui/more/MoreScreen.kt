@@ -54,8 +54,8 @@ fun MoreScreen(modifier: Modifier = Modifier) {
             )
             Spacer(Modifier.height(24.dp))
             Text(
-                "Metadata from AniList. Streaming resolved on-device through a Cloudflare-cleared " +
-                    "WebView session. This app links to third-party media it does not host.",
+                "Каталог, эпизоды и видеопотоки предоставляются AniLiberty. " +
+                    "Приложение воспроизводит видео напрямую и не хранит его на устройстве.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
             )

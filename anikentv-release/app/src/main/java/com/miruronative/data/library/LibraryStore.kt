@@ -29,7 +29,7 @@ object LibraryStore {
     private lateinit var prefs: SharedPreferences
     private lateinit var appContext: Context
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val aniListSyncMutex = Mutex()
+    private val libertySyncMutex = Mutex()
 
     private val _history = MutableStateFlow<List<HistoryEntry>>(emptyList())
     val history = _history.asStateFlow()
@@ -39,7 +39,9 @@ object LibraryStore {
 
     fun init(context: Context) {
         appContext = context.applicationContext
-        prefs = appContext.getSharedPreferences("miruro_library", Context.MODE_PRIVATE)
+        // Legacy history stored AniList IDs. Never reuse those numeric IDs for AniLiberty releases.
+        // The original preferences remain untouched, should the original app be reinstalled.
+        prefs = appContext.getSharedPreferences("aniliberty_library_v1", Context.MODE_PRIVATE)
         _history.value = decodeList(prefs.getString(KEY_HISTORY, null), HistoryEntry.serializer())
         _watchlist.value = decodeList(prefs.getString(KEY_WATCHLIST, null), WatchlistEntry.serializer())
     }
@@ -85,7 +87,7 @@ object LibraryStore {
         if (AuthManager.isLoggedIn && SettingsStore.syncSavedToAniList.value) {
             val saved = updated.any { it.anilistId == entry.anilistId }
             scope.launch {
-                aniListSyncMutex.withLock {
+                libertySyncMutex.withLock {
                     runCatching { AppGraph.repository.syncSavedAnime(entry.anilistId, saved) }
                 }
             }
@@ -96,13 +98,13 @@ object LibraryStore {
         if (!AuthManager.isLoggedIn || !SettingsStore.syncSavedToAniList.value) return
         val savedIds = _watchlist.value.map { it.anilistId }
         scope.launch {
-            aniListSyncMutex.withLock {
+            libertySyncMutex.withLock {
                 savedIds.forEach { id -> runCatching { AppGraph.repository.syncSavedAnime(id, true) } }
             }
         }
     }
 
-    /** Merge AniList Planning into this device without deleting device-only saves. */
+    /** Merge AniLiberty Planning into this device without deleting device-only saves. */
     fun hydrateWatchlistFromAniList(entries: List<WatchlistEntry>) {
         val merged = mergeWatchlistEntries(_watchlist.value, entries)
         if (merged == _watchlist.value) return

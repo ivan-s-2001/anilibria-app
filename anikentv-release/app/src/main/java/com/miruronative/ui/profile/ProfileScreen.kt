@@ -219,7 +219,7 @@ fun ProfileScreen(
             item {
                 ProfileSectionTitle(
                     selectedView.label,
-                    if (selectedView == LibraryView.WATCHLIST) "Saved here and in AniList Planning" else "Synced from AniList",
+                    if (selectedView == LibraryView.WATCHLIST) "Сохранено здесь и в планах AniLiberty" else "Синхронизировано с AniLiberty",
                 )
             }
             if (selectedCards.isEmpty()) {
@@ -288,13 +288,13 @@ private fun ProfileHero(
             Column(Modifier.fillMaxWidth().padding(20.dp)) {
                 Text("Your anime, in one place", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
                 Text(
-                    "Connect AniList to browse every list, score, and episode progress from Anilili.",
+                    "Подключите AniLiberty, чтобы синхронизировать коллекции и прогресс просмотра.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 5.dp),
                 )
                 Button(onClick = onLogin, modifier = Modifier.padding(top = 16.dp).focusHighlight(RoundedCornerShape(9.dp))) {
-                    Text("Login with AniList", fontWeight = FontWeight.Bold)
+                    Text("Войти в AniLiberty", fontWeight = FontWeight.Bold)
                 }
             }
             return
@@ -338,13 +338,13 @@ private fun ProfileHero(
                     Column(Modifier.weight(1f)) {
                         Text(viewer.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
                         Text(
-                            listOfNotNull("Signed in via AniList", joinedLabel(viewer.createdAt)).joinToString("  ·  "),
+                            listOfNotNull("AniLiberty", joinedLabel(viewer.createdAt)).joinToString("  ·  "),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     IconButton(onClick = onSync, modifier = Modifier.focusHighlight(RoundedCornerShape(9.dp))) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Sync AniList")
+                        Icon(Icons.Default.Refresh, contentDescription = "Синхронизировать AniLiberty")
                     }
                     IconButton(onClick = onLogout, modifier = Modifier.focusHighlight(RoundedCornerShape(9.dp))) {
                         Icon(Icons.Default.Close, contentDescription = "Logout")
@@ -352,14 +352,14 @@ private fun ProfileHero(
                 }
             }
             is UiState.Error -> Column(Modifier.padding(18.dp)) {
-                Text("AniList could not be loaded", fontWeight = FontWeight.Bold)
+                Text("AniLiberty недоступен", fontWeight = FontWeight.Bold)
                 Text(state.message, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
                 Row(Modifier.padding(top = 8.dp)) {
                     TextButton(onClick = onSync) { Text("Try again") }
                     TextButton(onClick = onLogout) { Text("Logout") }
                 }
             }
-            else -> Text("Syncing your AniList profile…", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
+            else -> Text("Загружаем профиль AniLiberty…", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
         }
     }
 }
@@ -369,11 +369,13 @@ private fun ProfileStats(profile: AniListProfile) {
     val device = LocalAppDeviceProfile.current
     val stats = profile.viewer.statistics?.anime
     val days = (stats?.minutesWatched ?: 0L) / 1440.0
+    val knownAnime = listOf(profile.watching, profile.planning, profile.paused, profile.completed, profile.dropped)
+        .flatten().mapNotNull { it.media?.id }.distinct().size
     Panel(Modifier.padding(horizontal = device.pagePadding)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 14.dp)) {
-            ProfileStat((stats?.count ?: 0).toString(), "Total anime", Modifier.weight(1f))
-            ProfileStat(String.format(Locale.US, "%.1f", days), "Days watched", Modifier.weight(1f))
-            ProfileStat(String.format(Locale.US, "%.1f", stats?.meanScore ?: 0.0), "Average score", Modifier.weight(1f))
+            ProfileStat((stats?.count ?: knownAnime).toString(), "Total anime", Modifier.weight(1f))
+            ProfileStat(stats?.let { String.format(Locale.US, "%.1f", days) } ?: "—", "Days watched", Modifier.weight(1f))
+            ProfileStat(stats?.let { String.format(Locale.US, "%.1f", it.meanScore) } ?: "—", "Average score", Modifier.weight(1f))
         }
     }
 }

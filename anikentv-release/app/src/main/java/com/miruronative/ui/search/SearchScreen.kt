@@ -308,7 +308,7 @@ private fun FilterSheet(
                     Column(Modifier.weight(1f)) {
                         Text("Filter catalog", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
                         Text(
-                            "Combine filters to narrow the full AniList catalog.",
+                            "Combine filters to narrow the AniLiberty catalog.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

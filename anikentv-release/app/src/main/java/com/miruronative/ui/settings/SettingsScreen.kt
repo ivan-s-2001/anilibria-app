@@ -202,12 +202,12 @@ fun SettingsScreen(
             }
             item { SectionDivider() }
 
-            item { SettingsSectionTitle("AniList") }
+            item { SettingsSectionTitle("AniLiberty") }
             item { SettingSwitch("Sync episode progress", "Update watched episodes while playing", autoSync, SettingsStore::setAutoSyncAniList) }
             item {
                 SettingSwitch(
                     "Sync watchlist with Planning",
-                    "Import Planning after login and add new saves without replacing active progress",
+                    "Импорт планов после входа без изменения остальных коллекций",
                     syncSavedToAniList,
                     ::setWatchlistSync,
                 )
@@ -218,7 +218,7 @@ fun SettingsScreen(
             item {
                 SettingSwitch(
                     "Notification alerts",
-                    "Logged in: AniList notifications; logged out: saved anime releases",
+                    "Оповещения о новых сериях сохранённых аниме",
                     releaseNotifications,
                     ::setReleaseNotifications,
                 )

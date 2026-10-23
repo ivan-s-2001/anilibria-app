@@ -169,8 +169,8 @@ fun WatchScreen(
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (webFallback) {
             EmbedWebView(
-                url = "https://www.miruro.to/info/$animeId",
-                referer = "https://www.miruro.to/",
+                url = "https://aniliberty.top/",
+                referer = "https://aniliberty.top/",
                 modifier = Modifier.fillMaxSize(),
                 onFullscreenChanged = { fullscreen = it },
                 onProgress = vm::onProgress,

@@ -163,9 +163,9 @@ fun NotificationsScreen(
                     Modifier.align(Alignment.Center).padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text("Log in with AniList", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Войдите в AniLiberty", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(
-                        "Notifications for new episodes and activity come from your AniList account.",
+                        "Уведомления о новых сериях отправляются на этом устройстве для сохранённых аниме.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 6.dp),

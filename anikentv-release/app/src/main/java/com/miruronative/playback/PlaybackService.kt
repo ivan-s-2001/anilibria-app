@@ -254,7 +254,7 @@ class PlaybackService : MediaSessionService() {
 
         /** Applies per-provider headers before Media3 creates manifest and segment data sources. */
         fun configureRequestHeaders(referer: String?) {
-            val safeReferer = referer ?: "https://www.miruro.to/"
+            val safeReferer = referer ?: "https://aniliberty.top/"
             val origin = android.net.Uri.parse(safeReferer).let { uri ->
                 if (uri.scheme != null && uri.host != null) "${uri.scheme}://${uri.host}" else safeReferer
             }

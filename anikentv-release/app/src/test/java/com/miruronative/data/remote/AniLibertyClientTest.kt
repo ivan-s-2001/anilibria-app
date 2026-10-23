@@ -6,6 +6,7 @@ import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
+import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
@@ -32,9 +33,11 @@ class AniLibertyClientTest {
         }
     """.trimIndent()
 
-    private fun client(handler: (String) -> String): AniLibertyClient {
+    private fun client(handler: (String) -> String): AniLibertyClient = requestClient { handler(it.url.toString()) }
+
+    private fun requestClient(handler: (Request) -> String): AniLibertyClient {
         val http = OkHttpClient.Builder().addInterceptor { chain ->
-            val payload = handler(chain.request().url.toString())
+            val payload = handler(chain.request())
             Response.Builder()
                 .request(chain.request())
                 .protocol(Protocol.HTTP_1_1)
@@ -108,5 +111,32 @@ class AniLibertyClientTest {
         assertEquals(7439, friday.single().media?.id)
         assertEquals(8, friday.single().episode)
         assertEquals(0L, friday.single().airingAt)
+    }
+
+    @Test
+    fun tvOtpSendsStableDeviceIdAndPreservesLeadingZeroInDisplayedCode() = runBlocking {
+        val client = requestClient { request ->
+            assertEquals("POST", request.method)
+            assertTrue(request.url.toString().endsWith("/accounts/otp/get"))
+            val body = okio.Buffer().also { buffer -> request.body!!.writeTo(buffer) }.readUtf8()
+            assertTrue(body.contains("\"device_id\":\"tv-device-1\""))
+            """{"otp":{"code":"058701"},"remaining_time":120}"""
+        }
+        val challenge = client.requestOtp("tv-device-1")
+        assertEquals("058701", challenge.code)
+        assertEquals(120, challenge.remainingSeconds)
+    }
+
+    @Test
+    fun tvOtpLoginUsesNumericCodeAndReceivesOwnSessionToken() = runBlocking {
+        val client = requestClient { request ->
+            assertEquals("POST", request.method)
+            assertTrue(request.url.toString().endsWith("/accounts/otp/login"))
+            val body = okio.Buffer().also { buffer -> request.body!!.writeTo(buffer) }.readUtf8()
+            assertTrue(body.contains("\"device_id\":\"tv-device-1\""))
+            assertTrue(body.contains("\"code\":58701"))
+            """{"token":"liberty-session-token"}"""
+        }
+        assertEquals("liberty-session-token", client.loginWithOtp("tv-device-1", "058701"))
     }
 }

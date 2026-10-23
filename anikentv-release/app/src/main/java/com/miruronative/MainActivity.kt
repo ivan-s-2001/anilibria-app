@@ -61,8 +61,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
-import com.miruronative.data.auth.AuthManager
-import com.miruronative.data.library.LibraryStore
 import com.miruronative.data.reminder.AutomaticReleaseManager
 import com.miruronative.data.reminder.ReleaseSyncScheduler
 import com.miruronative.diagnostics.CrashReportDialog
@@ -71,9 +69,7 @@ import com.miruronative.diagnostics.DiagnosticsLog
 import com.miruronative.data.settings.SettingsStore
 import com.miruronative.data.update.UpdateManager
 import com.miruronative.ui.detail.DetailScreen
-import com.miruronative.ui.FlixcloudResolverWebView
 import com.miruronative.ui.home.HomeScreen
-import com.miruronative.ui.PipeWebView
 import com.miruronative.ui.adaptive.LocalAppDeviceProfile
 import com.miruronative.ui.adaptive.focusHighlight
 import com.miruronative.ui.adaptive.rememberAppDeviceProfile
@@ -114,7 +110,6 @@ class MainActivity : FragmentActivity() {
         DiagnosticsLog.watchFirstDraw(window.decorView, "MainActivity")
         pendingRoute = intent.getStringExtra(Routes.EXTRA_ROUTE)
         DiagnosticsLog.event("MainActivity pendingRoute=${pendingRoute ?: "none"}")
-        handleAuthRedirect(intent)
         DiagnosticsLog.event("MainActivity.setContent start")
         setContent {
             LaunchedEffect(Unit) {
@@ -184,19 +179,6 @@ class MainActivity : FragmentActivity() {
             "MainActivity.onNewIntent pendingRoute=${pendingRoute ?: "none"} " +
                 "action=${intent.action ?: "none"} data=${intent.dataString ?: "none"}",
         )
-        handleAuthRedirect(intent)
-    }
-
-    private fun handleAuthRedirect(intent: Intent?) {
-        val url = intent?.dataString ?: return
-        if (!AuthManager.isRedirect(url)) return
-        DiagnosticsLog.event("Auth redirect received")
-        AuthManager.extractToken(url)?.let { token ->
-            AuthManager.setToken(token)
-            LibraryStore.syncSavedToAniList()
-            pendingRoute = Routes.MORE
-            DiagnosticsLog.event("Auth redirect accepted")
-        }
     }
 
     override fun onStop() {
@@ -263,19 +245,12 @@ private fun MiruroRoot(
     val backStack by nav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
     val showBottomBar = currentRoute in Routes.tabRoutes
-    var resolverWebViewsReady by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         DiagnosticsLog.event(
             "MiruroRoot composed formFactor=${deviceProfile.formFactor} " +
                 "widthDp=${deviceProfile.widthDp} navRail=${deviceProfile.useNavigationRail}",
         )
-    }
-
-    LaunchedEffect(Unit) {
-        delay(if (deviceProfile.isTv) 3_000 else 1_000)
-        resolverWebViewsReady = true
-        DiagnosticsLog.event("Resolver WebView startup delay elapsed")
     }
 
     LaunchedEffect(currentRoute) {
@@ -341,12 +316,6 @@ private fun MiruroRoot(
                         modifier = Modifier.weight(1f),
                     )
                 }
-            }
-            // Hidden resolver WebViews are not needed for Home. On slow Android TV boxes,
-            // creating WebView during first composition can delay the first visible frame.
-            if (resolverWebViewsReady) {
-                PipeWebView()
-                FlixcloudResolverWebView()
             }
         }
     }
