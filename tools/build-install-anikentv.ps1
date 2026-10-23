@@ -257,7 +257,14 @@ if (-not $GradleExecutable) {
         New-Item -ItemType Directory -Path $cache -Force | Out-Null
         $archive = Join-Path $cache "gradle-$GradleVersion-bin.zip"
         $url = "https://services.gradle.org/distributions/gradle-$GradleVersion-bin.zip"
-        $expected = (Invoke-WebRequest -Uri "$url.sha256" -UseBasicParsing).Content.Trim().Split()[0]
+        $checksumFile = Join-Path $cache "gradle-$GradleVersion-bin.zip.sha256"
+        Invoke-WebRequest -Uri "$url.sha256" -UseBasicParsing -OutFile $checksumFile
+        $checksumText = [System.IO.File]::ReadAllText($checksumFile)
+        $checksumMatch = [regex]::Match($checksumText, '(?i)\b[a-f0-9]{64}\b')
+        if (-not $checksumMatch.Success) {
+            throw 'Unable to read official Gradle SHA-256 checksum.'
+        }
+        $expected = $checksumMatch.Value
 
         if ((-not (Test-Path $archive)) -or
             ((Get-FileHash -Path $archive -Algorithm SHA256).Hash -ne $expected)) {
