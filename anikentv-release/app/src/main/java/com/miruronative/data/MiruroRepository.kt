@@ -62,17 +62,14 @@ class MiruroRepository(
         }
 
     suspend fun schedule(dayOffset: Int, force: Boolean = false): List<AiringSchedule> {
-        val zone = java.time.ZoneId.systemDefault()
-        val day = java.time.LocalDate.now(zone).plusDays(dayOffset.toLong())
-        val start = day.atStartOfDay(zone).toEpochSecond()
-        val end = day.plusDays(1).atStartOfDay(zone).toEpochSecond() - 1
+        val day = java.time.LocalDate.now(java.time.ZoneId.systemDefault()).plusDays(dayOffset.toLong())
         // Cached unfiltered and filtered at read time, so toggling the setting applies instantly.
         val schedules = cache.getOrFetch(
-            key = "schedule:$day",
+            key = "schedule:liberty:v1:$day",
             serializer = ListSerializer(AiringSchedule.serializer()),
             ttlMs = SCHEDULE_TTL,
             forceRefresh = force,
-        ) { aniList.airingSchedule(start, end) }
+        ) { liberty.schedule(day) }
         return if (hideAdult) schedules.filterNot { it.media?.isAdult == true } else schedules
     }
 
