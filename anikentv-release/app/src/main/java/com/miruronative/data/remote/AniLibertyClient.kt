@@ -238,7 +238,11 @@ class AniLibertyClient(
     private fun JsonObject.string(key: String): String? =
         (get(key) as? JsonPrimitive)?.contentOrNull
     private fun JsonObject.int(key: String): Int? =
-        (get(key) as? JsonPrimitive)?.intOrNull
+        (get(key) as? JsonPrimitive)?.let { value ->
+            value.intOrNull ?: value.doubleOrNull
+                ?.takeIf { it.isFinite() && it % 1.0 == 0.0 }
+                ?.toInt()
+        }
     private fun JsonObject.double(key: String): Double? =
         (get(key) as? JsonPrimitive)?.doubleOrNull
     private fun JsonObject.bool(key: String): Boolean? =
