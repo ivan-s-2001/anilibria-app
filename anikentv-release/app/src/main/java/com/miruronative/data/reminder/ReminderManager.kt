@@ -61,6 +61,7 @@ object ReminderManager {
     }
 
     private fun schedule(item: AiringSchedule) {
+        if (item.airingAt <= 0) return // AniLiberty weekly timetable has no exact release time.
         val media = item.media ?: return
         val record = ScheduledReminder(
             id = id(item),
