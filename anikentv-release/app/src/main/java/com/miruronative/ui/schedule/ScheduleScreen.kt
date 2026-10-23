@@ -185,7 +185,11 @@ private fun ScheduleList(
         return
     }
     val zone = ZoneId.systemDefault()
-    val grouped = items.groupBy { Instant.ofEpochSecond(it.airingAt).atZone(zone).hour }.toSortedMap()
+    // AniLiberty exposes only the day, so keep the existing list layout without
+    // inventing a broadcast time. Unknown times appear in their own group.
+    val grouped = items.groupBy {
+        if (it.airingAt <= 0) -1 else Instant.ofEpochSecond(it.airingAt).atZone(zone).hour
+    }.toSortedMap()
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 24.dp),
@@ -193,7 +197,7 @@ private fun ScheduleList(
         grouped.forEach { (hour, list) ->
             item {
                 Text(
-                    text = LocalTime.of(hour, 0).format(timeFmt),
+                    text = if (hour < 0) "Время не указано" else LocalTime.of(hour, 0).format(timeFmt),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(start = device.pagePadding, top = 14.dp, bottom = 6.dp),
@@ -257,7 +261,7 @@ private fun ScheduleRow(
                     .padding(horizontal = 8.dp, vertical = 2.dp),
             ) {
                 Text(
-                    "EP ${item.episode}",
+                    if (item.episode > 0) "EP ${item.episode}" else "EP —",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onPrimary,
                     fontWeight = FontWeight.Bold,
@@ -265,11 +269,11 @@ private fun ScheduleRow(
             }
         }
         Text(
-            text = Instant.ofEpochSecond(item.airingAt).atZone(zone).format(timeFmt),
+            text = if (item.airingAt > 0) Instant.ofEpochSecond(item.airingAt).atZone(zone).format(timeFmt) else "—",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        if (item.airingAt * 1000L > System.currentTimeMillis()) {
+        if (item.airingAt > System.currentTimeMillis() / 1000L) {
             IconButton(
                 onClick = { onToggleReminder(item) },
                 modifier = Modifier.focusHighlight(RoundedCornerShape(24.dp)),
