@@ -7,8 +7,8 @@
       powershell -ExecutionPolicy Bypass -File .\build-install-anikentv.ps1 -Tv 192.168.8.150:5555
       powershell -ExecutionPolicy Bypass -File .\build-install-anikentv.ps1 -RepoDirectory C:\Projects\anilibria-app
 
-    Requires Git, JDK 17+, Android SDK command-line tools and ADB.
-    Gradle 8.13 is downloaded and SHA-256 verified if not already installed.
+    Requires Git, JDK 17+ and Android SDK. Missing Android command-line
+    tools, SDK packages, and Gradle 8.13 can be downloaded automatically.
 #>
 
 [CmdletBinding()]
@@ -31,11 +31,14 @@ if ([string]::IsNullOrWhiteSpace($ScriptDirectory)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($RepoDirectory)) {
-    # When the script is placed in an existing checkout (also in a subfolder), use it.
+    # Never switch branches in a working AniLiberty checkout. Keep the Aniken
+    # experiment in a separate sibling repository, even if this script lives
+    # inside the original checkout.
     $candidate = $ScriptDirectory
+    $existingCheckout = $null
     while ($true) {
         if (Test-Path (Join-Path $candidate '.git')) {
-            $RepoDirectory = $candidate
+            $existingCheckout = $candidate
             break
         }
         $parent = Split-Path -Parent $candidate
@@ -43,7 +46,13 @@ if ([string]::IsNullOrWhiteSpace($RepoDirectory)) {
         $candidate = $parent
     }
 
-    if ([string]::IsNullOrWhiteSpace($RepoDirectory)) {
+    if ($existingCheckout) {
+        if ((Split-Path -Leaf $existingCheckout) -eq 'anikentv-original') {
+            $RepoDirectory = $existingCheckout
+        } else {
+            $RepoDirectory = Join-Path (Split-Path -Parent $existingCheckout) 'anikentv-original'
+        }
+    } else {
         $RepoDirectory = Join-Path $ScriptDirectory 'anilibria-app'
     }
 }
@@ -78,7 +87,52 @@ function Find-SdkManager {
     return $null
 }
 
+function Install-SdkManager {
+    $toolVersion = '15859902'
+    $toolSha256 = '90ae805d20434428bffcb699c290860f19bb5f66a67e6b330067e3de801fb04a'
+    $toolUrl = "https://dl.google.com/android/repository/commandlinetools-win-${toolVersion}_latest.zip"
+
+    $cacheBase = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { $env:TEMP }
+    $cache = Join-Path $cacheBase "AnikenTVBuild\android-cli-$toolVersion"
+    $manager = Join-Path $cache 'cmdline-tools\latest\bin\sdkmanager.bat'
+    if (Test-Path $manager) { return $manager }
+
+    Write-Host 'Android Command-line Tools for Windows are missing.' -ForegroundColor Yellow
+    Write-Host 'Official download: https://developer.android.com/studio#command-line-tools-only'
+    $answer = Read-Host 'Download the Google tools (~156 MB) and continue? [y/N]'
+    if ($answer -notmatch '^(y|yes|д|да)$') {
+        throw 'Install Android SDK Command-line Tools via Android Studio SDK Manager and retry.'
+    }
+
+    New-Item -ItemType Directory -Path $cache -Force | Out-Null
+    $archive = Join-Path $cache "commandlinetools-win-$toolVersion.zip"
+    if ((-not (Test-Path $archive)) -or
+        ((Get-FileHash -Path $archive -Algorithm SHA256).Hash -ne $toolSha256)) {
+        Write-Host 'Downloading Android Command-line Tools...'
+        Invoke-WebRequest -Uri $toolUrl -UseBasicParsing -OutFile $archive
+    }
+    if ((Get-FileHash -Path $archive -Algorithm SHA256).Hash -ne $toolSha256) {
+        throw 'Android Command-line Tools download failed SHA-256 verification.'
+    }
+
+    $unpacked = Join-Path $cache 'unpacked'
+    Expand-Archive -Path $archive -DestinationPath $unpacked -Force
+    $source = Join-Path $unpacked 'cmdline-tools'
+    $target = Join-Path $cache 'cmdline-tools\latest'
+    if (-not (Test-Path (Join-Path $source 'bin\sdkmanager.bat'))) {
+        throw 'Downloaded Command-line Tools archive has an unexpected structure.'
+    }
+    New-Item -ItemType Directory -Path $target -Force | Out-Null
+    Get-ChildItem -Path $source -Force |
+        Copy-Item -Destination $target -Recurse -Force
+    if (-not (Test-Path $manager)) {
+        throw 'Android Command-line Tools installation is incomplete.'
+    }
+    return $manager
+}
+
 Write-Host "`n[1/5] Repository and branch" -ForegroundColor Cyan
+Write-Host "Aniken working copy: $RepoDirectory"
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     throw 'Git was not found. Install Git for Windows and restart PowerShell.'
 }
@@ -178,7 +232,7 @@ if (-not (Test-Path (Join-Path $SdkDirectory 'platform-tools\adb.exe'))) {
 if ($packages.Count -gt 0) {
     $sdkManager = Find-SdkManager $SdkDirectory
     if (-not $sdkManager) {
-        throw "SDK packages missing ($($packages -join ', ')). Install Android SDK Command-line Tools in Android Studio."
+        $sdkManager = Install-SdkManager
     }
     Write-Host "Installing SDK packages: $($packages -join ', ')"
     Write-Host 'If Android requests license acceptance, follow the console prompt.'
