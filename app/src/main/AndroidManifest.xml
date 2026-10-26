@@ -2,7 +2,7 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-feature android:name="android.software.leanback" android:required="false"/>
     <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>
-    <application android:label="AniHall" android:theme="@style/AppTheme" android:allowBackup="false" android:banner="@drawable/tv_banner" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:usesCleartextTraffic="false">
+    <application android:label="AniHall Preview" android:theme="@style/AppTheme" android:allowBackup="false" android:banner="@drawable/tv_banner" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:usesCleartextTraffic="false">
         <activity android:name=".mobile.MobilePlayerActivity" android:screenOrientation="sensorLandscape" android:exported="false"/>
         <activity android:name=".mobile.MobileActivity" android:theme="@style/MobileTheme" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
