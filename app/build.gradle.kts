@@ -3,6 +3,7 @@ plugins { id("com.android.application") }
 android {
     namespace = "tv.aniliberty.next"
     compileSdk = 36
+    buildFeatures { resValues = true }
     defaultConfig {
         applicationId = "app.anihall.preview"
         minSdk = 26
