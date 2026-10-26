@@ -9,6 +9,14 @@ android {
         targetSdk = 36
         versionCode = 3
         versionName = "0.2.1"
+        resValue("string", "app_name", "AniHall Preview")
+    }
+    buildTypes {
+        getByName("debug") {
+            applicationIdSuffix = ".ci"
+            versionNameSuffix = "-ci"
+            resValue("string", "app_name", "AniHall Preview CI")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
