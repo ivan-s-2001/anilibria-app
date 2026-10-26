@@ -192,7 +192,7 @@ class MobileActivity : ComponentActivity() {
         }
         current = state.screen
         title.text = when (val screen = state.screen) {
-            is Screen.Catalog -> if (screen.query.isBlank()) "Каталог" else screen.query
+            is Screen.Catalog -> screen.title ?: if (screen.query.isBlank()) "Каталог" else screen.query
             is Screen.Library -> "Библиотека"
             is Screen.Detail -> "О тайтле"
             else -> "AniHall"
@@ -215,8 +215,11 @@ class MobileActivity : ComponentActivity() {
                         }))
                     }
                     state.home?.let { home ->
+                        home.featuredRelease?.let { release ->
+                            add(MobileRow(hero = release, click = { open(release) }))
+                        }
                         add(MobileRow(text = "Новые эпизоды", heading = true))
-                        home.latest.distinctBy { it.id }.forEach { add(poster(it)) }
+                        add(MobileRow(shelf = home.latest.distinctBy { it.id }.map(::poster)))
                         home.schedule?.getOrNull(1)?.takeIf { it.isNotEmpty() }?.let { today ->
                             add(MobileRow(text = "Сегодня в расписании", heading = true))
                             add(MobileRow(shelf = today.map { release ->

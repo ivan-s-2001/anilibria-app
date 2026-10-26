@@ -40,6 +40,7 @@ internal fun homeRows(
                 )
             )
         }
+        home.featuredRelease?.let { add(Row("home-featured:${it.id}", Kind.HOME_HERO, release = it)) }
         add(Row("latest-heading", Kind.HEADING, "Новые эпизоды", selected = 1, click = refresh))
         add(shelf(HomeSection.LATEST, releaseCards(home.latest, "latest"), false, HomeSection.LATEST.name))
         add(Row("schedule-days", Kind.DAYS, "Расписание релизов", selected = state.homeDay))

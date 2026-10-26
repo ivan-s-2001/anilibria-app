@@ -5,7 +5,6 @@
 </style>
 <style name="MobileTheme" parent="AppTheme">
     <item name="android:windowFullscreen">false</item>
-    <item name="android:windowLightNavigationBar">false</item>
     <item name="android:windowActionModeOverlay">true</item>
 </style>
 </resources>

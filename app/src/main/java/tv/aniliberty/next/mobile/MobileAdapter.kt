@@ -19,6 +19,7 @@ internal data class MobileRow(
     val subtitle: String = "",
     val image: String? = null,
     val poster: Release? = null,
+    val hero: Release? = null,
     val heading: Boolean = false,
     val primary: Boolean = false,
     val progress: Pair<Long, Long>? = null,
@@ -50,6 +51,10 @@ internal class MobileAdapter(private val horizontal: Boolean = false) : Recycler
         val box = holder.box
         box.removeAllViews()
         if (horizontal) box.layoutParams.width = box.dp(if (row.poster != null) 132 else 240)
+        row.hero?.let { release ->
+            box.addView(HomeHeroView(box.context).apply { bind(release) { row.click?.invoke() } }, FrameLayout.LayoutParams(-1, -2))
+            return
+        }
         if (row.shelf != null) {
             box.addView(RecyclerView(box.context).apply {
                 layoutManager = LinearLayoutManager(context, RecyclerView.HORIZONTAL, false)

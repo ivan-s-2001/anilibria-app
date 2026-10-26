@@ -3695,6 +3695,7 @@ class MainActivity : ComponentActivity() {
                                     Kind.ACCOUNT_TILE,
                                     Kind.POSTER,
                                     Kind.HERO,
+                                    Kind.HOME_HERO,
                                     Kind.SHELF,
                                     Kind.FEATURE,
                                     Kind.GENRE,

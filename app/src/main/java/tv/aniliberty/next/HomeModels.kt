@@ -10,6 +10,9 @@ data class HomeData(
     val videos: List<HomeVideo>? = null,
 )
 
+internal val HomeData.featuredRelease: Release?
+    get() = latest.firstOrNull { !it.blocked } ?: latest.firstOrNull()
+
 data class HomeVideo(
     val id: String,
     val title: String,

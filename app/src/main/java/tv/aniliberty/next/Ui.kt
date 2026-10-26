@@ -390,6 +390,7 @@ class PageAdapter(
                         )
                     }
                 Kind.HERO -> LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+                Kind.HOME_HERO -> HomeHeroView(context, television = true)
                 Kind.HEADING ->
                     LinearLayout(context).apply {
                         orientation = LinearLayout.VERTICAL
@@ -624,6 +625,9 @@ class PageAdapter(
             } else false
         }
         when (row.kind) {
+            Kind.HOME_HERO -> {
+                row.release?.let { release -> (view as HomeHeroView).bind(release) { details(release) } }
+            }
             Kind.PROFILE -> {
                 val box = view as LinearLayout
                 val profile = row.profile

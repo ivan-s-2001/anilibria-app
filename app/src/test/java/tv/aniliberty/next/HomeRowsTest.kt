@@ -40,4 +40,16 @@ class HomeRowsTest {
         assertEquals(3, homeFocusDestination(withHistory, 2, 1))
         assertEquals(1, homeFocusDestination(without, 0, 1))
     }
+
+    @Test
+    fun featuredTitleUsesApiDataAndIsReachableWithTheRemote() {
+        val release = Release(1, "", "Тайтл", "", null, "2026", "", "", "", emptyList(), "", emptyList(), emptyList(), false)
+        val data = home.copy(latest = listOf(release.copy(id = 2, blocked = true), release))
+        val rows = homeRows(UiState(Screen.Home, home = data), emptyList(), {}, {}, {},
+            shelf = { _, cards, _, key -> Row(key, Kind.SHELF, cards = cards) },
+            features = { _, _ -> emptyList() }, videos = { emptyList() })
+        assertEquals(Kind.HOME_HERO, rows.first().kind)
+        assertEquals(1, rows.first().release!!.id)
+        assertEquals(0, homeFocusDestination(rows, -1, 1))
+    }
 }

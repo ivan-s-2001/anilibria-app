@@ -6,6 +6,7 @@ enum class Kind {
     ACCOUNT_TABS,
     PROFILE,
     HERO,
+    HOME_HERO,
     TABS,
     POSTER,
     EPISODE,
