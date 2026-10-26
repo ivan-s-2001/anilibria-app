@@ -52,3 +52,10 @@ data class Release(
     val metadata: String
         get() = listOf(year, season, type, age).filter(String::isNotBlank).joinToString(" · ")
 }
+
+data class ExternalIds(val shikimori: Int? = null, val mal: Int? = null)
+
+data class Rating(val source: String, val value: Double, val votes: Int?)
+
+fun number(value: Double): String =
+    java.math.BigDecimal.valueOf(value).stripTrailingZeros().toPlainString()

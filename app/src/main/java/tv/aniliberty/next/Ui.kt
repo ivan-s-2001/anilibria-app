@@ -110,57 +110,6 @@ fun action(
         setOnClickListener { click() }
     }
 
-enum class Kind {
-    SETTING,
-    ACCOUNT_TILE,
-    ACCOUNT_TABS,
-    PROFILE,
-    HERO,
-    TABS,
-    POSTER,
-    EPISODE,
-    HEADING,
-    TEXT,
-    ACTION,
-    FEATURE,
-    DAYS,
-    SHELF,
-    MORE,
-    GENRE,
-    FRANCHISE,
-    REFRESH,
-    CONTINUE,
-    CATALOG_BAR,
-}
-
-data class Row(
-    val key: String,
-    val kind: Kind,
-    val title: String = "",
-    val subtitle: String = "",
-    val release: Release? = null,
-    val episode: Episode? = null,
-    val selected: Int = 0,
-    val click: (() -> Unit)? = null,
-    val image: String? = null,
-    val items: List<Release> = emptyList(),
-    val cards: List<Row> = emptyList(),
-    val watching: ContinueEpisode? = null,
-    val longClick: (() -> Unit)? = null,
-    val controls: List<Pair<String, () -> Unit>> = emptyList(),
-    val composition: List<String>? = null,
-    val focusLoad: (() -> Unit)? = null,
-    val homeStyle: Boolean = false,
-    val queryChanged: ((String) -> Unit)? = null,
-    val searchDone: (() -> Unit)? = null,
-    val favoriteTitle: String? = null,
-    val episodeProgress: Pair<Long, Long>? = null,
-    val profile: AccountProfile? = null,
-    val activeControls: Set<Int> = emptySet(),
-    val isFavorite: Boolean = false,
-    val collectionType: CollectionType? = null,
-)
-
 class PageAdapter(
     private val tab: (Int) -> Unit,
     private val play: (Episode) -> Unit,
@@ -441,6 +390,7 @@ class PageAdapter(
                         )
                     }
                 Kind.HERO -> LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+                Kind.HOME_HERO -> HomeHeroView(context, television = true)
                 Kind.HEADING ->
                     LinearLayout(context).apply {
                         orientation = LinearLayout.VERTICAL
@@ -675,6 +625,9 @@ class PageAdapter(
             } else false
         }
         when (row.kind) {
+            Kind.HOME_HERO -> {
+                row.release?.let { release -> (view as HomeHeroView).bind(release) { details(release) } }
+            }
             Kind.PROFILE -> {
                 val box = view as LinearLayout
                 val profile = row.profile
@@ -1279,7 +1232,10 @@ class PageAdapter(
                 }
                 if (r.ratings.isEmpty() && r.ongoing == null && r.favoriteCount == null)
                     ratings.parent.let { (it as View).visibility = View.GONE }
-                val episode = resumeEpisode(r.episodes, lastEpisode(r.id), TvSettings(view.context).watchedPercent, progress)
+                val episode = playbackEpisode(
+                    r, lastEpisode(r.id), watchedPercent = TvSettings(view.context).watchedPercent,
+                    progress = progress,
+                )
                 info.addView(
                     View(view.context).apply { tag = "title-bottom-spacer" },
                     LinearLayout.LayoutParams(-1, 0, 1f),

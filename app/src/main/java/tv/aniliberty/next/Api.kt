@@ -7,9 +7,6 @@ import kotlinx.coroutines.supervisorScope
 import org.json.JSONArray
 import org.json.JSONObject
 
-fun number(value: Double): String =
-    java.math.BigDecimal.valueOf(value).stripTrailingZeros().toPlainString()
-
 fun imageUrl(value: String?): String? =
     value
         ?.trim()
@@ -428,32 +425,6 @@ class Api(private val transport: AccountTransport = AccountHttpTransport()) {
     }
 }
 
-data class Feature(val id: String, val title: String, val subtitle: String, val image: String?)
-
-data class HomeData(
-    val latest: List<Release>,
-    val schedule: List<List<Release>>?,
-    val franchises: List<Feature>?,
-    val genres: List<Feature>?,
-    val videos: List<HomeVideo>? = null,
-)
-
-data class HomeVideo(
-    val id: String,
-    val title: String,
-    val subtitle: String,
-    val image: String?,
-    val url: String,
-)
-
-data class ExternalIds(val shikimori: Int? = null, val mal: Int? = null)
-
-data class Rating(val source: String, val value: Double, val votes: Int?)
-
-data class FranchiseGroup(val id: String, val title: String, val releases: List<Release>)
-
-data class Discovery(val franchises: List<FranchiseGroup>?, val recommendations: List<Release>?)
-
 fun uniqueRecommendations(
     currentId: Int,
     releases: List<Release>,
@@ -494,21 +465,6 @@ fun parseFranchiseGroups(json: JSONArray): List<FranchiseGroup> =
         }
         .filter { it.id.isNotBlank() && it.releases.isNotEmpty() }
         .distinctBy { it.id }
-
-enum class HomeSection(val title: String) {
-    LATEST("Новые эпизоды"),
-    SCHEDULE("Расписание релизов"),
-    FRANCHISES("Франшизы"),
-    GENRES("Жанры"),
-    VIDEOS("Видео команды"),
-}
-
-data class SectionData(
-    val releases: List<Release> = emptyList(),
-    val features: List<Feature> = emptyList(),
-    val videos: List<HomeVideo> = emptyList(),
-    val more: Boolean = false,
-)
 
 data class TorrentLink(val title: String, val description: String, val magnet: String?)
 

@@ -37,7 +37,7 @@ class DetailFocusTest {
             .setup().visible().windowFocusChanged(true)
         val activity = controller.get()
         val model = MainActivity::class.java.getDeclaredMethod("getModel")
-            .apply { isAccessible = true }.invoke(activity) as TvModel
+            .apply { isAccessible = true }.invoke(activity) as AppModel
         val render = MainActivity::class.java.getDeclaredMethod("render", UiState::class.java)
             .apply { isAccessible = true }
         val list = MainActivity::class.java.getDeclaredField("list")
@@ -112,7 +112,7 @@ class DetailFocusTest {
                 .java
                 .getDeclaredMethod("getModel")
                 .apply { isAccessible = true }
-                .invoke(activity) as TvModel
+                .invoke(activity) as AppModel
         val list =
             MainActivity::class
                 .java
@@ -246,7 +246,7 @@ class DetailFocusTest {
                 .java
                 .getDeclaredMethod("getModel")
                 .apply { isAccessible = true }
-                .invoke(activity) as TvModel
+                .invoke(activity) as AppModel
         val list =
             MainActivity::class
                 .java

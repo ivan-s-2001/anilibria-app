@@ -3,12 +3,21 @@ plugins { id("com.android.application") }
 android {
     namespace = "tv.aniliberty.next"
     compileSdk = 36
+    buildFeatures { resValues = true }
     defaultConfig {
-        applicationId = "tv.aniliberty.next"
+        applicationId = "app.anihall.preview"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 3
+        versionName = "0.2.1"
+        resValue("string", "app_name", "AniHall Preview")
+    }
+    buildTypes {
+        getByName("debug") {
+            applicationIdSuffix = ".ci"
+            versionNameSuffix = "-ci"
+            resValue("string", "app_name", "AniHall Preview CI")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

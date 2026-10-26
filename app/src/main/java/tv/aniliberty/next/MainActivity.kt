@@ -29,7 +29,7 @@ class MainActivity : ComponentActivity() {
     private var shelfMoveToken = 0
     private var pendingShelf: Pair<RecyclerView, String>? = null
     private var remotePendingKey: String? = null
-    private val model by viewModels<TvModel>()
+    private val model by viewModels<AppModel>()
     private lateinit var list: RecyclerView
     private lateinit var adapter: PageAdapter
     private lateinit var grid: GridLayoutManager
@@ -959,6 +959,11 @@ class MainActivity : ComponentActivity() {
             android.widget.FrameLayout(this).apply {
                 addView(shell, android.widget.FrameLayout.LayoutParams(-1, -1))
             }
+        playbackLoading = android.widget.ProgressBar(this).apply {
+            visibility = View.GONE
+            contentDescription = "Загрузка серии"
+        }
+        root.addView(playbackLoading, android.widget.FrameLayout.LayoutParams(dp(48), dp(48), android.view.Gravity.CENTER))
         startup =
             StartupScreen(
                 this,
@@ -1039,6 +1044,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        playbackLaunchJob?.cancel()
         remoteClick.cancel()
         remoteFocusToken++
         shelfMoveToken++
@@ -1106,12 +1112,46 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun playContinue(item: ContinueEpisode) {
+        launchPlayback(item.releaseId, item.episodeId)
+    }
+
+    private var playbackLaunchJob: kotlinx.coroutines.Job? = null
+    private lateinit var playbackLoading: android.widget.ProgressBar
+
+    private fun launchPlayback(releaseId: Int, episodeId: String? = null) {
+        if (playbackLaunchJob?.isActive == true) return
         rememberFocus()
-        startActivity(
-            Intent(this, PlayerActivity::class.java)
-                .putExtra("release", item.releaseId)
-                .putExtra("episode", item.episodeId)
-        )
+        playbackLaunchJob = lifecycleScope.launch {
+            playbackLoading.visibility = View.VISIBLE
+            try {
+                val release = model.api.release(releaseId)
+                account.applyProgress(release)
+                val episode = playbackEpisode(
+                    release,
+                    prefs.getString("last:$releaseId", null),
+                    requestedId = episodeId,
+                    watchedPercent = settings.watchedPercent,
+                    progress = { id ->
+                        prefs.getLong("position:$id", 0) to prefs.getLong("duration:$id", 0)
+                    },
+                )
+                if (episode == null) {
+                    Toast.makeText(this@MainActivity, "Просмотр пока недоступен", Toast.LENGTH_LONG).show()
+                    return@launch
+                }
+                startActivity(
+                    Intent(this@MainActivity, PlayerActivity::class.java)
+                        .putExtra("release", releaseId)
+                        .putExtra("episode", episode.id)
+                )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                Toast.makeText(this@MainActivity, "Не удалось загрузить тайтл", Toast.LENGTH_LONG).show()
+            } finally {
+                playbackLoading.visibility = View.GONE
+            }
+        }
     }
 
     private fun rememberFocus() {
@@ -2009,40 +2049,7 @@ class MainActivity : ComponentActivity() {
             )
         fun choose(choice: Int) {
             when (choice) {
-                0 ->
-                    lifecycleScope.launch {
-                        try {
-                            val release = model.api.release(item.id)
-                            val last = prefs.getString("last:${release.id}", null)
-                            val episode =
-                                release.episodes.firstOrNull { it.id == last }
-                                    ?: release.episodes.firstOrNull()
-                            if (release.blocked || episode == null || episode.streams.isEmpty())
-                                Toast.makeText(
-                                        this@MainActivity,
-                                        "Просмотр пока недоступен",
-                                        Toast.LENGTH_LONG,
-                                    )
-                                    .show()
-                            else {
-                                rememberFocus()
-                                startActivity(
-                                    Intent(this@MainActivity, PlayerActivity::class.java)
-                                        .putExtra("release", release.id)
-                                        .putExtra("episode", episode.id)
-                                )
-                            }
-                        } catch (e: kotlinx.coroutines.CancellationException) {
-                            throw e
-                        } catch (_: Exception) {
-                            Toast.makeText(
-                                    this@MainActivity,
-                                    "Не удалось загрузить тайтл",
-                                    Toast.LENGTH_LONG,
-                                )
-                                .show()
-                        }
-                    }
+                0 -> launchPlayback(item.id)
                 1 -> favorite(item)
                 2 -> {
                     rememberFocus()
@@ -2065,20 +2072,7 @@ class MainActivity : ComponentActivity() {
 
     private fun play(episode: Episode) {
         val release = model.state.value.detail ?: return
-        if (release.blocked) {
-            Toast.makeText(this, "Просмотр этого тайтла ограничен", Toast.LENGTH_LONG).show()
-            return
-        }
-        if (episode.streams.isEmpty()) {
-            Toast.makeText(this, "Серия пока недоступна", Toast.LENGTH_LONG).show()
-            return
-        }
-        rememberFocus()
-        startActivity(
-            Intent(this, PlayerActivity::class.java)
-                .putExtra("release", release.id)
-                .putExtra("episode", episode.id)
-        )
+        launchPlayback(release.id, episode.id)
     }
 
     private fun selectTab(index: Int) {
@@ -2173,20 +2167,6 @@ class MainActivity : ComponentActivity() {
         rememberFocus()
         model.open(Screen.Section(kind))
     }
-
-    private fun releaseCards(items: List<Release>, key: String) =
-        items
-            .distinctBy { it.id }
-            .map {
-                Row(
-                    "$key:release:${it.id}",
-                    Kind.POSTER,
-                    release = it,
-                    selected =
-                        if (key.startsWith("schedule", true)) 3
-                        else if (key.startsWith("latest", true)) 1 else 0,
-                )
-            }
 
     private fun watchOrderCards(items: List<Release>, key: String) =
         items
@@ -2385,6 +2365,7 @@ class MainActivity : ComponentActivity() {
             enterContent = false
         }
         if (current != state.screen) {
+            playbackLaunchJob?.cancel()
             remoteClick.cancel()
             remotePendingKey = null
             remoteFocusToken++
@@ -2458,103 +2439,23 @@ class MainActivity : ComponentActivity() {
             else
                 when (val screen = state.screen) {
                     Screen.Home -> {
-                        val home = state.home ?: return
-
-                        rows +=
-                            Row(
-                                "latest-heading",
-                                Kind.HEADING,
-                                "Новые эпизоды",
-                                selected = 1,
-                                click = {
-                                    if (!model.state.value.loading) {
-                                        rememberFocus()
-                                        lastHistoryHydration = 0
-                                        hydrateHistory()
-                                        model.retry()
-                                    }
-                                },
-                            )
-                        rows += homeShelf(HomeSection.LATEST, releaseCards(home.latest, "latest"))
-                        val unfinished = history.items()
-                        if (unfinished.isNotEmpty()) {
-                            rows +=
-                                Row(
-                                    "continue-heading",
-                                    Kind.HEADING,
-                                    "Продолжить просмотр",
-                                    selected = 1,
-                                )
-                            val cards =
-                                unfinished.map { item ->
-                                    val status =
-                                        when {
-                                            item.nextUp -> "Следующая серия"
-                                            item.duration > 0 ->
-                                                "Осталось ${(item.remaining+59999)/60000} мин"
-                                            else -> "Продолжить"
-                                        }
-                                    Row(
-                                        "continue:${item.releaseId}:${item.episodeId}",
-                                        Kind.CONTINUE,
-                                        item.releaseTitle,
-                                        "Серия ${number(item.ordinal)} · $status",
-                                        image = item.preview,
-                                        watching = item,
-                                        click = { playContinue(item) },
-                                        longClick = { continueActions(item) },
-                                    )
+                        rows += homeRows(
+                            state = state,
+                            continuing = history.items(),
+                            refresh = {
+                                if (!model.state.value.loading) {
+                                    rememberFocus()
+                                    lastHistoryHydration = 0
+                                    hydrateHistory()
+                                    model.retry()
                                 }
-                            rows += Row("shelf:continue", Kind.SHELF, selected = 5, cards = cards)
-                        }
-                        rows +=
-                            Row(
-                                "schedule-days",
-                                Kind.DAYS,
-                                "Расписание релизов",
-                                selected = state.homeDay,
-                            )
-                        val schedule = home.schedule?.getOrNull(state.homeDay)
-                        if (schedule == null)
-                            rows +=
-                                Row(
-                                    "schedule-retry",
-                                    Kind.ACTION,
-                                    "Не удалось загрузить расписание · Повторить",
-                                    click = model::retry,
-                                )
-                        else
-                            rows +=
-                                homeShelf(
-                                    HomeSection.SCHEDULE,
-                                    releaseCards(schedule, "schedule:${state.homeDay}"),
-                                    key = "schedule:${state.homeDay}",
-                                )
-                        rows += Row("franchises-heading", Kind.HEADING, "Франшизы", selected = 1)
-                        rows +=
-                            homeShelf(
-                                HomeSection.FRANCHISES,
-                                featureCards(home.franchises.orEmpty(), HomeSection.FRANCHISES),
-                                true,
-                            )
-                        rows += Row("genres-heading", Kind.HEADING, "Жанры", selected = 1)
-                        rows +=
-                            homeShelf(
-                                HomeSection.GENRES,
-                                featureCards(home.genres.orEmpty(), HomeSection.GENRES),
-                                true,
-                            )
-                        rows +=
-                            Row("videos-heading", Kind.HEADING, "Видео от AniLiberty", selected = 1)
-                        if (home.videos == null)
-                            rows +=
-                                Row(
-                                    "videos-retry",
-                                    Kind.ACTION,
-                                    "Не удалось загрузить видео · Повторить",
-                                    click = model::retry,
-                                )
-                        else rows += homeShelf(HomeSection.VIDEOS, videoCards(home.videos), true)
+                            },
+                            play = ::playContinue,
+                            continueActions = ::continueActions,
+                            shelf = ::homeShelf,
+                            features = ::featureCards,
+                            videos = ::videoCards,
+                        )
                     }
                     is Screen.Section -> {
                         val data = state.section ?: return
@@ -3794,6 +3695,7 @@ class MainActivity : ComponentActivity() {
                                     Kind.ACCOUNT_TILE,
                                     Kind.POSTER,
                                     Kind.HERO,
+                                    Kind.HOME_HERO,
                                     Kind.SHELF,
                                     Kind.FEATURE,
                                     Kind.GENRE,

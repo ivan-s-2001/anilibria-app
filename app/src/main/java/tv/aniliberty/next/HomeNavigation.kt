@@ -4,7 +4,7 @@ package tv.aniliberty.next
 fun homeFocusDestination(rows: List<Row>, from: Int, direction: Int): Int? {
     val indices = if (direction < 0) (from - 1 downTo 0) else (from + 1 until rows.size)
     return indices.firstOrNull {
-        rows[it].kind in setOf(Kind.SHELF, Kind.DAYS, Kind.ACTION) ||
+        rows[it].kind in setOf(Kind.SHELF, Kind.DAYS, Kind.ACTION, Kind.HOME_HERO) ||
             (rows[it].kind == Kind.HEADING && rows[it].click != null)
     }
 }

@@ -1,7 +1,7 @@
-name: New Android TV app
+name: AniHall Android mobile and TV
 on:
   push:
-    branches: [rewrite/tv-next]
+    branches: [rewrite/tv-next, feature/anihall-yummytv-structure]
   workflow_dispatch:
 permissions:
   contents: read
@@ -25,14 +25,14 @@ jobs:
       - run: bash ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon --console=plain
       - uses: actions/upload-artifact@v4
         with:
-          name: AniLiberty-TV-Next-debug
+          name: AniHall-Android-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: AniLiberty-TV-Next-release-checks
+          name: AniHall-Android-release-checks
           path: |
             app/build/outputs/apk/release/*.apk
             app/build/reports/

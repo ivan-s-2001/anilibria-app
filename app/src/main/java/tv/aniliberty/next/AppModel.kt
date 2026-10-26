@@ -7,7 +7,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
-class TvModel : ViewModel() {
+class AppModel : ViewModel() {
     val api = Api()
     val state = MutableStateFlow(UiState())
     private val stack = mutableListOf<Screen>()
