@@ -11,10 +11,28 @@ fun resumeEpisode(
     episodes: List<Episode>,
     lastId: String?,
     watchedPercent: Int = DEFAULT_WATCHED_PERCENT,
+    available: (Episode) -> Boolean = { true },
     progress: (String) -> Pair<Long, Long>,
 ): Episode? {
-    val saved = episodes.firstOrNull { it.id == lastId } ?: return episodes.firstOrNull()
+    val index = episodes.indexOfFirst { it.id == lastId }
+    val saved = episodes.getOrNull(index) ?: return episodes.firstOrNull(available)
     val (position, duration) = progress(saved.id)
-    return if (isEpisodeWatched(position, duration, watchedPercent)) nextEpisode(episodes, saved.id) ?: saved
-    else saved
+    if (available(saved) && !isEpisodeWatched(position, duration, watchedPercent)) return saved
+    return episodes.drop(index + 1).firstOrNull(available)
+        ?: saved.takeIf(available)
+        ?: episodes.firstOrNull(available)
+}
+
+/** Explicit episode choices stay exact; automatic continuation skips unavailable streams. */
+internal fun playbackEpisode(
+    release: Release,
+    lastId: String?,
+    requestedId: String? = null,
+    watchedPercent: Int = DEFAULT_WATCHED_PERCENT,
+    progress: (String) -> Pair<Long, Long>,
+): Episode? {
+    if (release.blocked) return null
+    if (requestedId != null)
+        return release.episodes.firstOrNull { it.id == requestedId && it.streams.isNotEmpty() }
+    return resumeEpisode(release.episodes, lastId, watchedPercent, { it.streams.isNotEmpty() }, progress)
 }

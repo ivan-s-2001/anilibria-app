@@ -13,6 +13,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "AniLibertyTVNext"
+rootProject.name = "AniHall"
 
 include(":app")

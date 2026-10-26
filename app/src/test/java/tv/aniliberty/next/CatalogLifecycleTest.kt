@@ -32,7 +32,7 @@ class CatalogLifecycleTest {
                 .java
                 .getDeclaredMethod("getModel")
                 .apply { isAccessible = true }
-                .invoke(activity) as TvModel
+                .invoke(activity) as AppModel
         val root = activity.window.decorView
         fun render(state: UiState) {
             model.state.value = state

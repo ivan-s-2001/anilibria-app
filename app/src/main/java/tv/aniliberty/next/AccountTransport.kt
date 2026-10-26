@@ -57,7 +57,7 @@ class AccountHttpTransport : AccountTransport {
             connection.requestMethod = method
             connection.instanceFollowRedirects = false
             connection.setRequestProperty("Accept", "application/json")
-            connection.setRequestProperty("User-Agent", "AniLiberty-Next/Android-TV")
+            connection.setRequestProperty("User-Agent", "AniHall/Android")
             if (token != null) connection.setRequestProperty("Authorization", "Bearer $token")
             if (body != null) {
                 connection.doOutput = true

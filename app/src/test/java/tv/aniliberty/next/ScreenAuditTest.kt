@@ -31,7 +31,7 @@ class ScreenAuditTest {
                 .java
                 .getDeclaredMethod("getModel")
                 .apply { isAccessible = true }
-                .invoke(activity) as TvModel
+                .invoke(activity) as AppModel
         val list =
             MainActivity::class
                 .java
